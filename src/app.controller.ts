@@ -14,21 +14,21 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  @Get('ping')
-  async pingDatabase() {
+  @Get('health')
+  async checkHealth() {
     try {
-      // Execute a simple raw query to prove connection
-      const result = await this.prisma.$queryRaw`SELECT 1 as connected`;
+      await this.prisma.$queryRaw`SELECT 1`;
       return {
-        message: 'Successfully connected to database!',
-        result,
+        status: 'ok',
+        message: 'Database connected, Prisma connected successfully'
       };
     } catch (error) {
       return {
-        message: 'Failed to connect to database.',
-        error: error.message,
+        status: 'error',
+        message: 'Database connection failed'
       };
     }
   }
 }
+
 
