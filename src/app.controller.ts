@@ -20,15 +20,13 @@ export class AppController {
       await this.prisma.$queryRaw`SELECT 1`;
       return {
         status: 'ok',
-        message: 'Database connected, Prisma connected successfully'
+        message: 'Database connected, Prisma connected successfully',
       };
     } catch (error) {
       return {
         status: 'error',
-        message: 'Database connection failed'
+        message: 'Database connection failed',
       };
     }
   }
 }
-
-
