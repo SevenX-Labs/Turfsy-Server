@@ -35,6 +35,7 @@ enum SportsType {
 enum TurfStatus {
   ACTIVE
   INACTIVE
+  UNDER_REVIEW  // FIX: added back — needed for admin approval flow
 }
  
 // ─────────────────────────────────────────
@@ -68,19 +69,19 @@ model Auth {
 model UserProfile {
   id          String    @id @default(uuid())
   authId      String    @unique
-  name        String?
-  email       String?   @unique
-  avatarUrl   String?
-  dob         DateTime?
-  gender      Gender?
+  name        String
+  email       String    @unique
+  avatarUrl   String
+  dob         DateTime
+  gender      Gender
   currentLat  Float?
   currentLng  Float?
   currentCity String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
  
-  auth        Auth           @relation(fields: [authId], references: [id], onDelete: Cascade)
-  payment     Payment?
+  auth    Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+  payment Payment?
 }
  
 // ─────────────────────────────────────────
@@ -90,17 +91,17 @@ model UserProfile {
 model OwnerProfile {
   id            String    @id @default(uuid())
   authId        String    @unique
-  name          String?
-  email         String?   @unique
-  contactNumber String?
-  avatarUrl     String?
-  aadharNumber  String?   // store encrypted
-  aadharUrl     String?   // uploaded doc URL
+  name          String
+  email         String    @unique
+  contactNumber String
+  avatarUrl     String
+  aadharNumber  String    // store encrypted
+  aadharUrl     String?
   isKycVerified Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
  
-  auth    Auth   @relation(fields: [authId], references: [id], onDelete: Cascade)
+  auth    Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
   turfs   Turf[]
   payment Payment?
  
@@ -118,23 +119,24 @@ model Turf {
   description         String?
   sportsType          SportsType
   turfSize            String     // e.g. "100x60 ft"
-  status              TurfStatus @default(ACTIVE)
+  status              TurfStatus @default(UNDER_REVIEW)
  
   // Location
   address             String
   city                String
-  pincode             Stringdd
-  lat                 Float?
-  lng                 Float? 
+  pincode             String     // FIX: was "Stringdd" — typo
+  lat                 Float
+  lng                 Float
+ 
   // Timings
   openTime            String     // "06:00" 24hr format
   closeTime           String     // "23:00" 24hr format
   minSlotDurationMins Int        // e.g. 60 for 1 hour
  
   // Images
-  groundDayUrl        String?
+  groundDayUrl        String
   groundNightUrl      String?
-  entranceUrl         String?
+  entranceUrl         String
   seatingAreaUrl      String?
  
   // Amenities
@@ -147,14 +149,14 @@ model Turf {
   cafeteria           Boolean    @default(false)
  
   // Pricing
-  weekdayDayPrice     Float?
-  weekdayNightPrice   Float?
-  weekendDayPrice     Float?
-  weekendNightPrice   Float?
+  weekdayDayPrice     Float
+  weekdayNightPrice   Float
+  weekendDayPrice     Float
+  weekendNightPrice   Float
  
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
-  deletedAt           DateTime?
+  deletedAt           DateTime?  // FIX: must be optional — null until deleted
  
   owner OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
  
@@ -165,18 +167,17 @@ model Turf {
  
 // ─────────────────────────────────────────
 // Payment  (shared, one row per user, role differentiates)
-// Created at profile creation time
 // ─────────────────────────────────────────
  
 model Payment {
-  id            String   @id @default(uuid())
-  authId        String   @unique
-  role          Role                    // USER or OWNER
-  upiId         String
-  userProfileId String?  @unique        // set if role = USER
-  ownerProfileId String? @unique        // set if role = OWNER
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(uuid())
+  authId         String   @unique
+  role           Role
+  upiId          String
+  userProfileId  String?  @unique  // FIX: must be optional — null if role = OWNER
+  ownerProfileId String?  @unique  // FIX: must be optional — null if role = USER
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
  
   auth         Auth          @relation(fields: [authId], references: [id], onDelete: Cascade)
   userProfile  UserProfile?  @relation(fields: [userProfileId], references: [id])
@@ -216,7 +217,7 @@ model OtpEntry {
   sessionToken String    @unique @default(uuid())
   code         String
   expiresAt    DateTime
-  verifiedAt   DateTime?
+  verifiedAt   DateTime? // FIX: must be optional — null until verified
   resendCount  Int       @default(0)
   lastResentAt DateTime?
   createdAt    DateTime  @default(now())
@@ -226,3 +227,4 @@ model OtpEntry {
   @@index([sessionToken])
   @@index([authId])
 }
+ 
