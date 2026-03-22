@@ -11,3 +11,220 @@ datasource db {
   provider  = "postgresql"
 }
 
+// ─────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────
+ 
+enum Role {
+  USER
+  OWNER
+}
+ 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+ 
+enum SportsType {
+  FOOTBALL
+  CRICKET
+}
+ 
+enum TurfStatus {
+  ACTIVE
+  INACTIVE
+  UNDER_REVIEW
+}
+ 
+// ─────────────────────────────────────────
+// Auth  (shared login table for all roles)
+// ─────────────────────────────────────────
+ 
+model Auth {
+  id         String    @id @default(uuid())
+  phone      String    @unique
+  role       Role      @default(USER)
+  isVerified Boolean   @default(false)
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+ 
+  sessions     Session[]
+  otpEntries   OtpEntry[]
+  userProfile  UserProfile?
+  ownerProfile OwnerProfile?
+  payment      Payment?
+ 
+  @@index([phone])
+  @@index([role])
+}
+ 
+// ─────────────────────────────────────────
+// UserProfile  (role = USER)
+// ─────────────────────────────────────────
+ 
+model UserProfile {
+  id          String    @id @default(uuid())
+  authId      String    @unique
+  name        String?
+  email       String?   @unique
+  avatarUrl   String?
+  dob         DateTime?
+  gender      Gender?
+  currentLat  Float?
+  currentLng  Float?
+  currentCity String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+ 
+  auth        Auth           @relation(fields: [authId], references: [id], onDelete: Cascade)
+  payment     Payment?
+}
+ 
+// ─────────────────────────────────────────
+// OwnerProfile  (role = OWNER)
+// ─────────────────────────────────────────
+ 
+model OwnerProfile {
+  id            String    @id @default(uuid())
+  authId        String    @unique
+  name          String?
+  email         String?   @unique
+  contactNumber String?
+  avatarUrl     String?
+  aadharNumber  String?   // store encrypted
+  aadharUrl     String?   // uploaded doc URL
+  isKycVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+ 
+  auth    Auth   @relation(fields: [authId], references: [id], onDelete: Cascade)
+  turfs   Turf[]
+  payment Payment?
+ 
+  @@index([authId])
+}
+ 
+// ─────────────────────────────────────────
+// Turf
+// ─────────────────────────────────────────
+ 
+model Turf {
+  id                  String     @id @default(uuid())
+  ownerProfileId      String
+  name                String
+  description         String?
+  sportsType          SportsType
+  turfSize            String     // e.g. "100x60 ft"
+  status              TurfStatus @default(UNDER_REVIEW)
+ 
+  // Location
+  address             String
+  city                String
+  pincode             String
+  lat                 Float?
+  lng                 Float?
+ 
+  // Timings
+  openTime            String     // "06:00" 24hr format
+  closeTime           String     // "23:00" 24hr format
+  minSlotDurationMins Int        // e.g. 60 for 1 hour
+ 
+  // Images
+  groundDayUrl        String?
+  groundNightUrl      String?
+  entranceUrl         String?
+  seatingAreaUrl      String?
+ 
+  // Amenities
+  floodLights         Boolean    @default(false)
+  parking             Boolean    @default(false)
+  washroom            Boolean    @default(false)
+  changingRoom        Boolean    @default(false)
+  drinkingWater       Boolean    @default(false)
+  seatingArea         Boolean    @default(false)
+  cafeteria           Boolean    @default(false)
+ 
+  // Pricing
+  weekdayDayPrice     Float?
+  weekdayNightPrice   Float?
+  weekendDayPrice     Float?
+  weekendNightPrice   Float?
+ 
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  deletedAt           DateTime?
+ 
+  owner OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+ 
+  @@index([ownerProfileId])
+  @@index([city])
+  @@index([status])
+}
+ 
+// ─────────────────────────────────────────
+// Payment  (shared, one row per user, role differentiates)
+// Created at profile creation time
+// ─────────────────────────────────────────
+ 
+model Payment {
+  id            String   @id @default(uuid())
+  authId        String   @unique
+  role          Role                    // USER or OWNER
+  upiId         String
+  userProfileId String?  @unique        // set if role = USER
+  ownerProfileId String? @unique        // set if role = OWNER
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+ 
+  auth         Auth          @relation(fields: [authId], references: [id], onDelete: Cascade)
+  userProfile  UserProfile?  @relation(fields: [userProfileId], references: [id])
+  ownerProfile OwnerProfile? @relation(fields: [ownerProfileId], references: [id])
+ 
+  @@index([authId])
+  @@index([role])
+}
+ 
+// ─────────────────────────────────────────
+// Session
+// ─────────────────────────────────────────
+ 
+model Session {
+  id        String    @id @default(uuid())
+  authId    String
+  token     String    @unique @default(uuid())
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+ 
+  auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
+ 
+  @@index([token])
+  @@index([authId])
+}
+ 
+// ─────────────────────────────────────────
+// OtpEntry
+// ─────────────────────────────────────────
+ 
+model OtpEntry {
+  id           String    @id @default(uuid())
+  authId       String
+  sessionToken String    @unique @default(uuid())
+  code         String
+  expiresAt    DateTime
+  verifiedAt   DateTime?
+  resendCount  Int       @default(0)
+  lastResentAt DateTime?
+  createdAt    DateTime  @default(now())
+ 
+  auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
+ 
+  @@index([sessionToken])
+  @@index([authId])
+}
