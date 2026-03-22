@@ -35,7 +35,6 @@ enum SportsType {
 enum TurfStatus {
   ACTIVE
   INACTIVE
-  UNDER_REVIEW
 }
  
 // ─────────────────────────────────────────
@@ -119,15 +118,14 @@ model Turf {
   description         String?
   sportsType          SportsType
   turfSize            String     // e.g. "100x60 ft"
-  status              TurfStatus @default(UNDER_REVIEW)
+  status              TurfStatus @default(ACTIVE)
  
   // Location
   address             String
   city                String
-  pincode             String
+  pincode             Stringdd
   lat                 Float?
-  lng                 Float?
- 
+  lng                 Float? 
   // Timings
   openTime            String     // "06:00" 24hr format
   closeTime           String     // "23:00" 24hr format
