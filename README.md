@@ -97,3 +97,148 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 # Turfsy-Server
+
+## Authentication API
+
+Base URL: `https://turfsy.onrender.com`
+
+### 1. POST /api/v3/auth/login
+
+**Request:**
+```json
+{
+  "phone": "8652601566"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "OTP sent successfully",
+  "sessionToken": "uuid",
+  "expiresIn": 60
+}
+```
+
+### 2. POST /api/v3/auth/verify-otp
+
+**Request:**
+```json
+{
+  "phone": "8652601566",
+  "otp": "OTP_FROM_TERMINAL"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "OTP verified",
+  "accessToken": "eyJhbGci..." // JWT token, use this for authenticated requests
+}
+```
+
+### 3. POST /api/v3/auth/select-role
+
+**Headers:**
+`Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY`
+
+**Request:**
+```json
+{
+  "role": "USER"
+}
+```
+**Response:**
+```json
+{
+  "role": "USER",
+  "isNewUser": true,
+  "profile": null,
+  "accessToken": "eyJhbGci..." // JWT token (if you want to re-issue or confirm)
+}
+```
+
+### 4. POST /api/v3/auth/resend-otp
+
+**Request:**
+```json
+{
+  "sessionToken": "SESSION_TOKEN_FROM_LOGIN"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "OTP resent successfully",
+  "expiresIn": 60
+}
+```
+
+### 5. GET /api/v3/auth/get-me
+
+**Headers:**
+`Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "phone": "8652601566",
+    "role": "USER",
+    "isVerified": true,
+    "isActive": true,
+    "profile": {
+      "id": "uuid",
+      "name": "",
+      "email": ""
+    },
+    "payment": null
+  }
+}
+```
+
+### 6. GET /api/v3/auth/logout
+
+**Headers:**
+`Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY`
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+### 7. DELETE /api/v3/auth/delete-account
+
+**Headers:**
+`Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY`
+
+**Request:**
+```json
+{
+  "sessionToken": "SESSION_TOKEN_FROM_LOGIN"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Account deleted successfully"
+}
+```
+
+### Test Order
+
+1. POST /login         → copy sessionToken + check terminal for OTP
+2. POST /verify-otp    → copy accessToken
+3. POST /select-role   → use accessToken, select role, get isNewUser/profile
+4. GET  /get-me        → use accessToken
+5. POST /resend-otp    → use sessionToken
+6. GET  /logout        → use accessToken
+7. DELETE /delete-account → use both

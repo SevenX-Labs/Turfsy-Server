@@ -73,34 +73,25 @@ export class AuthService {
   // ─────────────────────────────────────────
 
   async login(dto: LoginDto, ip: string, userAgent: string) {
-    const { phone, role } = dto;
+    const { phone } = dto;
 
-    // Upsert auth record
-    const auth = await this.prisma.auth.upsert({
-      where: { phone },
-      update: { role },
-      create: { phone, role },
-    });
+    let auth = await this.prisma.auth.findUnique({ where: { phone } });
+    if (!auth) {
+      auth = await this.prisma.auth.create({ data: { phone } });
+    }
 
     if (!auth.isActive) {
       throw new UnauthorizedException('Account is deactivated');
     }
 
-    // Generate OTP
     const otp = this.generateOtp();
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
 
-    // Create OtpEntry
     const otpEntry = await this.prisma.otpEntry.create({
-      data: {
-        authId: auth.id,
-        code: hashedOtp,
-        expiresAt,
-      },
+      data: { authId: auth.id, code: hashedOtp, expiresAt },
     });
 
-    // Send OTP
     await this.sendOtpViaSms(phone, otp);
 
     return {
@@ -118,18 +109,13 @@ export class AuthService {
   async verifyOtp(dto: VerifyOtpDto) {
     const { phone, otp } = dto;
 
-    // Find auth by phone
     const authRecord = await this.prisma.auth.findUnique({ where: { phone } });
     if (!authRecord) {
       throw new NotFoundException('Phone number not registered');
     }
 
-    // Get latest unverified OtpEntry for this auth
     const otpEntry = await this.prisma.otpEntry.findFirst({
-      where: {
-        authId: authRecord.id,
-        verifiedAt: null,
-      },
+      where: { authId: authRecord.id, verifiedAt: null },
       orderBy: { createdAt: 'desc' },
       include: { auth: true },
     });
@@ -157,16 +143,12 @@ export class AuthService {
       data: { verifiedAt: new Date() },
     });
 
-    // Create session
+    // Create session immediately after OTP verify
     const expiresAt = new Date(
       Date.now() + parseInt(this.config.get('SESSION_EXPIRY_DAYS', '7')) * 86400000,
     );
-
     const session = await this.prisma.session.create({
-      data: {
-        authId: otpEntry.authId,
-        expiresAt,
-      },
+      data: { authId: otpEntry.authId, expiresAt },
     });
 
     // Mark auth as verified
@@ -175,18 +157,64 @@ export class AuthService {
       data: { isVerified: true },
     });
 
-    // Create profile if first time
-    const auth = otpEntry.auth;
-    await this.createProfileIfNotExists(auth.id, auth.role);
+    const auth = await this.prisma.auth.findUnique({ where: { id: otpEntry.authId } });
+    if (!auth) {
+      throw new NotFoundException('Auth record not found after OTP verification');
+    }
 
-    // Sign JWT
+    // Issue JWT — role will be set in /select-role
     const token = this.generateSessionToken(auth.id, session.id, auth.role);
 
     return {
       success: true,
-      message: 'Login successful',
-      accessToken: token,
-      role: auth.role,
+      message: 'OTP verified successfully',
+      accessToken: token
+    };
+  }
+
+  // ─────────────────────────────────────────
+  // POST /select-role — set role, return profile
+  // ─────────────────────────────────────────
+
+  async selectRole(authId: string, role: Role) {
+    const auth = await this.prisma.auth.findUnique({
+      where: { id: authId },
+      include: { userProfile: true, ownerProfile: true },
+    });
+
+    if (!auth) throw new NotFoundException('Account not found');
+    if (!auth.isActive) throw new UnauthorizedException('Account is deactivated');
+
+    // Update role in DB
+    await this.prisma.auth.update({
+      where: { id: authId },
+      data: { role },
+    });
+
+    // isNewUser = true if profile has no name yet
+    const isNewUser =
+      role === Role.USER
+        ? !auth.userProfile || !auth.userProfile.name
+        : !auth.ownerProfile || !auth.ownerProfile.name;
+
+    // Create empty profile row if first time
+    await this.createProfileIfNotExists(authId, role);
+
+    // Fetch full profile for returning users
+    let profile: Record<string, any> | null = null;
+    if (!isNewUser) {
+      profile =
+        role === Role.USER
+          ? await this.prisma.userProfile.findUnique({ where: { authId }, include: { payment: true } })
+          : await this.prisma.ownerProfile.findUnique({ where: { authId }, include: { turfs: true, payment: true } });
+    }
+
+    return {
+      success: true,
+      message: isNewUser ? 'Welcome! Please complete your profile.' : 'Welcome back!',
+      role,
+      isNewUser,
+      profile: profile ?? null,
     };
   }
 
@@ -210,7 +238,6 @@ export class AuthService {
       throw new ConflictException('OTP already verified');
     }
 
-    // Rate limit check — 1 req per 60s
     if (otpEntry.lastResentAt) {
       const diff = (Date.now() - otpEntry.lastResentAt.getTime()) / 1000;
       if (diff < this.RESEND_LIMIT_SECONDS) {
@@ -226,7 +253,6 @@ export class AuthService {
       }
     }
 
-    // Generate new OTP
     const otp = this.generateOtp();
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
@@ -287,12 +313,8 @@ export class AuthService {
       throw new NotFoundException('Account not found');
     }
 
-    // Require OTP re-verification for account deletion
     const otpEntry = await this.prisma.otpEntry.findFirst({
-      where: {
-        authId,
-        verifiedAt: { not: null },
-      },
+      where: { authId, verifiedAt: { not: null } },
       orderBy: { verifiedAt: 'desc' },
     });
 
@@ -300,7 +322,6 @@ export class AuthService {
       throw new UnauthorizedException('Please verify OTP before deleting account');
     }
 
-    // Soft delete — revoke all sessions + mark deletedAt
     await this.prisma.$transaction([
       this.prisma.session.updateMany({
         where: { authId, revokedAt: null },
@@ -351,10 +372,7 @@ export class AuthService {
     };
   }
 
-  // ─────────────────────────────────────────
-  // Internal — create profile on first login
-  // ─────────────────────────────────────────
-
+  // Create empty profile row on first login
   private async createProfileIfNotExists(authId: string, role: Role) {
     if (role === Role.USER) {
       const exists = await this.prisma.userProfile.findUnique({ where: { authId } });

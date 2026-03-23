@@ -14,15 +14,15 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
+import { SelectRoleDto } from './dto/select-role.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import type { Request } from 'express';
 
 @Controller('api/v3/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // ─── POST /api/v3/auth/login ───────────────────────────────────────
+  // Phone only — sends OTP, no role
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(
@@ -33,21 +33,29 @@ export class AuthController {
     return this.authService.login(dto, ip, userAgent);
   }
 
-  // ─── POST /api/v3/auth/verify-otp ─────────────────────────────────
+  // Verify OTP — returns accessToken immediately
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
   async verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto);
   }
 
-  // ─── POST /api/v3/auth/resend-otp ─────────────────────────────────
+  // Select role — requires accessToken, updates role + returns profile
+  @Post('select-role')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async selectRole(@Req() req: any, @Body() dto: SelectRoleDto) {
+    return this.authService.selectRole(req.user.authId, dto.role);
+  }
+
+  // Resend OTP — rate limited 1/min
   @Post('resend-otp')
   @HttpCode(HttpStatus.OK)
   async resendOtp(@Body() dto: ResendOtpDto) {
     return this.authService.resendOtp(dto);
   }
 
-  // ─── GET /api/v3/auth/logout ───────────────────────────────────────
+  // Logout — revoke session
   @Get('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -55,18 +63,15 @@ export class AuthController {
     return this.authService.logout(req.user.sessionId);
   }
 
-  // ─── DELETE /api/v3/auth/delete-account ───────────────────────────
+  // Soft delete account
   @Delete('delete-account')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async deleteAccount(
-    @Req() req: any,
-    @Body() dto: DeleteAccountDto,
-  ) {
+  async deleteAccount(@Req() req: any, @Body() dto: DeleteAccountDto) {
     return this.authService.deleteAccount(req.user.authId, dto);
   }
 
-  // ─── GET /api/v3/auth/get-me ───────────────────────────────────────
+  // Get authenticated user profile
   @Get('get-me')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

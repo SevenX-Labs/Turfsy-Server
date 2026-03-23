@@ -12,19 +12,10 @@ URL     → https://turfsy.onrender.com/api/v3/auth/login
 Header  → Content-Type: application/json
 ```
 
-**USER:**
+**Request:**
 ```json
 {
-  "phone": "8652601566",
-  "role": "USER"
-}
-```
-
-**OWNER:**
-```json
-{
-  "phone": "8652601566",
-  "role": "OWNER"  
+  "phone": "8652601566"
 }
 ```
 
@@ -48,6 +39,7 @@ URL     → https://turfsy.onrender.com/api/v3/auth/verify-otp
 Header  → Content-Type: application/json
 ```
 
+**Request:**
 ```json
 {
   "phone": "8652601566",
@@ -59,9 +51,33 @@ Header  → Content-Type: application/json
 ```json
 {
   "success": true,
-  "message": "Login successful",
-  "accessToken": "eyJhbGci...",
+  "message": "OTP verified",
+  "accessToken": "eyJhbGci..." // JWT token, use this for authenticated requests
+}
+```
+## 3. POST /api/v3/auth/select-role
+
+```
+Method  → POST
+URL     → https://turfsy.onrender.com/api/v3/auth/select-role
+Header  → Content-Type: application/json
+         Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
+```
+
+**Request:**
+```json
+{
   "role": "USER"
+}
+```
+
++**Response:**
+```json
+{
+  "role": "USER",
+  "isNewUser": true,
+  "profile": null,
+  "accessToken": "eyJhbGci..." // JWT token (if you want to re-issue or confirm)
 }
 ```
 
@@ -174,8 +190,9 @@ Header  → Content-Type: application/json
 ```
 1. POST /login         → copy sessionToken + check terminal for OTP
 2. POST /verify-otp    → copy accessToken
-3. GET  /get-me        → use accessToken
-4. POST /resend-otp    → use sessionToken
-5. GET  /logout        → use accessToken
-6. DELETE /delete-account → use both
+3. POST /select-role   → use accessToken, select role, get isNewUser/profile
+4. GET  /get-me        → use accessToken
+5. POST /resend-otp    → use sessionToken
+6. GET  /logout        → use accessToken
+7. DELETE /delete-account → use both
 ```
