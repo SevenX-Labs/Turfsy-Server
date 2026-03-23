@@ -16,6 +16,7 @@ import { ResendOtpDto } from './dto/resend-otp.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import axios from 'axios';
 
 @Injectable()
 export class AuthService {
@@ -41,8 +42,26 @@ export class AuthService {
   }
 
   private async sendOtpViaSms(phone: string, otp: string): Promise<void> {
-    // DEV MODE — replace with real SMS provider in production
     console.log(`[OTP] Phone: ${phone} | OTP: ${otp}`);
+    try {
+      const response = await axios.post(
+        'https://control.msg91.com/api/v5/otp',
+        {
+          template_id: this.config.get<string>('MSG91_TEMPLATE_ID'),
+          mobile: `91${phone}`,
+          otp: otp,
+        },
+        {
+          headers: {
+            authkey: this.config.get<string>('MSG91_AUTH_KEY'),
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      console.log(`[MSG91] Response:`, response.data);
+    } catch (err) {
+      console.error(`[MSG91] Error:`, JSON.stringify(err?.response?.data || err.message));
+    }
   }
 
   private generateSessionToken(authId: string, sessionId: string, role: Role) {
