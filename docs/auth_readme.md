@@ -1,6 +1,6 @@
 # Turfsy Auth API — Endpoint Test Bodies
 
-Base URL: `http://localhost:3000`
+Base URL: `https://turfsy.onrender.com`
 
 ---
 
@@ -8,7 +8,7 @@ Base URL: `http://localhost:3000`
 
 ```
 Method  → POST
-URL     → http://localhost:3000/api/v3/auth/login
+URL     → https://turfsy.onrender.com/api/v3/auth/login
 Header  → Content-Type: application/json
 ```
 
@@ -44,7 +44,7 @@ Header  → Content-Type: application/json
 
 ```
 Method  → POST
-URL     → http://localhost:3000/api/v3/auth/verify-otp
+URL     → https://turfsy.onrender.com/api/v3/auth/verify-otp
 Header  → Content-Type: application/json
 ```
 
@@ -71,7 +71,7 @@ Header  → Content-Type: application/json
 
 ```
 Method  → POST
-URL     → http://localhost:3000/api/v3/auth/resend-otp
+URL     → https://turfsy.onrender.com/api/v3/auth/resend-otp
 Header  → Content-Type: application/json
 ```
 
@@ -96,7 +96,7 @@ Header  → Content-Type: application/json
 
 ```
 Method  → GET
-URL     → http://localhost:3000/api/v3/auth/get-me
+URL     → https://turfsy.onrender.com/api/v3/auth/get-me
 Header  → Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
 ```
 
@@ -128,7 +128,7 @@ No body.
 
 ```
 Method  → GET
-URL     → http://localhost:3000/api/v3/auth/logout
+URL     → https://turfsy.onrender.com/api/v3/auth/logout
 Header  → Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
 ```
 
@@ -148,7 +148,7 @@ No body.
 
 ```
 Method  → DELETE
-URL     → http://localhost:3000/api/v3/auth/delete-account
+URL     → https://turfsy.onrender.com/api/v3/auth/delete-account
 Header  → Content-Type: application/json
          Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
 ```
