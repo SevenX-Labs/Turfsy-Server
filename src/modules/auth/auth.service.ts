@@ -84,6 +84,12 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
+    // Invalidate all previous unverified OTPs for this account
+    // so old sessionTokens can never be reused
+    await this.prisma.otpEntry.deleteMany({
+      where: { authId: auth.id, verifiedAt: null },
+    });
+
     const otp = this.generateOtp();
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
@@ -107,21 +113,16 @@ export class AuthService {
   // ─────────────────────────────────────────
 
   async verifyOtp(dto: VerifyOtpDto) {
-    const { phone, otp } = dto;
+    const { sessionToken, otp } = dto;
 
-    const authRecord = await this.prisma.auth.findUnique({ where: { phone } });
-    if (!authRecord) {
-      throw new NotFoundException('Phone number not registered');
-    }
-
-    const otpEntry = await this.prisma.otpEntry.findFirst({
-      where: { authId: authRecord.id, verifiedAt: null },
-      orderBy: { createdAt: 'desc' },
+    // Find the OTP entry directly by sessionToken — guarantees exact user + session match
+    const otpEntry = await this.prisma.otpEntry.findUnique({
+      where: { sessionToken },
       include: { auth: true },
     });
 
     if (!otpEntry) {
-      throw new NotFoundException('No active OTP found. Please request a new one');
+      throw new NotFoundException('Invalid or expired session token. Please login again');
     }
 
     if (otpEntry.verifiedAt) {
@@ -129,7 +130,7 @@ export class AuthService {
     }
 
     if (new Date() > otpEntry.expiresAt) {
-      throw new BadRequestException('OTP expired');
+      throw new BadRequestException('OTP expired. Please request a new one');
     }
 
     const isValid = await bcrypt.compare(otp, otpEntry.code);
@@ -143,7 +144,7 @@ export class AuthService {
       data: { verifiedAt: new Date() },
     });
 
-    // Create session immediately after OTP verify
+    // Create session
     const expiresAt = new Date(
       Date.now() + parseInt(this.config.get('SESSION_EXPIRY_DAYS', '7')) * 86400000,
     );
@@ -157,18 +158,13 @@ export class AuthService {
       data: { isVerified: true },
     });
 
-    const auth = await this.prisma.auth.findUnique({ where: { id: otpEntry.authId } });
-    if (!auth) {
-      throw new NotFoundException('Auth record not found after OTP verification');
-    }
-
-    // Issue JWT — role will be set in /select-role
-    const token = this.generateSessionToken(auth.id, session.id, auth.role);
+    // Issue JWT with the verified auth's role
+    const token = this.generateSessionToken(otpEntry.auth.id, session.id, otpEntry.auth.role);
 
     return {
       success: true,
       message: 'OTP verified successfully',
-      accessToken: token
+      accessToken: token,
     };
   }
 
@@ -403,5 +399,94 @@ export class AuthService {
         });
       }
     }
+  }
+
+  // ─────────────────────────────────────────
+  // POST /request-phone-change (authenticated)
+  // Sends OTP to the NEW phone number
+  // ─────────────────────────────────────────
+
+  async requestPhoneChange(authId: string, newPhone: string) {
+    const auth = await this.prisma.auth.findUnique({ where: { id: authId } });
+    if (!auth) throw new NotFoundException('Account not found');
+    if (!auth.isActive) throw new UnauthorizedException('Account is deactivated');
+
+    // New phone must not already be registered
+    const existing = await this.prisma.auth.findUnique({ where: { phone: newPhone } });
+    if (existing && existing.id !== authId) {
+      throw new ConflictException('This phone number is already registered to another account');
+    }
+
+    // Invalidate any pending OTPs
+    await this.prisma.otpEntry.deleteMany({
+      where: { authId, verifiedAt: null },
+    });
+
+    const otp = this.generateOtp();
+    const hashedOtp = await this.hashOtp(otp);
+    const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
+
+    // Store new phone temporarily in the OTP entry sessionToken metadata
+    // by creating OTP entry and returning the sessionToken + newPhone context
+    const otpEntry = await this.prisma.otpEntry.create({
+      data: { authId, code: hashedOtp, expiresAt },
+    });
+
+    await this.sendOtpViaSms(newPhone, otp);
+
+    return {
+      success: true,
+      message: `OTP sent to ${newPhone}`,
+      sessionToken: otpEntry.sessionToken,
+      newPhone,
+      expiresIn: this.OTP_EXPIRY_SECONDS,
+    };
+  }
+
+  // ─────────────────────────────────────────
+  // POST /verify-phone-change (authenticated)
+  // Verifies OTP + updates phone in Auth
+  // ─────────────────────────────────────────
+
+  async verifyPhoneChange(authId: string, sessionToken: string, newPhone: string, otp: string) {
+    const auth = await this.prisma.auth.findUnique({ where: { id: authId } });
+    if (!auth) throw new NotFoundException('Account not found');
+
+    const otpEntry = await this.prisma.otpEntry.findUnique({
+      where: { sessionToken },
+    });
+
+    if (!otpEntry || otpEntry.authId !== authId) {
+      throw new NotFoundException('Invalid session token');
+    }
+    if (otpEntry.verifiedAt) throw new ConflictException('OTP already used');
+    if (new Date() > otpEntry.expiresAt) throw new BadRequestException('OTP expired');
+
+    const isValid = await bcrypt.compare(otp, otpEntry.code);
+    if (!isValid) throw new UnauthorizedException('Invalid OTP');
+
+    // Double-check new phone is still available
+    const taken = await this.prisma.auth.findUnique({ where: { phone: newPhone } });
+    if (taken && taken.id !== authId) {
+      throw new ConflictException('This phone number is already registered to another account');
+    }
+
+    // Mark OTP verified + update phone atomically
+    await this.prisma.$transaction([
+      this.prisma.otpEntry.update({
+        where: { id: otpEntry.id },
+        data: { verifiedAt: new Date() },
+      }),
+      this.prisma.auth.update({
+        where: { id: authId },
+        data: { phone: newPhone },
+      }),
+    ]);
+
+    return {
+      success: true,
+      message: 'Phone number updated successfully',
+      data: { phone: newPhone },
+    };
   }
 }

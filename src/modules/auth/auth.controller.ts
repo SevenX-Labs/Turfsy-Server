@@ -78,4 +78,34 @@ export class AuthController {
   async getMe(@Req() req: any) {
     return this.authService.getMe(req.user.authId);
   }
+
+  // Request phone number change — sends OTP to new number
+  @Post('request-phone-change')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async requestPhoneChange(
+    @Req() req: any,
+    @Body() body: { newPhone: string },
+  ) {
+    if (!body.newPhone) {
+      throw new Error('newPhone is required');
+    }
+    return this.authService.requestPhoneChange(req.user.authId, body.newPhone);
+  }
+
+  // Verify phone change OTP — updates phone in DB
+  @Post('verify-phone-change')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async verifyPhoneChange(
+    @Req() req: any,
+    @Body() body: { sessionToken: string; newPhone: string; otp: string },
+  ) {
+    return this.authService.verifyPhoneChange(
+      req.user.authId,
+      body.sessionToken,
+      body.newPhone,
+      body.otp,
+    );
+  }
 }

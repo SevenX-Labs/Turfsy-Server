@@ -42,7 +42,7 @@ Header  → Content-Type: application/json
 **Request:**
 ```json
 {
-  "phone": "8652601566",
+  "sessionToken": "SESSION_TOKEN_FROM_LOGIN",
   "otp": "OTP_FROM_TERMINAL"
 }
 ```

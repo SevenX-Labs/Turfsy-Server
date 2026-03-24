@@ -1,8 +1,8 @@
-import { IsString, Length, IsMobilePhone } from 'class-validator';
+import { IsString, Length } from 'class-validator';
 
 export class VerifyOtpDto {
-  @IsMobilePhone('en-IN', {}, { message: 'Enter a valid Indian mobile number' })
-  phone: string;
+  @IsString()
+  sessionToken: string;
 
   @IsString()
   @Length(6, 6, { message: 'OTP must be 6 digits' })

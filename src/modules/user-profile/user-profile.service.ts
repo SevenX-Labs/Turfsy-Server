@@ -23,6 +23,7 @@ export class UserProfileService {
     });
 
     if (!auth) throw new NotFoundException('Account not found');
+    if (!auth.isVerified) throw new ForbiddenException('Please verify your phone number first');
     if (auth.role !== Role.USER) throw new ForbiddenException('Only USER role can create user profile');
     if (auth.userProfile?.name) throw new ConflictException('Profile already created');
 
