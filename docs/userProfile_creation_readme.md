@@ -16,7 +16,6 @@ All endpoints require authentication (JWT in Authorization header).
 {
 	"name": "John Doe",
 	"email": "john@example.com",
-	"avatarUrl": "https://example.com/avatar.jpg",
 	"dob": "2000-01-01",
 	"gender": "MALE",
 	"currentLat": 19.123,
@@ -54,7 +53,7 @@ All endpoints require authentication (JWT in Authorization header).
 
 ## 3. Update User Profile
 
-**PATCH** `/api/v3/user-profile/:id`
+**PATCH** `/api/v3/user-profile`
 
 **Headers:**
 `Authorization: Bearer <accessToken>`
@@ -64,7 +63,6 @@ All endpoints require authentication (JWT in Authorization header).
 {
 	"name": "Jane Doe",
 	"email": "jane@example.com",
-	"avatarUrl": "https://example.com/avatar2.jpg",
 	"dob": "1999-12-31",
 	"gender": "FEMALE",
 	"currentLat": 20.123,
@@ -125,5 +123,32 @@ All endpoints require authentication (JWT in Authorization header).
 {
 	"success": true,
 	"message": "Location updated successfully"
+}
+```
+
+---
+
+## 6. Upload User Avatar
+
+**PATCH** `/api/v3/user-profile/upload-avatar`
+
+**Headers:**
+`Authorization: Bearer <accessToken>`
+`Content-Type: multipart/form-data`
+
+**Body (form-data):**
+```
+Key: avatar
+Value: [Your Image File (jpg/png/webp), Max 5MB]
+```
+
+**Success Response:**
+```json
+{
+  "success": true,
+  "message": "Avatar updated successfully",
+  "data": {
+    "avatarUrl": "https://turfsy.onrender.com/uploads/avatars/YOUR_AUTH_ID-123456789.jpg"
+  }
 }
 ```

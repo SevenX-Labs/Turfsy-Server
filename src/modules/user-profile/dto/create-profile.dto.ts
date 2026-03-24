@@ -19,9 +19,6 @@ export class CreateUserProfileDto {
   @IsEmail({}, { message: 'Enter a valid email address' })
   email: string;
 
-  @IsString()
-  avatarUrl: string;
-
   @IsDateString({}, { message: 'Enter a valid date (YYYY-MM-DD)' })
   dob: string;
 

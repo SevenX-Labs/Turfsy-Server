@@ -37,7 +37,6 @@ export class UserProfileService {
       data: {
         name: dto.name,
         email: dto.email,
-        avatarUrl: dto.avatarUrl,
         dob: new Date(dto.dob),
         gender: dto.gender,
         currentLat: dto.currentLat ?? null,
@@ -69,13 +68,12 @@ export class UserProfileService {
   }
 
   // Update profile — only owner of profile can update
-  async updateProfile(authId: string, profileId: string, dto: UpdateUserProfileDto) {
+  async updateProfile(authId: string, dto: UpdateUserProfileDto) {
     const profile = await this.prisma.userProfile.findUnique({
-      where: { id: profileId },
+      where: { authId },
     });
 
     if (!profile) throw new NotFoundException('Profile not found');
-    if (profile.authId !== authId) throw new ForbiddenException('You are not allowed to update this profile');
 
     // Check email uniqueness if being changed
     if (dto.email && dto.email !== profile.email) {
@@ -86,11 +84,10 @@ export class UserProfileService {
     }
 
     const updated = await this.prisma.userProfile.update({
-      where: { id: profileId },
+      where: { authId },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.email !== undefined && { email: dto.email }),
-        ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl }),
         ...(dto.dob !== undefined && { dob: new Date(dto.dob) }),
         ...(dto.gender !== undefined && { gender: dto.gender }),
         ...(dto.currentLat !== undefined && { currentLat: dto.currentLat }),
@@ -103,6 +100,26 @@ export class UserProfileService {
       success: true,
       message: 'Profile updated successfully',
       data: updated,
+    };
+  }
+
+  // Update avatar URL
+  async updateAvatar(authId: string, avatarUrl: string) {
+    const profile = await this.prisma.userProfile.findUnique({
+      where: { authId },
+    });
+
+    if (!profile) throw new NotFoundException('Profile not found');
+
+    const updated = await this.prisma.userProfile.update({
+      where: { authId },
+      data: { avatarUrl },
+    });
+
+    return {
+      success: true,
+      message: 'Avatar updated successfully',
+      data: { avatarUrl: updated.avatarUrl },
     };
   }
 

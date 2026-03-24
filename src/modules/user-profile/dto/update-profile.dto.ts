@@ -22,10 +22,6 @@ export class UpdateUserProfileDto {
   email?: string;
 
   @IsOptional()
-  @IsString()
-  avatarUrl?: string;
-
-  @IsOptional()
   @IsDateString({}, { message: 'Enter a valid date (YYYY-MM-DD)' })
   dob?: string;
 

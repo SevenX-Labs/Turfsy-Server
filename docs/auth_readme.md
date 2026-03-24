@@ -71,7 +71,7 @@ Header  → Content-Type: application/json
 }
 ```
 
-+**Response:**
+**Response:**
 ```json
 {
   "role": "USER",
