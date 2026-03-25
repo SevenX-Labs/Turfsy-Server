@@ -6,9 +6,10 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UserProfileModule } from './modules/user-profile/user-profile.module';
 import { OwnerProfileModule } from './modules/owner-profile/owner-profile.module';
 import { TurfsModule } from './modules/turfs/turfs.module';
+import { UploadModule } from './modules/upload/upload.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UserProfileModule, OwnerProfileModule, TurfsModule],
+  imports: [PrismaModule, AuthModule, UserProfileModule, OwnerProfileModule, TurfsModule, UploadModule],
   controllers: [AppController],
   providers: [AppService],
 })

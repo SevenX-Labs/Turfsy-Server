@@ -71,7 +71,7 @@ model UserProfile {
   authId      String    @unique
   name        String
   email       String    @unique
-  avatarUrl   String
+  avatarUrl   String?
   dob         DateTime
   gender      Gender
   currentLat  Float?
@@ -94,7 +94,7 @@ model OwnerProfile {
   name          String
   email         String    @unique
   contactNumber String
-  avatarUrl     String
+  avatarUrl     String?
   aadharNumber  String    // store encrypted
   aadharUrl     String?
   isKycVerified Boolean   @default(false)

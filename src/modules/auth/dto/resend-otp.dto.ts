@@ -1,6 +1,6 @@
-import { IsString } from 'class-validator';
+import { IsMobilePhone } from 'class-validator';
 
 export class ResendOtpDto {
-  @IsString()
-  sessionToken: string;
+  @IsMobilePhone('en-IN', {}, { message: 'Enter a valid Indian mobile number' })
+  phone: string;
 }

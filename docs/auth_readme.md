@@ -42,7 +42,7 @@ Header  → Content-Type: application/json
 **Request:**
 ```json
 {
-  "sessionToken": "SESSION_TOKEN_FROM_LOGIN",
+  "phone": "8652601566",
   "otp": "OTP_FROM_TERMINAL"
 }
 ```
@@ -91,9 +91,10 @@ URL     → https://turfsy.onrender.com/api/v3/auth/resend-otp
 Header  → Content-Type: application/json
 ```
 
+**Request:**
 ```json
 {
-  "sessionToken": "SESSION_TOKEN_FROM_LOGIN"
+  "phone": "8652601566"
 }
 ```
 
@@ -188,11 +189,11 @@ Header  → Content-Type: application/json
 ## Test Order
 
 ```
-1. POST /login         → copy sessionToken + check terminal for OTP
-2. POST /verify-otp    → copy accessToken
+1. POST /login         → check terminal for OTP
+2. POST /verify-otp    → copy accessToken (uses phone + otp)
 3. POST /select-role   → use accessToken, select role, get isNewUser/profile
 4. GET  /get-me        → use accessToken
-5. POST /resend-otp    → use sessionToken
+5. POST /resend-otp    → uses phone
 6. GET  /logout        → use accessToken
-7. DELETE /delete-account → use both
+7. DELETE /delete-account → use accessToken (requires sessionToken body if testing deletion)
 ```

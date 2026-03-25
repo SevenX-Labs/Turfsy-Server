@@ -1,154 +1,292 @@
-# User Profile API
+# User Profile API — Endpoint Test Guide
 
-All endpoints require authentication (JWT in Authorization header).
+Base URL: `http://localhost:3000`
 
----
-
-## 1. Create User Profile
-
-**POST** `/api/v3/user-profile`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-
-**Body:**
-```json
-{
-	"name": "John Doe",
-	"email": "john@example.com",
-	"dob": "2000-01-01",
-	"gender": "MALE",
-	"currentLat": 19.123,
-	"currentLng": 72.456,
-	"currentCity": "Mumbai"
-}
-```
-**Success Response:**
-```json
-{
-	"success": true,
-	"message": "Profile created successfully",
-	"data": { /* user profile object */ }
-}
-```
+> All endpoints require `Authorization: Bearer <accessToken>`.
+> Get your token from `POST /api/v3/auth/verify-otp` → then `POST /api/v3/auth/select-role`.
 
 ---
 
-## 2. Get Own Profile
+## Recommended Test Flow
 
-**GET** `/api/v3/user-profile`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-
-**Success Response:**
-```json
-{
-	"success": true,
-	"data": { /* user profile object, includes payment if set */ }
-}
 ```
+1. POST  /api/v3/auth/login                     → get sessionToken (check terminal for OTP)
+2. POST  /api/v3/auth/verify-otp                → get accessToken
+3. POST  /api/v3/auth/select-role  (role: USER) → empty profile row auto-created in DB
+4. POST  /api/v3/user-profile/upload-avatar           ← UPLOAD IMAGE FIRST (Supabase Storage)
+5. POST  /api/v3/user-profile                   → create profile (fill in name, email, etc.)
+6. GET   /api/v3/user-profile                   → verify full profile with avatarUrl
+7. PATCH /api/v3/user-profile                   → update any fields
+8. POST  /api/v3/user-profile/location          → update GPS location
+9. POST  /api/v3/user-profile/payment-details   → save UPI ID
+10. DELETE /api/v3/user-profile/upload-avatar                      → delete image (avatarUrl → null)
+```
+
+> **Why upload first?** After `select-role`, an empty profile row is created in the DB.
+> The upload endpoint uses that row to save the `avatarUrl`. Then `createProfile` fills in the rest.
 
 ---
 
-## 3. Update User Profile
+## 1. POST /api/v3/user-profile/upload-avatar — Upload Profile Picture
 
-**PATCH** `/api/v3/user-profile`
+> Stores image in Supabase Storage → `uploads/users/{authId}/profile.jpg`
+> Saves public URL as `avatarUrl` in DB. **No image binary in DB.**
+> Re-uploading automatically overwrites the previous image.
 
-**Headers:**
-`Authorization: Bearer <accessToken>`
-
-**Body:** (any subset of fields)
-```json
-{
-	"name": "Jane Doe",
-	"email": "jane@example.com",
-	"dob": "1999-12-31",
-	"gender": "FEMALE",
-	"currentLat": 20.123,
-	"currentLng": 73.456,
-	"currentCity": "Pune"
-}
 ```
-**Success Response:**
-```json
-{
-	"success": true,
-	"data": { /* updated user profile object */ }
-}
+Method  → POST
+URL     → http://localhost:3000/api/v3/user-profile/upload-avatar
+Headers → Authorization: Bearer ACCESS_TOKEN
+Body    → form-data
 ```
 
----
+**form-data:**
 
-## 4. Save UPI Payment Details
+| Key | Type | Value |
+|---|---|---|
+| `file` | File | Select image from device |
 
-**POST** `/api/v3/user-profile/payment-details`
+**Allowed types:** `image/jpeg` · `image/jpg` · `image/png` · `image/webp`
+**Max size:** `5 MB`
 
-**Headers:**
-`Authorization: Bearer <accessToken>`
-
-**Body:**
-```json
-{
-	"upiId": "john@upi"
-}
-```
-**Success Response:**
-```json
-{
-	"success": true,
-	"message": "Payment details saved successfully"
-}
-```
-
----
-
-## 5. Update Location
-
-**POST** `/api/v3/user-profile/location`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-
-**Body:**
-```json
-{
-	"lat": 19.123,
-	"lng": 72.456,
-	"city": "Mumbai"
-}
-```
-**Success Response:**
-```json
-{
-	"success": true,
-	"message": "Location updated successfully"
-}
-```
-
----
-
-## 6. Upload User Avatar
-
-**PATCH** `/api/v3/user-profile/upload-avatar`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: multipart/form-data`
-
-**Body (form-data):**
-```
-Key: avatar
-Value: [Your Image File (jpg/png/webp), Max 5MB]
-```
-
-**Success Response:**
+**Response `200`:**
 ```json
 {
   "success": true,
-  "message": "Avatar updated successfully",
+  "avatarUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/users/{authId}/profile.jpg"
+}
+```
+
+**Errors:**
+| Status | Reason |
+|---|---|
+| `400` | Field name wrong (must be `file`) / invalid type / exceeds 5 MB |
+| `401` | Missing or invalid token |
+| `404` | Profile row not found (did you call select-role first?) |
+| `500` | Supabase upload failed |
+
+---
+
+## 2. DELETE /api/v3/user-profile/upload-avatar — Delete Profile Picture
+
+> Removes image from Supabase Storage and sets `avatarUrl = null` in DB.
+
+```
+Method  → DELETE
+URL     → http://localhost:3000/api/v3/user-profile/upload-avatar
+Headers → Authorization: Bearer ACCESS_TOKEN
+```
+
+No body.
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "message": "Profile image deleted successfully"
+}
+```
+
+---
+
+## 3. POST /api/v3/user-profile — Create Profile
+
+> Fills in the profile details. Call this **after** uploading the profile picture.
+> `avatarUrl` is already saved from step 1 — do not pass it here.
+
+```
+Method  → POST
+URL     → http://localhost:3000/api/v3/user-profile
+Headers → Content-Type: application/json
+          Authorization: Bearer ACCESS_TOKEN
+```
+
+**Request:**
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "dob": "2000-01-15",
+  "gender": "MALE",
+  "currentLat": 19.0760,
+  "currentLng": 72.8777,
+  "currentCity": "Mumbai"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | ✅ | Full name |
+| `email` | string | ✅ | Must be unique |
+| `dob` | string | ✅ | Format: `"YYYY-MM-DD"` |
+| `gender` | string | ✅ | `MALE` \| `FEMALE` \| `OTHER` \| `PREFER_NOT_TO_SAY` |
+| `currentLat` | number | ❌ | Decimal latitude |
+| `currentLng` | number | ❌ | Decimal longitude |
+| `currentCity` | string | ❌ | City name |
+
+**Response `201`:**
+```json
+{
+  "success": true,
+  "message": "Profile created successfully",
   "data": {
-    "avatarUrl": "https://turfsy.onrender.com/uploads/avatars/YOUR_AUTH_ID-123456789.jpg"
+    "id": "uuid",
+    "authId": "uuid",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "avatarUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/users/{authId}/profile.jpg",
+    "dob": "2000-01-15T00:00:00.000Z",
+    "gender": "MALE",
+    "currentLat": 19.076,
+    "currentLng": 72.8777,
+    "currentCity": "Mumbai",
+    "createdAt": "2026-03-25T13:00:00.000Z",
+    "updatedAt": "2026-03-25T13:00:00.000Z"
   }
 }
 ```
+
+---
+
+## 4. GET /api/v3/user-profile — Get Own Profile
+
+```
+Method  → GET
+URL     → http://localhost:3000/api/v3/user-profile
+Headers → Authorization: Bearer ACCESS_TOKEN
+```
+
+No body.
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "authId": "uuid",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "avatarUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/users/{authId}/profile.jpg",
+    "dob": "2000-01-15T00:00:00.000Z",
+    "gender": "MALE",
+    "currentLat": 19.076,
+    "currentLng": 72.8777,
+    "currentCity": "Mumbai",
+    "createdAt": "2026-03-25T13:00:00.000Z",
+    "updatedAt": "2026-03-25T13:00:00.000Z",
+    "payment": null
+  }
+}
+```
+
+---
+
+## 5. PATCH /api/v3/user-profile — Update Profile
+
+> Send only the fields you want to update.
+
+```
+Method  → PATCH
+URL     → http://localhost:3000/api/v3/user-profile
+Headers → Content-Type: application/json
+          Authorization: Bearer ACCESS_TOKEN
+```
+
+**Request:** (any subset)
+```json
+{
+  "name": "John Updated",
+  "email": "john.new@example.com",
+  "currentCity": "Pune"
+}
+```
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "message": "Profile updated successfully",
+  "data": {
+    "id": "uuid",
+    "name": "John Updated",
+    "email": "john.new@example.com",
+    "currentCity": "Pune"
+  }
+}
+```
+
+---
+
+## 6. POST /api/v3/user-profile/location — Update Location
+
+```
+Method  → POST
+URL     → http://localhost:3000/api/v3/user-profile/location
+Headers → Content-Type: application/json
+          Authorization: Bearer ACCESS_TOKEN
+```
+
+**Request:**
+```json
+{
+  "lat": 18.5204,
+  "lng": 73.8567,
+  "city": "Pune"
+}
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `lat` | number | ✅ |
+| `lng` | number | ✅ |
+| `city` | string | ❌ |
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "message": "Location updated successfully",
+  "data": { "lat": 18.5204, "lng": 73.8567, "city": "Pune" }
+}
+```
+
+---
+
+## 7. POST /api/v3/user-profile/payment-details — Save UPI
+
+```
+Method  → POST
+URL     → http://localhost:3000/api/v3/user-profile/payment-details
+Headers → Content-Type: application/json
+          Authorization: Bearer ACCESS_TOKEN
+```
+
+**Request:**
+```json
+{
+  "upiId": "john@ybl"
+}
+```
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "message": "Payment details saved successfully",
+  "data": { "upiId": "john@ybl" }
+}
+```
+
+---
+
+## Storage Reference
+
+```
+Bucket  : uploads
+Path    : users/{authId}/profile.jpg
+Access  : Public (must be enabled in Supabase Dashboard → Storage)
+```
+
+> Uploading a new image always **overwrites** the same path — no duplicate files.
+> The `authId` comes from the JWT automatically — you never pass it manually.

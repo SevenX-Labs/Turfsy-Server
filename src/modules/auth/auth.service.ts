@@ -103,7 +103,6 @@ export class AuthService {
     return {
       success: true,
       message: 'OTP sent successfully',
-      sessionToken: otpEntry.sessionToken,
       expiresIn: this.OTP_EXPIRY_SECONDS,
     };
   }
@@ -113,16 +112,24 @@ export class AuthService {
   // ─────────────────────────────────────────
 
   async verifyOtp(dto: VerifyOtpDto) {
-    const { sessionToken, otp } = dto;
+    const { phone, otp } = dto;
 
-    // Find the OTP entry directly by sessionToken — guarantees exact user + session match
-    const otpEntry = await this.prisma.otpEntry.findUnique({
-      where: { sessionToken },
+    const auth = await this.prisma.auth.findUnique({
+      where: { phone },
+    });
+
+    if (!auth) {
+      throw new NotFoundException('Account not found');
+    }
+
+    const otpEntry = await this.prisma.otpEntry.findFirst({
+      where: { authId: auth.id, verifiedAt: null },
+      orderBy: { createdAt: 'desc' },
       include: { auth: true },
     });
 
     if (!otpEntry) {
-      throw new NotFoundException('Invalid or expired session token. Please login again');
+      throw new NotFoundException('Invalid or expired OTP request. Please login again');
     }
 
     if (otpEntry.verifiedAt) {
@@ -219,15 +226,24 @@ export class AuthService {
   // ─────────────────────────────────────────
 
   async resendOtp(dto: ResendOtpDto) {
-    const { sessionToken } = dto;
+    const { phone } = dto;
 
-    const otpEntry = await this.prisma.otpEntry.findUnique({
-      where: { sessionToken },
+    const auth = await this.prisma.auth.findUnique({
+      where: { phone },
+    });
+
+    if (!auth) {
+      throw new NotFoundException('Account not found');
+    }
+
+    const otpEntry = await this.prisma.otpEntry.findFirst({
+      where: { authId: auth.id, verifiedAt: null },
+      orderBy: { createdAt: 'desc' },
       include: { auth: true },
     });
 
     if (!otpEntry) {
-      throw new NotFoundException('Invalid session token');
+      throw new NotFoundException('Invalid OTP request');
     }
 
     if (otpEntry.verifiedAt) {
