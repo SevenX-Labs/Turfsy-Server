@@ -6,27 +6,26 @@ This document provides a comprehensive guide to the Turf creation, update, and r
 
 This module has been hardened for **production-grade security and scalability**.
 
-- **🔒 Path Traversal Protection**: Turf IDs are stripped of all non-alphanumeric characters. When replacing images, `path.basename()` strictly locks file unlinking to the designated `/uploads/turfs/[id]/` directory, making arbitrary file deletion impossible.
+- **☁️ Supabase Cloud Storage**: Turf images are stored in a dedicated Supabase S3 bucket (`turfs/{turfId}/{type}.jpg`). This isolates file infrastructure from the main application, eliminating path traversal risks and reducing local disk bloat entirely.
 - **⚡ Payload & DoS Protection**: The `nearby` search strictly limits queries to a `max 100km radius` and truncates responses to the top **50 closest turfs** to ensure fast latency and prevent out-of-memory crashes under heavy load.
 - **📍 GPS Spoofing Prevention**: Coordinates (`lat`, `lng`) are mathematically validated between `[-90, 90]` and `[-180, 180]`. Additionally, coordinates are **immutable** via the update endpoint once created, guaranteeing physical location accuracy.
 - **🛡️ Rate Limiting**: Global `@nestjs/throttler` guards allow a maximum of 10 requests per minute per IP to mitigate brute force and scraping.
-- **🧹 Idempotent Garbage Collection**: Upload endpoints automatically unlink out-of-date image files from the disk, ensuring zero storage bloat over time.
 - **📸 Strict Image Specs**: 
-  - Max Size: 5MB per image to prevent storage exhaustion.
+  - Max Size: 5MB per image to prevent memory exhaustion during upload.
   - Count: **3 Explicit Images** (entrance, dayTurf, nightTurf).
-  - Validation: Deep MIME-type checking ensures only real images (`jpg, jpeg, png, gif, webp`) are accepted, blocking disguised executable scripts.
+  - Validation: Deep MIME-type checking ensures only real images (`jpg, jpeg, png, webp`) are accepted, blocking disguised executable scripts.
 
 ---
 
 ## 🚀 Endpoints
 
 ### 1. Create a Turf
-Owners can create a turf profile. Initial images are not required at this step; they are uploaded separately. 
+Owners can create a turf profile. You can either supply the details as JSON, or as `multipart/form-data` to optionally upload the images simultaneously.
 **Note**: This is the only time `lat` and `lng` are accepted.
 
 - **URL**: `POST /api/v3/turfs`
 - **Auth**: Required (JWT - Owner Role)
-- **Body (`application/json`)**:
+- **Body (`multipart/form-data` or `application/json`)**:
 ```json
 {
   "name": "Champions Arena",
@@ -54,11 +53,29 @@ Owners can create a turf profile. Initial images are not required at this step; 
   "weekendNightPrice": 1800
 }
 ```
+*(If using `multipart/form-data`, you may also include files for the `entrance`, `dayTurf`, and `nightTurf` fields.)*
 
 ---
 
-### 2. Upload/Update Turf Images
-Upload the 3 specific images for a turf. This endpoint is idempotent and handles cleanup of old files.
+### 2. Update Turf
+Update turf details. Fields like `lat` and `lng` are ignored if sent in the body. You can also upload/replace images at the same time.
+
+- **URL**: `PATCH /api/v3/turfs/:turfId`
+- **Auth**: Required (Owner)
+- **Body (`multipart/form-data` or `application/json`)**:
+```json
+{
+  "name": "Champions Arena (Updated)",
+  "openTime": "07:00",
+  "closeTime": "22:00",
+  "weekdayDayPrice": 1300
+}
+```
+
+---
+
+### 3. Upload/Update Turf Images (Bulk)
+Upload the 3 specific images for a turf in a single request. This endpoint is idempotent—subsequent uploads automatically overwrite the old images in the Supabase S3 bucket.
 
 - **URL**: `POST /api/v3/turfs/:turfId/images`
 - **Auth**: Required
@@ -71,36 +88,28 @@ Upload the 3 specific images for a turf. This endpoint is idempotent and handles
 ```json
 {
   "id": "turf-uuid-here",
-  "entranceUrl": "http://localhost:3000/uploads/turfs/turf-uuid/1711465200-entrance.jpg",
-  "groundDayUrl": "http://localhost:3000/uploads/turfs/turf-uuid/1711465200-day.jpg",
-  "groundNightUrl": "http://localhost:3000/uploads/turfs/turf-uuid/1711465200-night.jpg",
+  "entranceUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.jpg",
+  "groundDayUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/dayTurf.jpg",
+  "groundNightUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/nightTurf.jpg",
   "...otherFields": "..."
 }
 ```
 
 ---
 
-### 3. Update Turf
-Update turf details. Fields like `lat` and `lng` are ignored if sent in the body.
+### 4. Upload Single Turf Image (One-by-One)
+Upload or replace a single specific image for a turf.
 
-- **URL**: `PATCH /api/v3/turfs/:turfId`
-- **Auth**: Required (Owner)
-- **Body (`application/json`)**:
-```json
-{
-  "name": "Champions Arena (Updated)",
-  "description": "Updated description for the turf.",
-  "openTime": "07:00",
-  "closeTime": "22:00",
-  "weekdayDayPrice": 1300
-  // lat and lng will be ignored if sent
-}
-```
+- **URL**: `PATCH /api/v3/turfs/:turfId/upload-image/:type`
+  *(Where `:type` must be exactly `entrance`, `dayTurf`, or `nightTurf`)*
+- **Auth**: Required
+- **Body (`multipart/form-data`)**:
+  - `file`: (File) The image file to upload
 
 ---
 
-### 4. Get Turf Details (Consumer View)
-Retrieve full turf data formatted for the UI (Autoswipe, Reviews, Owner Contact).
+### 5. Get Turf Details (Consumer View)
+Retrieve full turf data formatted for the UI (Autoswipe, Reviews, Owner Contact). Images are served directly via public Supabase URLs.
 
 - **URL**: `GET /api/v3/turfs/:turfId`
 - **Auth**: Optional
@@ -111,42 +120,25 @@ Retrieve full turf data formatted for the UI (Autoswipe, Reviews, Owner Contact)
   "name": "Champions Arena",
   "description": "Premium 5-a-side football turf...",
   "images": [
-    "http://localhost:3000/uploads/turfs/.../123-entrance.jpg",
-    "http://localhost:3000/uploads/turfs/.../123-day.jpg"
+    "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.jpg",
+    "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/dayTurf.jpg"
   ],
   "rating": 4.5,
-  "reviewCount": 2,
   "openTime": "06:00",
   "closeTime": "23:00",
   "status": "ACTIVE",
-  "address": "123 Sports Complex, MG Road",
-  "city": "Mumbai",
   "weekdayDayPrice": 1200,
-  "weekdayNightPrice": 1500,
   "weekendDayPrice": 1500,
-  "weekendNightPrice": 1800,
   "owner": {
     "name": "Sahil",
     "contactNumber": "+91 9876543210"
-  },
-  "rules": [
-    "No smoking inside the turf",
-    "Wear proper non-marking sports shoes",
-    "Please arrive 10 minutes before your slot"
-  ],
-  "customerReviews": [
-    {
-      "reviewerName": "Rohit Sharma",
-      "rating": 5,
-      "comment": "Excellent quality ground!"
-    }
-  ]
+  }
 }
 ```
 
 ---
 
-### 5. Update Turf Status
+### 6. Update Turf Status
 For admin/owner to toggle visibility.
 
 - **URL**: `PATCH /api/v3/turfs/:turfId/status`
@@ -160,10 +152,8 @@ For admin/owner to toggle visibility.
 
 ---
 
-### 6. Search Nearby Turfs
-Fetch turfs near a given location. The frontend can send coordinates from:
-- **Option A**: User's current GPS location (auto-detect)
-- **Option B**: Manually selected location from a map pin
+### 7. Search Nearby Turfs
+Fetch turfs near a given location.
 
 - **URL**: `GET /api/v3/turfs/nearby?lat=19.0760&lng=72.8777&radiusKm=10`
 - **Auth**: Not Required
@@ -184,20 +174,8 @@ Fetch turfs near a given location. The frontend can send coordinates from:
       "name": "Champions Arena",
       "distanceKm": 1.23,
       "images": [
-        "http://localhost:3000/uploads/turfs/.../entrance.jpg",
-        "http://localhost:3000/uploads/turfs/.../day.jpg",
-        "http://localhost:3000/uploads/turfs/.../night.jpg"
-      ],
-      "weekdayDayPrice": 1200,
-      "weekdayNightPrice": 1500,
-      "weekendDayPrice": 1500,
-      "weekendNightPrice": 1800,
-      "openTime": "06:00",
-      "closeTime": "23:00",
-      "owner": {
-        "name": "Sahil",
-        "contactNumber": "+91 9876543210"
-      }
+        "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.jpg"
+      ]
     }
   ]
 }
@@ -207,19 +185,17 @@ Fetch turfs near a given location. The frontend can send coordinates from:
 
 ## 🛠️ Testing with Postman/cURL
 
-### Uploading Images via cURL:
+### Uploading a Single Image via cURL (New Flow):
+```bash
+curl -X PATCH http://localhost:3000/api/v3/turfs/YOUR_TURF_ID/upload-image/dayTurf \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@/path/to/ground_day.jpg"
+```
+
+### Uploading Bulk Images via cURL:
 ```bash
 curl -X POST http://localhost:3000/api/v3/turfs/YOUR_TURF_ID/images \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -F "entrance=@/path/to/entrance.jpg" \
   -F "dayTurf=@/path/to/ground_day.jpg"
 ```
-
-### Fetching Nearby Turfs via cURL:
-```bash
-curl "http://localhost:3000/api/v3/turfs/nearby?lat=19.0760&lng=72.8777&radiusKm=15"
-```
-
-### Note on Static Assets:
-Ensure the following line is in your `main.ts` to access images in the browser:
-`app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads/' });`
