@@ -135,9 +135,8 @@ model Turf {
  
   // Images
   groundDayUrl        String
-  groundNightUrl      String?
+  groundNightUrl      String
   entranceUrl         String
-  seatingAreaUrl      String?
  
   // Amenities
   floodLights         Boolean    @default(false)
