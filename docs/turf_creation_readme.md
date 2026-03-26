@@ -9,15 +9,18 @@ This document provides a comprehensive guide to the Turf creation, update, and r
 - **Rate Limiting**: 10 requests per minute per IP.
 - **Image Specs**: 
   - Max Size: 5MB per image.
+  - Count: **3 Images** (entrance, dayTurf, nightTurf).
   - Allowed Formats: `jpg, jpeg, png, gif, webp`.
   - Automatic cleanup of old images on update.
+- **Location Policy**: `lat` and `lng` are set during creation and **cannot be updated** via the update endpoint to ensure the turf's physical location remains consistent once established.
 
 ---
 
 ## 🚀 Endpoints
 
 ### 1. Create a Turf
-Owners can create a turf profile. Initial images are not required at this step; they are uploaded separately.
+Owners can create a turf profile. Initial images are not required at this step; they are uploaded separately. 
+**Note**: This is the only time `lat` and `lng` are accepted.
 
 - **URL**: `POST /api/v3/turfs`
 - **Auth**: Required (JWT - Owner Role)
@@ -53,7 +56,7 @@ Owners can create a turf profile. Initial images are not required at this step; 
 ---
 
 ### 2. Upload/Update Turf Images
-Upload up to 4 specific images for a turf. This endpoint is idempotent and handles cleanup of old files.
+Upload the 3 specific images for a turf. This endpoint is idempotent and handles cleanup of old files.
 
 - **URL**: `POST /api/v3/turfs/:turfId/images`
 - **Auth**: Required
@@ -61,7 +64,6 @@ Upload up to 4 specific images for a turf. This endpoint is idempotent and handl
   - `entrance`: (File) Main entrance image
   - `dayTurf`: (File) Ground image during daylight
   - `nightTurf`: (File) Ground image under floodlights
-  - `seatingArea`: (File) Seating/Wait area image
 
 **Success Response (200 OK):**
 ```json
@@ -70,14 +72,32 @@ Upload up to 4 specific images for a turf. This endpoint is idempotent and handl
   "entranceUrl": "http://localhost:3000/uploads/turfs/turf-uuid/1711465200-entrance.jpg",
   "groundDayUrl": "http://localhost:3000/uploads/turfs/turf-uuid/1711465200-day.jpg",
   "groundNightUrl": "http://localhost:3000/uploads/turfs/turf-uuid/1711465200-night.jpg",
-  "seatingAreaUrl": "http://localhost:3000/uploads/turfs/turf-uuid/1711465200-seating.jpg",
   "...otherFields": "..."
 }
 ```
 
 ---
 
-### 3. Get Turf Details (Consumer View)
+### 3. Update Turf
+Update turf details. Fields like `lat` and `lng` are ignored if sent in the body.
+
+- **URL**: `PATCH /api/v3/turfs/:turfId`
+- **Auth**: Required (Owner)
+- **Body (`application/json`)**:
+```json
+{
+  "name": "Champions Arena (Updated)",
+  "description": "Updated description for the turf.",
+  "openTime": "07:00",
+  "closeTime": "22:00",
+  "weekdayDayPrice": 1300
+  // lat and lng will be ignored if sent
+}
+```
+
+---
+
+### 4. Get Turf Details (Consumer View)
 Retrieve full turf data formatted for the UI (Autoswipe, Reviews, Owner Contact).
 
 - **URL**: `GET /api/v3/turfs/:turfId`

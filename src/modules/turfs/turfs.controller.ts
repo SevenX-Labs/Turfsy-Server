@@ -71,7 +71,7 @@ export class TurfsController {
     return this.turfsService.getMyTurfs(req.user.authId);
   }
 
-  // 3. Update Turf
+  // 3. Update Turf (lat and lng are omitted to prevent constant changes)
   @Patch(':turfId')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -103,7 +103,7 @@ export class TurfsController {
     return this.turfsService.getTurfDetails(turfId);
   }
 
-  // 6. Upload 4 images (entrance, day turf, night turf, seating area)
+  // 6. Upload 3 images (entrance, day turf, night turf)
   @Post(':turfId/images')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
@@ -112,7 +112,6 @@ export class TurfsController {
         { name: 'entrance', maxCount: 1 },
         { name: 'dayTurf', maxCount: 1 },
         { name: 'nightTurf', maxCount: 1 },
-        { name: 'seatingArea', maxCount: 1 },
       ],
       {
         storage: makeStorage(),
@@ -128,11 +127,10 @@ export class TurfsController {
       entrance?: any[];
       dayTurf?: any[];
       nightTurf?: any[];
-      seatingArea?: any[];
     },
     @Req() req: any,
   ) {
-    if (!files.entrance && !files.dayTurf && !files.nightTurf && !files.seatingArea) {
+    if (!files.entrance && !files.dayTurf && !files.nightTurf) {
       throw new BadRequestException('At least one image must be provided');
     }
 
@@ -144,7 +142,6 @@ export class TurfsController {
     if (files.entrance?.[0]) images.entranceUrl = `${base}/${files.entrance[0].filename}`;
     if (files.dayTurf?.[0]) images.groundDayUrl = `${base}/${files.dayTurf[0].filename}`;
     if (files.nightTurf?.[0]) images.groundNightUrl = `${base}/${files.nightTurf[0].filename}`;
-    if (files.seatingArea?.[0]) images.seatingAreaUrl = `${base}/${files.seatingArea[0].filename}`;
 
     return this.turfsService.updateTurfImagesWithIdempotency(req.user.authId, turfId, images);
   }
