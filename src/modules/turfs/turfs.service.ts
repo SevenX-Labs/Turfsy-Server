@@ -46,6 +46,7 @@ export class TurfsService {
         weekendDayPrice: dto.weekendDayPrice,
         weekendNightPrice: dto.weekendNightPrice,
         groundDayUrl: '',
+        groundNightUrl: '',
         entranceUrl: '',
       },
     });
@@ -173,7 +174,6 @@ export class TurfsService {
         turf.entranceUrl,
         turf.groundDayUrl,
         turf.groundNightUrl,
-        turf.seatingAreaUrl,
       ].filter(Boolean),
       rating: 4.5, // Placeholder
       rules: [
@@ -216,7 +216,6 @@ export class TurfsService {
     if (images.entranceUrl) deleteOldImage(turf.entranceUrl);
     if (images.groundDayUrl) deleteOldImage(turf.groundDayUrl);
     if (images.groundNightUrl) deleteOldImage(turf.groundNightUrl);
-    if (images.seatingAreaUrl) deleteOldImage(turf.seatingAreaUrl);
 
     const updated = await this.prisma.turf.update({
       where: { id: turfId },
