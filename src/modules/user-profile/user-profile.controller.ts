@@ -8,6 +8,7 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import { UserProfileService } from './user-profile.service';
 import { CreateUserProfileDto } from './dto/create-profile.dto';

@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import * as fs from 'fs';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
 import { TurfStatus } from '@prisma/client';
@@ -45,9 +44,6 @@ export class TurfsService {
         weekdayNightPrice: dto.weekdayNightPrice,
         weekendDayPrice: dto.weekendDayPrice,
         weekendNightPrice: dto.weekendNightPrice,
-        groundDayUrl: '',
-        groundNightUrl: '',
-        entranceUrl: '',
       },
     });
 
@@ -91,7 +87,8 @@ export class TurfsService {
         images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
       }))
       .filter((turf) => turf.distanceKm <= radiusKm)
-      .sort((a, b) => a.distanceKm - b.distanceKm);
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 50); // Hard limit to top 50 turfs for safety and payload size limit
 
     return {
       success: true,
@@ -228,47 +225,6 @@ export class TurfsService {
         { reviewerName: 'Rohit Sharma', rating: 5, comment: 'Excellent quality ground!' },
         { reviewerName: 'Virat Kohli', rating: 4, comment: 'Good pitch, floodlights could be better.' },
       ],
-    };
-  }
-
-  // 6. Upload/Update Turf Images (Idempotent)
-  async updateTurfImagesWithIdempotency(authId: string, turfId: string, images: any) {
-    const profile = await this.prisma.ownerProfile.findUnique({
-      where: { authId },
-    });
-
-    if (!profile) throw new NotFoundException('Owner profile not found');
-
-    const turf = await this.prisma.turf.findUnique({ where: { id: turfId } });
-    if (!turf) throw new NotFoundException('Turf not found');
-    if (turf.ownerProfileId !== profile.id)
-      throw new ForbiddenException('You are not allowed to update this turf');
-
-    const deleteOldImage = (oldUrl: string | null) => {
-      if (oldUrl) {
-        try {
-          const urlObj = new URL(oldUrl);
-          const oldPath = `./${urlObj.pathname.startsWith('/') ? urlObj.pathname.slice(1) : urlObj.pathname}`;
-          if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
-          }
-        } catch (e) {}
-      }
-    };
-
-    if (images.entranceUrl) deleteOldImage(turf.entranceUrl);
-    if (images.groundDayUrl) deleteOldImage(turf.groundDayUrl);
-    if (images.groundNightUrl) deleteOldImage(turf.groundNightUrl);
-
-    const updated = await this.prisma.turf.update({
-      where: { id: turfId },
-      data: images,
-    });
-
-    return {
-      success: true,
-      message: 'Turf images updated successfully',
-      data: updated,
     };
   }
 }

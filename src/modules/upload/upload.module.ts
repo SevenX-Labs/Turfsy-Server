@@ -20,5 +20,6 @@ import { PrismaModule } from '../../prisma/prisma.module';
   ],
   controllers: [UploadController],
   providers: [UploadService],
+  exports: [UploadService],
 })
 export class UploadModule {}

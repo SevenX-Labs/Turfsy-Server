@@ -2,17 +2,19 @@
 
 This document provides a comprehensive guide to the Turf creation, update, and retrieval endpoints.
 
-## 📌 Architecture Overview
+## 📌 Architecture & Security Overview
 
-- **Storage Strategy**: Local disk storage organized by `turfId`.
-- **Path**: `./uploads/turfs/{turfId}/{unique-filename}.ext`
-- **Rate Limiting**: 10 requests per minute per IP.
-- **Image Specs**: 
-  - Max Size: 5MB per image.
-  - Count: **3 Images** (entrance, dayTurf, nightTurf).
-  - Allowed Formats: `jpg, jpeg, png, gif, webp`.
-  - Automatic cleanup of old images on update.
-- **Location Policy**: `lat` and `lng` are set during creation and **cannot be updated** via the update endpoint to ensure the turf's physical location remains consistent once established.
+This module has been hardened for **production-grade security and scalability**.
+
+- **🔒 Path Traversal Protection**: Turf IDs are stripped of all non-alphanumeric characters. When replacing images, `path.basename()` strictly locks file unlinking to the designated `/uploads/turfs/[id]/` directory, making arbitrary file deletion impossible.
+- **⚡ Payload & DoS Protection**: The `nearby` search strictly limits queries to a `max 100km radius` and truncates responses to the top **50 closest turfs** to ensure fast latency and prevent out-of-memory crashes under heavy load.
+- **📍 GPS Spoofing Prevention**: Coordinates (`lat`, `lng`) are mathematically validated between `[-90, 90]` and `[-180, 180]`. Additionally, coordinates are **immutable** via the update endpoint once created, guaranteeing physical location accuracy.
+- **🛡️ Rate Limiting**: Global `@nestjs/throttler` guards allow a maximum of 10 requests per minute per IP to mitigate brute force and scraping.
+- **🧹 Idempotent Garbage Collection**: Upload endpoints automatically unlink out-of-date image files from the disk, ensuring zero storage bloat over time.
+- **📸 Strict Image Specs**: 
+  - Max Size: 5MB per image to prevent storage exhaustion.
+  - Count: **3 Explicit Images** (entrance, dayTurf, nightTurf).
+  - Validation: Deep MIME-type checking ensures only real images (`jpg, jpeg, png, gif, webp`) are accepted, blocking disguised executable scripts.
 
 ---
 

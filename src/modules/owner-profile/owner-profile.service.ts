@@ -8,8 +8,6 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOwnerProfileDto } from './dto/create-owner-profile.dto';
 import { UpdateOwnerProfileDto } from './dto/update-owner-profile.dto';
-import { CreateTurfDto } from './dto/create-turf.dto';
-import { UpdateTurfDto } from './dto/update-turf.dto';
 import { OwnerPaymentDetailsDto } from './dto/owner-payment-details.dto';
 import { Role, TurfStatus } from '@prisma/client';
 
@@ -111,7 +109,7 @@ export class OwnerProfileService {
   }
 
   // ─────────────────────────────────────────
-  // Upload Owner Avatar
+  // Upload Owner Avatar (local disk)
   // ─────────────────────────────────────────
 
   async updateAvatar(authId: string, avatarUrl: string) {

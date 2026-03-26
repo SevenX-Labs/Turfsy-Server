@@ -134,9 +134,9 @@ model Turf {
   minSlotDurationMins Int        // e.g. 60 for 1 hour
  
   // Images
-  groundDayUrl        String
-  groundNightUrl      String
-  entranceUrl         String
+  groundDayUrl        String?
+  groundNightUrl      String?
+  entranceUrl         String?
  
   // Amenities
   floodLights         Boolean    @default(false)

@@ -8,60 +8,73 @@ import {
   Query,
   UseInterceptors,
   UploadedFiles,
+  UploadedFile,
   BadRequestException,
   Req,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import * as fs from 'fs';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { TurfsService } from './turfs.service';
+import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TurfStatus } from '@prisma/client';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
 
-// Helper for multer disk storage
-function makeStorage() {
-  return diskStorage({
-    destination: (req: any, file, cb) => {
-      const turfId = req.params.turfId || 'new';
-      const uploadPath = `./uploads/turfs/${turfId}`;
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
-      }
-      cb(null, uploadPath);
-    },
-    filename: (req: any, file, cb) => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      const ext = extname(file.originalname);
-      // Clean original filename (no spaces or weird characters)
-      const cleanName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '').slice(0, 20);
-      cb(null, `${uniqueSuffix}-${cleanName}`);
-    },
-  });
-}
-
-const imageFilter = (req: any, file: any, cb: any) => {
-  if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
-    return cb(new BadRequestException('Only image files are allowed!'), false);
-  }
-  cb(null, true);
-};
+import { memoryStorage } from 'multer';
 
 @Controller('api/v3/turfs')
 export class TurfsController {
-  constructor(private readonly turfsService: TurfsService) {}
+  constructor(
+    private readonly turfsService: TurfsService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   // 1. Create a Turf
   @Post()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
-  async createTurf(@Req() req: any, @Body() dto: CreateTurfDto) {
-    return this.turfsService.createTurf(req.user.authId, dto);
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'entrance', maxCount: 1 },
+        { name: 'dayTurf', maxCount: 1 },
+        { name: 'nightTurf', maxCount: 1 },
+      ],
+      {
+        storage: memoryStorage(),
+        limits: { fileSize: 5 * 1024 * 1024 },
+      },
+    ),
+  )
+  async createTurf(
+    @Req() req: any,
+    @Body() dto: CreateTurfDto,
+    @UploadedFiles()
+    files: {
+      entrance?: any[];
+      dayTurf?: any[];
+      nightTurf?: any[];
+    },
+  ) {
+    const response = await this.turfsService.createTurf(req.user.authId, dto);
+    const turf = response.data;
+
+    // Handle initial image uploads if provided
+    if (files.entrance?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'entrance', files.entrance[0]);
+    }
+    if (files.dayTurf?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'dayTurf', files.dayTurf[0]);
+    }
+    if (files.nightTurf?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'nightTurf', files.nightTurf[0]);
+    }
+
+    // Return the latest turf data with URLs
+    return this.turfsService.getTurfDetails(turf.id);
   }
 
   // 2. Search Nearby Turfs (by current location or manual map pin)
@@ -81,7 +94,17 @@ export class TurfsController {
     if (isNaN(parsedLat) || isNaN(parsedLng)) {
       throw new BadRequestException('lat and lng must be valid numbers');
     }
+    // 2. Coordinate Validation: Prevent impossible math or DB errors
+    if (parsedLat < -90 || parsedLat > 90 || parsedLng < -180 || parsedLng > 180) {
+      throw new BadRequestException('Invalid coordinates. Lat must be between -90 and 90, Lng between -180 and 180');
+    }
+
     const radius = radiusKm ? parseFloat(radiusKm) : 10; // default 10 km
+    // 3. Rate/Load Protection: Limit radius to prevent querying thousands of locations
+    if (radius <= 0 || radius > 100) {
+      throw new BadRequestException('Search radius must be between 1 and 100 km');
+    }
+
     return this.turfsService.getNearbyTurfs(parsedLat, parsedLng, radius);
   }
 
@@ -97,12 +120,46 @@ export class TurfsController {
   @Patch(':turfId')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'entrance', maxCount: 1 },
+        { name: 'dayTurf', maxCount: 1 },
+        { name: 'nightTurf', maxCount: 1 },
+      ],
+      {
+        storage: memoryStorage(),
+        limits: { fileSize: 5 * 1024 * 1024 },
+      },
+    ),
+  )
   async updateTurf(
     @Req() req: any,
     @Param('turfId') turfId: string,
     @Body() dto: UpdateTurfDto,
+    @UploadedFiles()
+    files: {
+      entrance?: any[];
+      dayTurf?: any[];
+      nightTurf?: any[];
+    },
   ) {
-    return this.turfsService.updateTurf(req.user.authId, turfId, dto);
+    // 1. Update metadata
+    await this.turfsService.updateTurf(req.user.authId, turfId, dto);
+
+    // 2. Update images if provided
+    if (files.entrance?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'entrance', files.entrance[0]);
+    }
+    if (files.dayTurf?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'dayTurf', files.dayTurf[0]);
+    }
+    if (files.nightTurf?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'nightTurf', files.nightTurf[0]);
+    }
+
+    // 3. Return latest details
+    return this.turfsService.getTurfDetails(turfId);
   }
 
   // 4. Update Turf Status
@@ -125,9 +182,10 @@ export class TurfsController {
     return this.turfsService.getTurfDetails(turfId);
   }
 
-  // 6. Upload 3 images (entrance, day turf, night turf)
+  // 6. Upload 3 images (entrance, day turf, night turf) - Idempotent
   @Post(':turfId/images')
   @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
   @UseInterceptors(
     FileFieldsInterceptor(
       [
@@ -136,9 +194,8 @@ export class TurfsController {
         { name: 'nightTurf', maxCount: 1 },
       ],
       {
-        storage: makeStorage(),
-        limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max size
-        fileFilter: imageFilter,
+        storage: memoryStorage(),
+        limits: { fileSize: 5 * 1024 * 1024 },
       },
     ),
   )
@@ -156,15 +213,41 @@ export class TurfsController {
       throw new BadRequestException('At least one image must be provided');
     }
 
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const host = req.headers['host'];
-    const base = `${protocol}://${host}/uploads/turfs/${turfId}`;
+    if (files.entrance?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'entrance', files.entrance[0]);
+    }
+    if (files.dayTurf?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'dayTurf', files.dayTurf[0]);
+    }
+    if (files.nightTurf?.[0]) {
+      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'nightTurf', files.nightTurf[0]);
+    }
 
-    const images: any = {};
-    if (files.entrance?.[0]) images.entranceUrl = `${base}/${files.entrance[0].filename}`;
-    if (files.dayTurf?.[0]) images.groundDayUrl = `${base}/${files.dayTurf[0].filename}`;
-    if (files.nightTurf?.[0]) images.groundNightUrl = `${base}/${files.nightTurf[0].filename}`;
+    return this.turfsService.getTurfDetails(turfId);
+  }
 
-    return this.turfsService.updateTurfImagesWithIdempotency(req.user.authId, turfId, images);
+  // 7. Separate Image Upload (Single) - One by One
+  @Patch(':turfId/upload-image/:type')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  async uploadSingleTurfImage(
+    @Req() req: any,
+    @Param('turfId') turfId: string,
+    @Param('type') type: 'entrance' | 'dayTurf' | 'nightTurf',
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Image file is required');
+    if (!['entrance', 'dayTurf', 'nightTurf'].includes(type)) {
+      throw new BadRequestException('Invalid image type');
+    }
+
+    await this.uploadService.uploadTurfImage(req.user.authId, turfId, type, file);
+    return this.turfsService.getTurfDetails(turfId);
   }
 }

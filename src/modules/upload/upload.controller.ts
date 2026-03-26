@@ -22,15 +22,14 @@ export class UploadController {
 
   /**
    * POST /api/v3/user-profile/upload-avatar
-   * Upload (or replace) the authenticated user's profile image.
-   * Expects multipart/form-data with field name "file".
+   * Upload (or replace) the authenticated user's profile image in Supabase.
    */
   @Post('upload-avatar')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: memoryStorage(), // keep file in memory; Supabase SDK needs a Buffer
-      limits: { fileSize: 5 * 1024 * 1024 }, // hard-cap at 5 MB before hitting the service
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (_req, file, cb) => {
         const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
         if (!allowed.includes(file.mimetype)) {
@@ -55,8 +54,6 @@ export class UploadController {
 
   /**
    * DELETE /api/v3/user-profile/upload-avatar
-   * Remove the authenticated user's profile image from Supabase Storage
-   * and clear the avatarUrl in the database.
    */
   @Delete('upload-avatar')
   @HttpCode(HttpStatus.OK)
