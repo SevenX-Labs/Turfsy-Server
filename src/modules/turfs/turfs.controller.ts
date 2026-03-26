@@ -5,6 +5,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
@@ -63,7 +64,28 @@ export class TurfsController {
     return this.turfsService.createTurf(req.user.authId, dto);
   }
 
-  // 2. Get All My Turfs (for Owners)
+  // 2. Search Nearby Turfs (by current location or manual map pin)
+  // GET /api/v3/turfs/nearby?lat=19.07&lng=72.87&radiusKm=10
+  @Get('nearby')
+  @HttpCode(HttpStatus.OK)
+  async getNearbyTurfs(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+    @Query('radiusKm') radiusKm?: string,
+  ) {
+    if (!lat || !lng) {
+      throw new BadRequestException('lat and lng query params are required');
+    }
+    const parsedLat = parseFloat(lat);
+    const parsedLng = parseFloat(lng);
+    if (isNaN(parsedLat) || isNaN(parsedLng)) {
+      throw new BadRequestException('lat and lng must be valid numbers');
+    }
+    const radius = radiusKm ? parseFloat(radiusKm) : 10; // default 10 km
+    return this.turfsService.getNearbyTurfs(parsedLat, parsedLng, radius);
+  }
+
+  // 3. Get All My Turfs (for Owners)
   @Get('my')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

@@ -58,7 +58,50 @@ export class TurfsService {
     };
   }
 
-  // 2. Get All My Turfs (for Owners)
+  // 2. Get Nearby Turfs (Haversine distance calculation)
+  async getNearbyTurfs(userLat: number, userLng: number, radiusKm: number) {
+    const turfs = await this.prisma.turf.findMany({
+      where: { deletedAt: null, status: 'ACTIVE' },
+      include: {
+        owner: {
+          select: { name: true, contactNumber: true },
+        },
+      },
+    });
+
+    // Haversine formula to calculate distance in km
+    const haversine = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+      const R = 6371; // Earth's radius in km
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLng = ((lng2 - lng1) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    const turfsWithDistance = turfs
+      .map((turf) => ({
+        ...turf,
+        distanceKm: parseFloat(haversine(userLat, userLng, turf.lat, turf.lng).toFixed(2)),
+        images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
+      }))
+      .filter((turf) => turf.distanceKm <= radiusKm)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    return {
+      success: true,
+      count: turfsWithDistance.length,
+      radiusKm,
+      data: turfsWithDistance,
+    };
+  }
+
+  // 3. Get All My Turfs (for Owners)
   async getMyTurfs(authId: string) {
     const profile = await this.prisma.ownerProfile.findUnique({
       where: { authId },

@@ -144,7 +144,7 @@ Retrieve full turf data formatted for the UI (Autoswipe, Reviews, Owner Contact)
 
 ---
 
-### 4. Update Turf Status
+### 5. Update Turf Status
 For admin/owner to toggle visibility.
 
 - **URL**: `PATCH /api/v3/turfs/:turfId/status`
@@ -158,6 +158,51 @@ For admin/owner to toggle visibility.
 
 ---
 
+### 6. Search Nearby Turfs
+Fetch turfs near a given location. The frontend can send coordinates from:
+- **Option A**: User's current GPS location (auto-detect)
+- **Option B**: Manually selected location from a map pin
+
+- **URL**: `GET /api/v3/turfs/nearby?lat=19.0760&lng=72.8777&radiusKm=10`
+- **Auth**: Not Required
+- **Query Params**:
+  - `lat` (required): Latitude of the search point
+  - `lng` (required): Longitude of the search point
+  - `radiusKm` (optional, default: 10): Search radius in kilometers
+
+**Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "count": 3,
+  "radiusKm": 10,
+  "data": [
+    {
+      "id": "turf-uuid-1",
+      "name": "Champions Arena",
+      "distanceKm": 1.23,
+      "images": [
+        "http://localhost:3000/uploads/turfs/.../entrance.jpg",
+        "http://localhost:3000/uploads/turfs/.../day.jpg",
+        "http://localhost:3000/uploads/turfs/.../night.jpg"
+      ],
+      "weekdayDayPrice": 1200,
+      "weekdayNightPrice": 1500,
+      "weekendDayPrice": 1500,
+      "weekendNightPrice": 1800,
+      "openTime": "06:00",
+      "closeTime": "23:00",
+      "owner": {
+        "name": "Sahil",
+        "contactNumber": "+91 9876543210"
+      }
+    }
+  ]
+}
+```
+
+---
+
 ## 🛠️ Testing with Postman/cURL
 
 ### Uploading Images via cURL:
@@ -166,6 +211,11 @@ curl -X POST http://localhost:3000/api/v3/turfs/YOUR_TURF_ID/images \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -F "entrance=@/path/to/entrance.jpg" \
   -F "dayTurf=@/path/to/ground_day.jpg"
+```
+
+### Fetching Nearby Turfs via cURL:
+```bash
+curl "http://localhost:3000/api/v3/turfs/nearby?lat=19.0760&lng=72.8777&radiusKm=15"
 ```
 
 ### Note on Static Assets:
