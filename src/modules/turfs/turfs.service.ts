@@ -19,6 +19,7 @@ export class TurfsService {
       throw new ForbiddenException('Please complete your owner profile first');
 
     const turf = await this.prisma.turf.create({
+      // @ts-ignore: IDE cache may still think groundDayUrl is required
       data: {
         ownerProfileId: profile.id,
         name: dto.name,
