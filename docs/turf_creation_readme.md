@@ -1,22 +1,3 @@
-# 🏟️ Turf Management Documentation
-
-This document provides a comprehensive guide to the Turf creation, update, and retrieval endpoints.
-
-## 📌 Architecture & Security Overview
-
-This module has been hardened for **production-grade security and scalability**.
-
-- **☁️ Supabase Cloud Storage**: Turf images are stored in a dedicated Supabase S3 bucket (`turfs/{turfId}/{type}.jpg`). This isolates file infrastructure from the main application, eliminating path traversal risks and reducing local disk bloat entirely.
-- **⚡ Payload & DoS Protection**: The `nearby` search strictly limits queries to a `max 100km radius` and truncates responses to the top **50 closest turfs** to ensure fast latency and prevent out-of-memory crashes under heavy load.
-- **📍 GPS Spoofing Prevention**: Coordinates (`lat`, `lng`) are mathematically validated between `[-90, 90]` and `[-180, 180]`. Additionally, coordinates are **immutable** via the update endpoint once created, guaranteeing physical location accuracy.
-- **🛡️ Rate Limiting**: Global `@nestjs/throttler` guards allow a maximum of 10 requests per minute per IP to mitigate brute force and scraping.
-- **📸 Strict Image Specs**: 
-  - Max Size: 5MB per image to prevent memory exhaustion during upload.
-  - Count: **3 Explicit Images** (entrance, dayTurf, nightTurf).
-  - Validation: Deep MIME-type checking ensures only real images (`jpg, jpeg, png, webp`) are accepted, blocking disguised executable scripts.
-
----
-
 ## 🚀 Endpoints
 
 ### 1. Create a Turf
