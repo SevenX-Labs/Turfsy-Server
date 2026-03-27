@@ -9,7 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOwnerProfileDto } from './dto/create-owner-profile.dto';
 import { UpdateOwnerProfileDto } from './dto/update-owner-profile.dto';
 import { OwnerPaymentDetailsDto } from './dto/owner-payment-details.dto';
-import { Role, TurfStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class OwnerProfileService {

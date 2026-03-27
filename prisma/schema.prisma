@@ -33,7 +33,6 @@ enum SportsType {
 }
  
 enum TurfStatus {
-  UNDER_REVIEW
   ACTIVE
   INACTIVE
 }
