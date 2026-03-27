@@ -63,13 +63,13 @@ export class TurfsController {
     const turf = response.data;
 
     // Handle initial image uploads if provided
-    if (files.entrance?.[0]) {
+    if (files?.entrance?.[0]) {
       await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'entrance', files.entrance[0]);
     }
-    if (files.dayTurf?.[0]) {
+    if (files?.dayTurf?.[0]) {
       await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'dayTurf', files.dayTurf[0]);
     }
-    if (files.nightTurf?.[0]) {
+    if (files?.nightTurf?.[0]) {
       await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'nightTurf', files.nightTurf[0]);
     }
 
@@ -148,13 +148,13 @@ export class TurfsController {
     await this.turfsService.updateTurf(req.user.authId, turfId, dto);
 
     // 2. Update images if provided
-    if (files.entrance?.[0]) {
+    if (files?.entrance?.[0]) {
       await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'entrance', files.entrance[0]);
     }
-    if (files.dayTurf?.[0]) {
+    if (files?.dayTurf?.[0]) {
       await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'dayTurf', files.dayTurf[0]);
     }
-    if (files.nightTurf?.[0]) {
+    if (files?.nightTurf?.[0]) {
       await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'nightTurf', files.nightTurf[0]);
     }
 
@@ -209,11 +209,11 @@ export class TurfsController {
     },
     @Req() req: any,
   ) {
-    if (!files.entrance && !files.dayTurf && !files.nightTurf) {
+    if (!files || (!files.entrance && !files.dayTurf && !files.nightTurf)) {
       throw new BadRequestException('At least one image must be provided');
     }
 
-    if (files.entrance?.[0]) {
+    if (files?.entrance?.[0]) {
       await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'entrance', files.entrance[0]);
     }
     if (files.dayTurf?.[0]) {
