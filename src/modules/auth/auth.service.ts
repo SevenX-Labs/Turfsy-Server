@@ -14,7 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
-import { Role, TurfStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import axios from 'axios';
 
@@ -66,6 +66,20 @@ export class AuthService {
 
   private generateSessionToken(authId: string, sessionId: string, role: Role) {
     return this.jwtService.sign({ authId, sessionId, role });
+  }
+
+  private async normalizeOwnerTurfStatuses(authId: string) {
+    await this.prisma.$executeRaw`
+      UPDATE "Turf"
+      SET "status" = 'INACTIVE'::"TurfStatus"
+      WHERE EXISTS (
+        SELECT 1
+        FROM "OwnerProfile" op
+        WHERE op."id" = "Turf"."ownerProfileId"
+          AND op."authId" = ${authId}
+      )
+        AND "status"::text NOT IN ('ACTIVE', 'INACTIVE')
+    `;
   }
 
   // ─────────────────────────────────────────
@@ -218,10 +232,12 @@ export class AuthService {
         });
 
         if (ownerProfile) {
+          await this.normalizeOwnerTurfStatuses(authId);
+
           const turfs = await this.prisma.turf.findMany({
             where: {
-              ownerProfileId: ownerProfile.id,
-              status: { in: [TurfStatus.ACTIVE, TurfStatus.INACTIVE] },
+              owner: { authId },
+              deletedAt: null,
             },
             orderBy: { createdAt: 'desc' },
           });
@@ -397,10 +413,12 @@ export class AuthService {
     let profile: Record<string, any> | null = auth.role === Role.OWNER ? ownerProfile : userProfile;
 
     if (auth.role === Role.OWNER && ownerProfile) {
+      await this.normalizeOwnerTurfStatuses(authId);
+
       const turfs = await this.prisma.turf.findMany({
         where: {
-          ownerProfileId: ownerProfile.id,
-          status: { in: [TurfStatus.ACTIVE, TurfStatus.INACTIVE] },
+          owner: { authId },
+          deletedAt: null,
         },
         orderBy: { createdAt: 'desc' },
       });

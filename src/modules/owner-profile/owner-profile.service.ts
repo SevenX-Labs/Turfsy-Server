@@ -9,11 +9,25 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOwnerProfileDto } from './dto/create-owner-profile.dto';
 import { UpdateOwnerProfileDto } from './dto/update-owner-profile.dto';
 import { OwnerPaymentDetailsDto } from './dto/owner-payment-details.dto';
-import { Role, TurfStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class OwnerProfileService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async normalizeOwnerTurfStatuses(authId: string) {
+    await this.prisma.$executeRaw`
+      UPDATE "Turf"
+      SET "status" = 'INACTIVE'::"TurfStatus"
+      WHERE EXISTS (
+        SELECT 1
+        FROM "OwnerProfile" op
+        WHERE op."id" = "Turf"."ownerProfileId"
+          AND op."authId" = ${authId}
+      )
+        AND "status"::text NOT IN ('ACTIVE', 'INACTIVE')
+    `;
+  }
 
   // ─────────────────────────────────────────
   // Create Owner Profile
@@ -72,10 +86,12 @@ export class OwnerProfileService {
 
     if (!profile) throw new NotFoundException('Profile not found');
 
+    await this.normalizeOwnerTurfStatuses(authId);
+
     const turfs = await this.prisma.turf.findMany({
       where: {
-        ownerProfileId: profile.id,
-        status: { in: [TurfStatus.ACTIVE, TurfStatus.INACTIVE] },
+        owner: { authId },
+        deletedAt: null,
       },
       orderBy: { createdAt: 'desc' },
     });
