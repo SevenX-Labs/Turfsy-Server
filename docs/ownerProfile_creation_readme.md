@@ -214,7 +214,7 @@ Value: [Image File — jpg/jpeg/png/webp, Max 5MB]
     "id": "uuid",
     "ownerProfileId": "uuid",
     "name": "Green Arena",
-    "status": "UNDER_REVIEW",
+    "status": "ACTIVE",
     "groundDayUrl": "",
     "entranceUrl": "",
     ...
@@ -242,7 +242,7 @@ No body.
       "id": "uuid",
       "name": "Green Arena",
       "city": "Mumbai",
-      "status": "UNDER_REVIEW",
+      "status": "ACTIVE",
       "sportsType": "FOOTBALL",
       "weekdayDayPrice": 800,
       ...
@@ -332,7 +332,7 @@ Key: seatingArea   → [Image File — seating area photo]
 ```
 
 **Enum values:**
-- `status`: `ACTIVE` | `INACTIVE` | `UNDER_REVIEW`
+- `status`: `ACTIVE` | `INACTIVE`
 
 **Success Response:**
 ```json
@@ -357,7 +357,7 @@ Key: seatingArea   → [Image File — seating area photo]
 4. POST /ownerProfile/payment-details → save UPI ID
 5. POST /ownerProfile/turfs    → create turf (no images yet)
 6. POST /ownerProfile/turfs/:id/images → upload ground/entrance photos
-7. PATCH /ownerProfile/turfs/:id/status → set ACTIVE when ready
+7. PATCH /ownerProfile/turfs/:id/status → toggle ACTIVE/INACTIVE when needed
 8. GET  /ownerProfile          → verify full profile with turfs + payment
 9. PATCH /ownerProfile         → update any profile field anytime
 10. PATCH /ownerProfile/turfs/:id → update any turf field anytime

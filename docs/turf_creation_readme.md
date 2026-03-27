@@ -146,7 +146,7 @@ For admin/owner to toggle visibility.
 - **Body**:
 ```json
 {
-  "status": "ACTIVE" // Options: ACTIVE, INACTIVE, UNDER_REVIEW
+  "status": "ACTIVE" // Options: ACTIVE, INACTIVE
 }
 ```
 

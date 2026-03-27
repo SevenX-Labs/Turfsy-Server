@@ -35,7 +35,6 @@ enum SportsType {
 enum TurfStatus {
   ACTIVE
   INACTIVE
-  UNDER_REVIEW  // FIX: added back — needed for admin approval flow
 }
  
 // ─────────────────────────────────────────
@@ -119,7 +118,7 @@ model Turf {
   description         String?
   sportsType          SportsType
   turfSize            String     // e.g. "100x60 ft"
-  status              TurfStatus @default(UNDER_REVIEW)
+  status              TurfStatus @default(ACTIVE)
  
   // Location
   address             String
