@@ -9,7 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOwnerProfileDto } from './dto/create-owner-profile.dto';
 import { UpdateOwnerProfileDto } from './dto/update-owner-profile.dto';
 import { OwnerPaymentDetailsDto } from './dto/owner-payment-details.dto';
-import { Role } from '@prisma/client';
+import { Role, TurfStatus } from '@prisma/client';
 
 @Injectable()
 export class OwnerProfileService {
@@ -67,14 +67,25 @@ export class OwnerProfileService {
   async getProfile(authId: string) {
     const profile = await this.prisma.ownerProfile.findUnique({
       where: { authId },
-      include: { turfs: true, payment: true },
+      include: { payment: true },
     });
 
     if (!profile) throw new NotFoundException('Profile not found');
 
+    const turfs = await this.prisma.turf.findMany({
+      where: {
+        ownerProfileId: profile.id,
+        status: { in: [TurfStatus.ACTIVE, TurfStatus.INACTIVE] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
     return {
       success: true,
-      data: profile,
+      data: {
+        ...profile,
+        turfs,
+      },
     };
   }
 

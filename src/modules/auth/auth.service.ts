@@ -14,7 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
-import { Role } from '@prisma/client';
+import { Role, TurfStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import axios from 'axios';
 
@@ -206,10 +206,34 @@ export class AuthService {
     // Fetch full profile for returning users
     let profile: Record<string, any> | null = null;
     if (!isNewUser) {
-      profile =
-        role === Role.USER
-          ? await this.prisma.userProfile.findUnique({ where: { authId }, include: { payment: true } })
-          : await this.prisma.ownerProfile.findUnique({ where: { authId }, include: { turfs: true, payment: true } });
+      if (role === Role.USER) {
+        profile = await this.prisma.userProfile.findUnique({
+          where: { authId },
+          include: { payment: true },
+        });
+      } else {
+        const ownerProfile = await this.prisma.ownerProfile.findUnique({
+          where: { authId },
+          include: { payment: true },
+        });
+
+        if (ownerProfile) {
+          const turfs = await this.prisma.turf.findMany({
+            where: {
+              ownerProfileId: ownerProfile.id,
+              status: { in: [TurfStatus.ACTIVE, TurfStatus.INACTIVE] },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          profile = {
+            ...ownerProfile,
+            turfs,
+          };
+        } else {
+          profile = null;
+        }
+      }
     }
 
     return {
@@ -360,9 +384,7 @@ export class AuthService {
       where: { id: authId },
       include: {
         userProfile: true,
-        ownerProfile: {
-          include: { turfs: true },
-        },
+        ownerProfile: true,
         payment: true,
       },
     });
@@ -372,7 +394,22 @@ export class AuthService {
     }
 
     const { userProfile, ownerProfile, payment, ...authData } = auth;
-    const profile = auth.role === Role.OWNER ? ownerProfile : userProfile;
+    let profile: Record<string, any> | null = auth.role === Role.OWNER ? ownerProfile : userProfile;
+
+    if (auth.role === Role.OWNER && ownerProfile) {
+      const turfs = await this.prisma.turf.findMany({
+        where: {
+          ownerProfileId: ownerProfile.id,
+          status: { in: [TurfStatus.ACTIVE, TurfStatus.INACTIVE] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      profile = {
+        ...ownerProfile,
+        turfs,
+      };
+    }
 
     return {
       success: true,
