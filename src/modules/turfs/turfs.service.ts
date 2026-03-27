@@ -18,6 +18,50 @@ export class TurfsService {
     if (!profile.name)
       throw new ForbiddenException('Please complete your owner profile first');
 
+    // Guard against accidental duplicate submissions (double-click / retry race)
+    // for the exact same turf payload within a short time window.
+    const recentDuplicate = await this.prisma.turf.findFirst({
+      where: {
+        ownerProfileId: profile.id,
+        deletedAt: null,
+        name: dto.name,
+        description: dto.description ?? null,
+        sportsType: dto.sportsType,
+        turfSize: dto.turfSize,
+        address: dto.address,
+        city: dto.city,
+        pincode: dto.pincode,
+        lat: dto.lat,
+        lng: dto.lng,
+        openTime: dto.openTime,
+        closeTime: dto.closeTime,
+        minSlotDurationMins: dto.minSlotDurationMins,
+        floodLights: dto.floodLights ?? false,
+        parking: dto.parking ?? false,
+        washroom: dto.washroom ?? false,
+        changingRoom: dto.changingRoom ?? false,
+        drinkingWater: dto.drinkingWater ?? false,
+        seatingArea: dto.seatingArea ?? false,
+        cafeteria: dto.cafeteria ?? false,
+        weekdayDayPrice: dto.weekdayDayPrice,
+        weekdayNightPrice: dto.weekdayNightPrice,
+        weekendDayPrice: dto.weekendDayPrice,
+        weekendNightPrice: dto.weekendNightPrice,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (
+      recentDuplicate &&
+      Date.now() - recentDuplicate.createdAt.getTime() <= 30_000
+    ) {
+      return {
+        success: true,
+        message: 'Duplicate create request ignored',
+        data: recentDuplicate,
+      };
+    }
+
     const turf = await this.prisma.turf.create({
       // @ts-ignore: IDE cache may still think groundDayUrl is required
       data: {

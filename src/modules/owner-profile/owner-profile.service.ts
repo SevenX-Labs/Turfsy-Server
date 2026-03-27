@@ -31,6 +31,11 @@ export class OwnerProfileService {
       throw new ForbiddenException('Only OWNER role can create owner profile');
     if (auth.ownerProfile?.name)
       throw new ConflictException('Profile already created');
+    if (dto.contactNumber !== auth.phone) {
+      throw new BadRequestException(
+        'Contact number must match the verified login phone number',
+      );
+    }
 
     // Check email uniqueness
     const emailExists = await this.prisma.ownerProfile.findUnique({
@@ -43,7 +48,7 @@ export class OwnerProfileService {
       data: {
         name: dto.name,
         email: dto.email,
-        contactNumber: dto.contactNumber,
+        contactNumber: auth.phone,
         aadharNumber: dto.aadharNumber,
       },
     });
@@ -78,11 +83,22 @@ export class OwnerProfileService {
   // ─────────────────────────────────────────
 
   async updateProfile(authId: string, dto: UpdateOwnerProfileDto) {
+    const auth = await this.prisma.auth.findUnique({
+      where: { id: authId },
+      select: { phone: true },
+    });
+    if (!auth) throw new NotFoundException('Account not found');
+
     const profile = await this.prisma.ownerProfile.findUnique({
       where: { authId },
     });
 
     if (!profile) throw new NotFoundException('Profile not found');
+    if (dto.contactNumber !== undefined && dto.contactNumber !== auth.phone) {
+      throw new BadRequestException(
+        'Contact number must match the verified login phone number',
+      );
+    }
 
     // Check email uniqueness if changed
     if (dto.email && dto.email !== profile.email) {
@@ -97,7 +113,8 @@ export class OwnerProfileService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.email !== undefined && { email: dto.email }),
-        ...(dto.contactNumber !== undefined && { contactNumber: dto.contactNumber }),
+        // Always mirror the verified auth phone in owner profile.
+        contactNumber: auth.phone,
       },
     });
 
