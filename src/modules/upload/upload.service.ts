@@ -29,6 +29,48 @@ export class UploadService {
     this.supabase = createClient(url, key);
   }
 
+  private getSafeFileExtension(mimetype: string): string {
+    if (mimetype === 'image/png') return 'png';
+    if (mimetype === 'image/webp') return 'webp';
+    return 'jpg';
+  }
+
+  private sanitizeNameForFile(name: string): string {
+    const sanitized = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+    return sanitized || 'user';
+  }
+
+  private async clearUserAvatarFolder(authId: string) {
+    const folderPath = `users/${authId}`;
+    const { data: existingFiles, error: listError } = await this.supabase.storage
+      .from(this.bucket)
+      .list(folderPath, { limit: 100 });
+
+    if (listError) {
+      throw new InternalServerErrorException(
+        `Supabase list failed: ${listError.message}`,
+      );
+    }
+
+    if (!existingFiles?.length) return;
+
+    const filesToDelete = existingFiles.map((file) => `${folderPath}/${file.name}`);
+    const { error: deleteError } = await this.supabase.storage
+      .from(this.bucket)
+      .remove(filesToDelete);
+
+    if (deleteError) {
+      throw new InternalServerErrorException(
+        `Supabase delete failed: ${deleteError.message}`,
+      );
+    }
+  }
+
   // ─────────────────────────────────────────
   // Upload user profile image
   // ─────────────────────────────────────────
@@ -54,9 +96,18 @@ export class UploadService {
     if (!profile) {
       throw new NotFoundException('User profile not found');
     }
+    if (!profile.name?.trim()) {
+      throw new BadRequestException(
+        'Please complete profile name before uploading avatar',
+      );
+    }
 
-    // Storage path: users/${authId}/profile.jpg
-    const storagePath = `users/${authId}/profile.jpg`;
+    const safeName = this.sanitizeNameForFile(profile.name || '');
+    const extension = this.getSafeFileExtension(file.mimetype);
+    const storagePath = `users/${authId}/${safeName}.${extension}`;
+
+    // Keep only one avatar file per user in storage.
+    await this.clearUserAvatarFolder(authId);
 
     const { error: uploadError } = await this.supabase.storage
       .from(this.bucket)
@@ -98,15 +149,7 @@ export class UploadService {
       throw new NotFoundException('User profile not found');
     }
 
-    const storagePath = `users/${authId}/profile.jpg`;
-
-    const { error: deleteError } = await this.supabase.storage
-      .from(this.bucket)
-      .remove([storagePath]);
-
-    if (deleteError) {
-      throw new InternalServerErrorException(`Supabase delete failed: ${deleteError.message}`);
-    }
+    await this.clearUserAvatarFolder(authId);
 
     await this.prisma.userProfile.update({
       where: { authId },
