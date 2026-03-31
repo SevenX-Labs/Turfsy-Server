@@ -77,6 +77,12 @@ export class TurfsController {
     return this.turfsService.getTurfDetails(turf.id);
   }
 
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  async listTurfs() {
+    return this.turfsService.listAllTurfs();
+  }
+
   // 2. Search Nearby Turfs (by current location or manual map pin)
   // GET /api/v3/turfs/nearby?lat=19.07&lng=72.87&radiusKm=10
   @Get('nearby')

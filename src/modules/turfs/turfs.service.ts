@@ -272,4 +272,39 @@ export class TurfsService {
       ],
     };
   }
+
+  async listAllTurfs() {
+    const turfs = await this.prisma.turf.findMany({
+      where: {
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
+      include: {
+        owner: {
+          select: {
+            name: true,
+            contactNumber: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const formatted = turfs.map((turf) => ({
+      ...turf,
+      images: [
+        turf.entranceUrl,
+        turf.groundDayUrl,
+        turf.groundNightUrl,
+      ].filter(Boolean),
+      rating: 0,
+      reviewCount: 0,
+    }));
+
+    return {
+      success: true,
+      count: formatted.length,
+      data: formatted,
+    };
+  }
 }

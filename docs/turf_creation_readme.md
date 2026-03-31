@@ -164,6 +164,41 @@ Fetch turfs near a given location.
 
 ---
 
+### 8. List All Turfs
+
+- **URL**: `GET /api/v3/turfs`
+- **Auth**: Optional
+- **Query Params**: None
+- **Description**: Returns every active turf with owner information and public image URLs so dashboards can render a complete catalog.
+- **Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "count": 15,
+  "data": [
+    {
+      "id": "turf-uuid",
+      "name": "Champions Arena",
+      "city": "Mumbai",
+      "address": "123 MG Road",
+      "status": "ACTIVE",
+      "weekdayDayPrice": 1200,
+      "weekdayNightPrice": 1500,
+      "weekendDayPrice": 1500,
+      "weekendNightPrice": 1800,
+      "images": [
+        "https://example.com/entrance.jpg",
+        "https://example.com/day.jpg"
+      ],
+      "owner": {
+        "name": "Sahil",
+        "contactNumber": "+91 9876543210"
+      }
+    }
+  ]
+}
+```
+
 ## 🛠️ Testing with Postman/cURL
 
 ### Uploading a Single Image via cURL (New Flow):
