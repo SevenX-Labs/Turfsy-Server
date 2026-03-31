@@ -446,7 +446,7 @@ export class UserHomeService {
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
-    userCity?: string,
+    userCity?: string | null,
   ): UserHomeSectionDto {
     let nearbyTurfs: { turf: RawTurf; dist: number | null }[] = [];
 
