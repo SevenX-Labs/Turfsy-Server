@@ -15,40 +15,48 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers['authorization'];
+    const request = this.getRequest(context);
+    const token = this.extractToken(request);
+    const payload = this.verifyToken(token);
+    await this.ensureSessionValid(payload.sessionId);
 
+    request.user = payload;
+    return true;
+  }
+
+  protected getRequest(context: ExecutionContext) {
+    return context.switchToHttp().getRequest();
+  }
+
+  protected extractToken(request: any) {
+    const authHeader = request.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedException('Missing or invalid authorization header');
     }
+    return authHeader.split(' ')[1];
+  }
 
-    const token = authHeader.split(' ')[1];
-
-    let payload: any;
+  protected verifyToken(token: string) {
     try {
-      payload = this.jwtService.verify(token);
+      return this.jwtService.verify(token);
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
 
-    // Validate session in DB
+  protected async ensureSessionValid(sessionId: string) {
     const session = await this.prisma.session.findUnique({
-      where: { id: payload.sessionId },
+      where: { id: sessionId },
     });
 
     if (!session) {
       throw new UnauthorizedException('Session not found');
     }
-
     if (session.revokedAt) {
       throw new UnauthorizedException('Session has been revoked');
     }
-
     if (new Date() > session.expiresAt) {
       throw new UnauthorizedException('Session expired');
     }
-
-    request.user = payload;
-    return true;
   }
 }
