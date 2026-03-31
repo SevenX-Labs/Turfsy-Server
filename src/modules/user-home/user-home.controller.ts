@@ -10,8 +10,10 @@ import {
 import { Request } from 'express';
 import { UserHomeService } from './user-home.service';
 import { UserHomeResponseDto } from './dto/user-home-response.dto';
+import { UserHomeSectionResponseDto } from './dto/user-home-section-response.dto';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { UserHomeQueryDto } from './dto/user-home-query.dto';
+import { HomeSectionType } from './types/home-section.enum';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -30,22 +32,121 @@ export class UserHomeController {
     @Req() req: AuthenticatedRequest,
     @Query() query: UserHomeQueryDto,
   ): Promise<UserHomeResponseDto> {
+    return this.userHomeService.getHomeSections(
+      this.buildUserOptions(req, query),
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('top-recommended')
+  @HttpCode(HttpStatus.OK)
+  async getTopRecommended(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: UserHomeQueryDto,
+  ): Promise<UserHomeSectionResponseDto> {
+    return this.userHomeService.getSection(
+      HomeSectionType.TOP_RECOMMENDED,
+      this.buildUserOptions(req, query),
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('most-rated')
+  @HttpCode(HttpStatus.OK)
+  async getMostRated(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: UserHomeQueryDto,
+  ): Promise<UserHomeSectionResponseDto> {
+    return this.userHomeService.getSection(
+      HomeSectionType.MOST_RATED,
+      this.buildUserOptions(req, query),
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('budget-friendly')
+  @HttpCode(HttpStatus.OK)
+  async getBudgetFriendly(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: UserHomeQueryDto,
+  ): Promise<UserHomeSectionResponseDto> {
+    return this.userHomeService.getSection(
+      HomeSectionType.BUDGET_FRIENDLY,
+      this.buildUserOptions(req, query),
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('nearby')
+  @HttpCode(HttpStatus.OK)
+  async getNearby(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: UserHomeQueryDto,
+  ): Promise<UserHomeSectionResponseDto> {
+    return this.userHomeService.getSection(
+      HomeSectionType.NEARBY,
+      this.buildUserOptions(req, query),
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('most-demanded')
+  @HttpCode(HttpStatus.OK)
+  async getMostDemanded(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: UserHomeQueryDto,
+  ): Promise<UserHomeSectionResponseDto> {
+    return this.userHomeService.getSection(
+      HomeSectionType.MOST_DEMANDED,
+      this.buildUserOptions(req, query),
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('newly-opened')
+  @HttpCode(HttpStatus.OK)
+  async getNewlyOpened(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: UserHomeQueryDto,
+  ): Promise<UserHomeSectionResponseDto> {
+    return this.userHomeService.getSection(
+      HomeSectionType.NEWLY_OPENED,
+      this.buildUserOptions(req, query),
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('recently-viewed')
+  @HttpCode(HttpStatus.OK)
+  async getRecentlyViewed(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: UserHomeQueryDto,
+  ): Promise<UserHomeSectionResponseDto> {
+    return this.userHomeService.getSection(
+      HomeSectionType.RECENTLY_VIEWED,
+      this.buildUserOptions(req, query),
+    );
+  }
+
+  private buildUserOptions(
+    req: AuthenticatedRequest,
+    query: UserHomeQueryDto,
+  ) {
     const lat = this.parseCoordinate(query.lat);
     const lng = this.parseCoordinate(query.lng);
     const city = query.city?.trim();
 
-    return this.userHomeService.getHomeSections({
+    return {
       authId: req.user?.authId,
       queryLat: lat,
       queryLng: lng,
       queryCity: city,
-    });
+    };
   }
 
   private parseCoordinate(value?: string): number | undefined {
     if (!value) return undefined;
     const parsed = parseFloat(value);
-    if (Number.isNaN(parsed)) return undefined;
-    return parsed;
+    return Number.isNaN(parsed) ? undefined : parsed;
   }
 }

@@ -5,4 +5,5 @@ export enum HomeSectionType {
   NEARBY = 'nearby',
   MOST_DEMANDED = 'most_demanded',
   NEWLY_OPENED = 'newly_opened',
+  RECENTLY_VIEWED = 'recently_viewed',
 }

@@ -10,14 +10,17 @@ Base URL: `https://turfsy.onrender.com`
 2. [Where to Place the Guard File](#where-to-place-the-guard-file)
 3. [Endpoint](#endpoint)
 4. [Query Parameters](#query-parameters)
-5. [All Test Cases — Postman / Thunder Client / cURL](#all-test-cases)
-6. [Full Response Structure](#full-response-structure)
-7. [TurfCard Object Reference](#turfcard-object-reference)
-8. [Section Logic Reference](#section-logic-reference)
-9. [Error Responses](#error-responses)
-10. [AppModule Registration](#appmodule-registration)
-11. [Full File Structure](#full-file-structure)
-12. [Future Enhancements](#future-enhancements)
+5. [Testing Endpoints](#testing-endpoints)
+6. [Testing Request Body](#testing-request-body)
+7. [User Home Section Endpoints](#user-home-section-endpoints)
+8. [All Test Cases — Postman / Thunder Client / cURL](#all-test-cases)
+9. [Full Response Structure](#full-response-structure)
+10. [TurfCard Object Reference](#turfcard-object-reference)
+11. [Section Logic Reference](#section-logic-reference)
+12. [Error Responses](#error-responses)
+13. [AppModule Registration](#appmodule-registration)
+14. [Full File Structure](#full-file-structure)
+15. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -29,6 +32,7 @@ The User Home endpoint returns **all 6 personalised home sections** for the Turf
 - Auth is optional — works for both guests and logged-in users
 - Location comes from query params OR saved profile — no extra call needed
 - Sections with 0 results are automatically removed from the response
+- Each section is also exposed separately under `/api/v3/user-home/<section-slug>` so you can load only the list you need.
 
 ---
 
@@ -77,7 +81,7 @@ While `/api/v3/user-home` aggregates every section, the following turf-specific 
 | Newly Opened | `GET /api/v3/turfs/newly-joined` | Shows turfs created within the last 30 days. |
 | Recently Viewed (demo) | `GET /api/v3/turfs/recently-viewed` | Demo endpoint for recency-based cards — useful for mocking user behavior and matching the home page layout. |
 
-Run these before or alongside the home endpoint to verify section-specific expectations.
+Run these before or alongside the home endpoint to verify section-specific expectations. When you need the exact same view that `/api/v3/user-home` serves, use the sectionized endpoints documented below (`/api/v3/user-home/top-recommended`, etc.) so you get a single section payload without waiting for the full dashboard response.
 
 ---
 
@@ -92,6 +96,22 @@ Run these before or alongside the home endpoint to verify section-specific expec
 | `GET /api/v3/turfs/most-demanded` | None |
 | `GET /api/v3/turfs/newly-joined` | None |
 | `GET /api/v3/turfs/recently-viewed` | None (demo endpoint; server returns sample payload). |
+
+## User Home Section Endpoints
+
+Each section also exposes its own URL so you can fetch only that specific list. All endpoints accept the same optional query params (`lat`, `lng`, `city`) and optional JWT for saved locations.
+
+| Section | Endpoint |
+| --- | --- |
+| Top Recommended | `GET /api/v3/user-home/top-recommended` |
+| Most Rated | `GET /api/v3/user-home/most-rated` |
+| Budget Friendly | `GET /api/v3/user-home/budget-friendly` |
+| Nearby | `GET /api/v3/user-home/nearby` |
+| Most Demanded | `GET /api/v3/user-home/most-demanded` |
+| Newly Opened | `GET /api/v3/user-home/newly-opened` |
+| Recently Viewed | `GET /api/v3/user-home/recently-viewed` |
+
+Each response mirrors the section structure that `/api/v3/user-home` returns — `{ success, userCity, section }`.
 
 ## All Test Cases
 

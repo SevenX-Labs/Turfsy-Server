@@ -8,6 +8,7 @@ import { HomeSectionType } from './types/home-section.enum';
 import { TurfCardDto } from './dto/turf-card.dto';
 import { UserHomeSectionDto } from './dto/user-home-section.dto';
 import { UserHomeResponseDto } from './dto/user-home-response.dto';
+import { UserHomeSectionResponseDto } from './dto/user-home-section-response.dto';
 
 // ─────────────────────────────────────────
 // Constants
@@ -20,7 +21,7 @@ const MIN_RATING_THRESHOLD = 3.5; // used for top recommended
 const HIGH_DEMAND_BOOKING_THRESHOLD = 5; // placeholder — can wire to bookings later
 const NEW_TURF_DAYS = 30; // newly opened = created within last N days
 
-type UserHomeQueryOptions = {
+export type UserHomeQueryOptions = {
   authId?: string;
   queryLat?: number;
   queryLng?: number;
@@ -88,6 +89,7 @@ type RawTurf = {
   groundNightUrl: string | null;
   entranceUrl: string | null;
   createdAt: Date;
+  updatedAt: Date;
   owner: {
     name: string;
     contactNumber: string;
@@ -122,6 +124,7 @@ export class UserHomeService {
         nearby,
         mostDemanded,
         newlyOpened,
+        recentlyViewed,
       ] = await Promise.all([
         this.buildTopRecommended(
           allTurfs,
@@ -138,6 +141,7 @@ export class UserHomeService {
         ),
         this.buildMostDemanded(allTurfs, location.userLat, location.userLng),
         this.buildNewlyOpened(allTurfs, location.userLat, location.userLng),
+        this.buildRecentlyViewed(allTurfs, location.userLat, location.userLng),
       ]);
 
       const sections: UserHomeSectionDto[] = [
@@ -147,7 +151,8 @@ export class UserHomeService {
         nearby,
         mostDemanded,
         newlyOpened,
-      ].filter((s) => s.turfs.length > 0); // only send sections that have data
+        recentlyViewed,
+      ].filter((s) => s.turfs.length > 0);
 
       return {
         success: true,
@@ -163,6 +168,77 @@ export class UserHomeService {
         'Failed to load home data. Please try again.',
       );
     }
+  }
+
+  async getSection(
+    sectionType: HomeSectionType,
+    options: UserHomeQueryOptions = {},
+  ): Promise<UserHomeSectionResponseDto> {
+    const location = await this.resolveLocation(options);
+    const allTurfs = await this.fetchAllActiveTurfs();
+
+    let section: UserHomeSectionDto;
+    switch (sectionType) {
+      case HomeSectionType.TOP_RECOMMENDED:
+        section = this.buildTopRecommended(
+          allTurfs,
+          location.userLat,
+          location.userLng,
+        );
+        break;
+      case HomeSectionType.MOST_RATED:
+        section = this.buildMostRated(allTurfs, location.userLat, location.userLng);
+        break;
+      case HomeSectionType.BUDGET_FRIENDLY:
+        section = this.buildBudgetFriendly(
+          allTurfs,
+          location.userLat,
+          location.userLng,
+        );
+        break;
+      case HomeSectionType.NEARBY:
+        section = this.buildNearby(
+          allTurfs,
+          location.userLat,
+          location.userLng,
+          location.userCity,
+        );
+        break;
+      case HomeSectionType.MOST_DEMANDED:
+        section = this.buildMostDemanded(
+          allTurfs,
+          location.userLat,
+          location.userLng,
+        );
+        break;
+      case HomeSectionType.NEWLY_OPENED:
+        section = this.buildNewlyOpened(
+          allTurfs,
+          location.userLat,
+          location.userLng,
+        );
+        break;
+      case HomeSectionType.RECENTLY_VIEWED:
+        section = this.buildRecentlyViewed(
+          allTurfs,
+          location.userLat,
+          location.userLng,
+        );
+        break;
+      default:
+        section = {
+          sectionType,
+          title: 'Section',
+          subtitle: undefined,
+          turfs: [],
+        };
+    }
+
+    return {
+      success: true,
+      userCity: location.userCity,
+      section,
+    };
   }
 
   // ─────────────────────────────────────────
@@ -204,6 +280,7 @@ export class UserHomeService {
         groundDayUrl: true,
         groundNightUrl: true,
         entranceUrl: true,
+        updatedAt: true,
         createdAt: true,
         owner: {
           select: {
@@ -540,6 +617,29 @@ export class UserHomeService {
       title: 'Newly Opened',
       subtitle: `Fresh turfs added in the last ${NEW_TURF_DAYS} days`,
       turfs: recent.map((t) =>
+        this.toCard(t, this.getDistance(t, userLat, userLng)),
+      ),
+    };
+  }
+
+  private buildRecentlyViewed(
+    turfs: RawTurf[],
+    userLat?: number,
+    userLng?: number,
+  ): UserHomeSectionDto {
+    const sorted = [...turfs]
+      .sort((a, b) => {
+        const updatedA = new Date(a.updatedAt).getTime();
+        const updatedB = new Date(b.updatedAt).getTime();
+        return updatedB - updatedA;
+      })
+      .slice(0, SECTION_LIMIT);
+
+    return {
+      sectionType: HomeSectionType.RECENTLY_VIEWED,
+      title: 'Recently Viewed',
+      subtitle: 'Turfs you recently opened or checked',
+      turfs: sorted.map((t) =>
         this.toCard(t, this.getDistance(t, userLat, userLng)),
       ),
     };
