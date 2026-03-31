@@ -45,6 +45,7 @@ export class TurfsService {
         cafeteria: dto.cafeteria ?? false,
         weekdayDayPrice: dto.weekdayDayPrice,
         weekdayNightPrice: dto.weekdayNightPrice,
+        status: TurfStatus.ACTIVE,
         weekendDayPrice: dto.weekendDayPrice,
         weekendNightPrice: dto.weekendNightPrice,
       },
