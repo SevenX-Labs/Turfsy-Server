@@ -15,7 +15,9 @@ import { UserHomeSectionResponseDto } from './dto/user-home-section-response.dto
 // ─────────────────────────────────────────
 
 const SECTION_LIMIT = 10; // max turfs per section
-const DEFAULT_RADIUS_KM = 15; // nearby radius
+const DEFAULT_RADIUS_KM = 5; // nearby radius default when GPS provided
+const MIN_RADIUS_KM = 1;
+const MAX_RADIUS_KM = 15;
 const BUDGET_MAX_PRICE = 800; // weekdayDayPrice <= this = budget friendly
 const MIN_RATING_THRESHOLD = 3.5; // used for top recommended
 const HIGH_DEMAND_BOOKING_THRESHOLD = 5; // placeholder — can wire to bookings later
@@ -26,12 +28,14 @@ export type UserHomeQueryOptions = {
   queryLat?: number;
   queryLng?: number;
   queryCity?: string;
+  queryRadiusKm?: number;
 };
 
 type LocationContext = {
   userLat?: number;
   userLng?: number;
   userCity: string | null;
+  radiusKm: number;
 };
 
 // ─────────────────────────────────────────
@@ -137,6 +141,7 @@ export class UserHomeService {
           allTurfs,
           location.userLat,
           location.userLng,
+          location.radiusKm,
           location.userCity ?? undefined,
         ),
         this.buildMostDemanded(allTurfs, location.userLat, location.userLng),
@@ -201,6 +206,7 @@ export class UserHomeService {
           allTurfs,
           location.userLat,
           location.userLng,
+          location.radiusKm,
           location.userCity,
         );
         break;
@@ -398,12 +404,25 @@ export class UserHomeService {
       ? options.queryLng
       : profileLocation?.currentLng ?? undefined;
     const userCity = cleanCity ?? profileLocation?.currentCity ?? null;
+    const requestedRadius =
+      typeof options.queryRadiusKm === 'number'
+        ? options.queryRadiusKm
+        : undefined;
+    const radiusKm = this.clampRadius(requestedRadius ?? DEFAULT_RADIUS_KM);
 
     return {
       userLat,
       userLng,
       userCity,
+      radiusKm,
     };
+  }
+
+  private clampRadius(value: number) {
+    return Math.min(
+      MAX_RADIUS_KM,
+      Math.max(MIN_RADIUS_KM, value),
+    );
   }
 
   private isValidLatitude(lat?: number): boolean {
@@ -526,6 +545,7 @@ export class UserHomeService {
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
+    radiusKm: number = DEFAULT_RADIUS_KM,
     userCity?: string | null,
   ): UserHomeSectionDto {
     let nearbyTurfs: { turf: RawTurf; dist: number | null }[] = [];
@@ -534,7 +554,7 @@ export class UserHomeService {
       // GPS-based
       nearbyTurfs = turfs
         .map((t) => ({ turf: t, dist: this.getDistance(t, userLat, userLng) }))
-        .filter((s) => s.dist != null && s.dist <= DEFAULT_RADIUS_KM)
+        .filter((s) => s.dist != null && s.dist <= radiusKm)
         .sort((a, b) => (a.dist ?? 999) - (b.dist ?? 999))
         .slice(0, SECTION_LIMIT);
     } else if (userCity) {
@@ -552,7 +572,7 @@ export class UserHomeService {
       title: 'Nearby Turfs',
       subtitle:
         userLat != null
-          ? `Turfs within ${DEFAULT_RADIUS_KM} km of you`
+          ? `Turfs within ${radiusKm} km of you`
           : 'Turfs in your city',
       turfs: nearbyTurfs.map((s) => this.toCard(s.turf, s.dist)),
     };

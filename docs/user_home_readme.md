@@ -60,9 +60,10 @@ GET /api/v3/user-home
 | `lat`  | float  | ❌        | -90 to 90                | User's current latitude  e.g. `19.0760`    |
 | `lng`  | float  | ❌        | -180 to 180              | User's current longitude e.g. `72.8777`    |
 | `city` | string | ❌        | trimmed string           | User's current city e.g. `Mumbai`          |
+| `radiusKm` | float | ❌  | 1 to 15                 | Search radius used when `lat` & `lng` are provided (defaults to 5 km). |
 
 **Location priority (highest to lowest):**
-1. Query params `?lat=&lng=` — always wins
+1. Query params `?lat=&lng=` — always wins (use `radiusKm` to limit to your preferred 1–15 km range)
 2. Saved `UserProfile.currentLat / currentLng / currentCity` — used if logged in and no query params
 3. No location — nearby section returns empty, all others work normally
 
@@ -111,7 +112,11 @@ Each section also exposes its own URL so you can fetch only that specific list. 
 | Newly Opened | `GET /api/v3/user-home/newly-opened` |
 | Recently Viewed | `GET /api/v3/user-home/recently-viewed` |
 
-Each response mirrors the section structure that `/api/v3/user-home` returns — `{ success, userCity, section }`.
+Each response mirrors the section structure that `/api/v3/user-home` returns — `{ success, userCity, section }`. Use `/api/v3/user-home/nearby` (and the other single-section URLs) when you only need one list so the frontend avoids fetching the entire dashboard payload when only a nearby search is required.
+
+## Nearby-Only Search
+
+If a client just wants turfs around a location without the rest of the dashboard data, call `GET /api/v3/user-home/nearby?lat=&lng=&radiusKm=` (optionally include `city`) and you’ll receive a single section payload containing at most 10 nearby cards plus the resolved `userCity`. That keeps the payload small while still applying the same GPS radius logic documented above.
 
 ## All Test Cases
 

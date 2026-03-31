@@ -135,16 +135,24 @@ export class UserHomeController {
     const lat = this.parseCoordinate(query.lat);
     const lng = this.parseCoordinate(query.lng);
     const city = query.city?.trim();
+    const radius = this.parseRadius(query.radiusKm);
 
     return {
       authId: req.user?.authId,
       queryLat: lat,
       queryLng: lng,
       queryCity: city,
+      queryRadiusKm: radius,
     };
   }
 
   private parseCoordinate(value?: string): number | undefined {
+    if (!value) return undefined;
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  private parseRadius(value?: string): number | undefined {
     if (!value) return undefined;
     const parsed = parseFloat(value);
     return Number.isNaN(parsed) ? undefined : parsed;
