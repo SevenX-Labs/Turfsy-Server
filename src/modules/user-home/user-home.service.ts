@@ -134,7 +134,7 @@ export class UserHomeService {
           allTurfs,
           location.userLat,
           location.userLng,
-          location.userCity,
+          location.userCity ?? undefined,
         ),
         this.buildMostDemanded(allTurfs, location.userLat, location.userLng),
         this.buildNewlyOpened(allTurfs, location.userLat, location.userLng),
@@ -155,7 +155,10 @@ export class UserHomeService {
         sections,
       };
     } catch (error) {
-      this.logger.error('Failed to build home sections', error?.stack ?? error);
+      this.logger.error(
+        'Failed to build home sections',
+        error instanceof Error ? error.stack : error
+      );
       throw new InternalServerErrorException(
         'Failed to load home data. Please try again.',
       );
