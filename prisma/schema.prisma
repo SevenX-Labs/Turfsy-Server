@@ -56,6 +56,7 @@ model Auth {
   userProfile  UserProfile?
   ownerProfile OwnerProfile?
   payment      Payment?
+  savedTurfs   SavedTurf[]
  
   @@index([phone])
   @@index([role])
@@ -157,6 +158,7 @@ model Turf {
   deletedAt           DateTime?  // FIX: must be optional — null until deleted
  
   owner OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+  savedByUsers SavedTurf[]
  
   @@index([ownerProfileId])
   @@index([city])
@@ -226,3 +228,29 @@ model OtpEntry {
   @@index([authId])
 }
  
+// ─────────────────────────────────────────
+// SavedTurf - User bookmarks/favorites
+// ─────────────────────────────────────────
+
+model SavedTurf {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")  // Auth.id (the user who saved)
+  turfId    String   @map("turf_id")  // Turf.id (the saved turf)
+  createdAt DateTime @default(now()) @map("created_at")
+  notes     String?  @db.Text          // Optional user notes about this turf
+
+  // Relations
+  user      Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate saves
+  @@unique([userId, turfId])
+  
+  // Indexes for your queries
+  @@index([userId])           // Get all saved turfs for a user
+  @@index([turfId])           // Get all users who saved this turf
+  @@index([userId, createdAt]) // Get all saved turfs sorted by recent
+  @@index([turfId, userId])    // Check if specific turf is saved by user
+  
+  @@map("saved_turfs")
+}

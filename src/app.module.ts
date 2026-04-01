@@ -10,6 +10,7 @@ import { OwnerProfileModule } from './modules/owner-profile/owner-profile.module
 import { TurfsModule } from './modules/turfs/turfs.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { UserHomeModule } from './modules/user-home/user-home.module';
+import { SavedTurfsModule } from './modules/saved-turfs/saved-turfs.module';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { UserHomeModule } from './modules/user-home/user-home.module';
     OwnerProfileModule, 
     TurfsModule, 
     UploadModule,
-    UserHomeModule
+    UserHomeModule,
+    SavedTurfsModule
   ],
   controllers: [AppController],
   providers: [
