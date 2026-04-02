@@ -9,13 +9,19 @@ Base URL: `/api/v3/booking`
 
 ### 1. ONLINE Payment Flow
 ```text
-Book Now
+Turf Page -> User clicks "Book Now"
    ↓
-Select Slots & See Live Availability (GET /availability/:turfId)
+Select Date & Duration (e.g., 3 hours)
    ↓
-Check Availability -> Proceed
+Call GET /availability/:turfId
    ↓
-Create Booking (POST /api/v3/booking) -> Status is PENDING
+UI computes & displays Slots:
+ - Show booked times in RED (Unavailable)
+ - Ensure chosen standard start time + 3 hours doesn't hit a RED block
+   ↓
+User selects an Available, Green Time Slot
+   ↓
+Create Booking (POST /api/v3/booking) -> Status holds PENDING
    ↓
 Pay Now (Razorpay Screen opens)
    ↓
@@ -33,13 +39,17 @@ Pay Now (Razorpay Screen opens)
 
 ### 2. CASH Payment Flow
 ```text
-Book Now
+Turf Page -> User clicks "Book Now"
    ↓
-Select Slots & See Live Availability
+Select Date & Duration (e.g., 3 hours)
+   ↓
+Check Availability (UI hides RED slots, enables Green slots)
+   ↓
+User selects an Available Time Slot
    ↓
 Create Booking (POST /api/v3/booking with paymentType="CASH")
    ↓
-Booking Confirmed -> checkInPin Generated
+Booking Confirmed -> checkInPin Generated (e.g. 4821)
    ↓
 User arrives at Turf -> Shows PIN
    ↓

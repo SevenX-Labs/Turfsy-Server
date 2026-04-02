@@ -74,10 +74,11 @@ src/
 4. Browse Home Page (`Nearby`, `Popular`).
 5. `Search & Filter` for turfs.
 6. `Save` favorite turfs for later.
-7. Tap a Turf $\to$ Check `Availability`.
-8. `Book Slot` (Cash or Online).
-9. Show generated PIN at owner's desk (if CASH) $\to$ Visit Complete.
-10. `Rate Turf` post-visit check.
+7. Click `Book Now` on a Turf → Select `Date` & `Duration (hours)`.
+8. Check `Live Slots Availability` — UI visually marks booked/overlapping clusters in RED and available in GREEN. 
+9. `Select an Available Slot` and initiate Payment (`ONLINE/CASH`).
+10. Show generated PIN at owner's desk (if CASH) $\to$ Visit Complete.
+11. `Rate Turf` post-visit check.
 
 ### Owner Flow:
 1. `Login` using phone $\to$ Role=`OWNER`.
