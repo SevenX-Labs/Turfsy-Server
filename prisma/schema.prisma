@@ -1,207 +1,137 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
-// ─────────────────────────────────────────
-// Enums
-// ─────────────────────────────────────────
- 
-enum Role {
-  USER
-  OWNER
-}
- 
-enum Gender {
-  MALE
-  FEMALE
-  OTHER
-  PREFER_NOT_TO_SAY
-}
- 
-enum SportsType {
-  FOOTBALL
-  CRICKET
-}
- 
-enum TurfStatus {
-  ACTIVE
-  INACTIVE
-}
- 
-// ─────────────────────────────────────────
-// Auth  (shared login table for all roles)
-// ─────────────────────────────────────────
- 
 model Auth {
-  id         String    @id @default(uuid())
-  phone      String    @unique
-  role       Role      @default(USER)
-  isVerified Boolean   @default(false)
-  isActive   Boolean   @default(true)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
- 
-  sessions     Session[]
+  id           String        @id @default(uuid())
+  phone        String        @unique
+  role         Role          @default(USER)
+  isVerified   Boolean       @default(false)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
   otpEntries   OtpEntry[]
-  userProfile  UserProfile?
   ownerProfile OwnerProfile?
   payment      Payment?
+  sessions     Session[]
+  userProfile  UserProfile?
+  bookings     Booking[]
   savedTurfs   SavedTurf[]
- 
+  ratings      TurfRating[]
+
   @@index([phone])
   @@index([role])
 }
- 
-// ─────────────────────────────────────────
-// UserProfile  (role = USER)
-// ─────────────────────────────────────────
- 
+
 model UserProfile {
-  id          String    @id @default(uuid())
-  authId      String    @unique
+  id          String   @id @default(uuid())
+  authId      String   @unique
   name        String
-  email       String    @unique
+  email       String   @unique
   avatarUrl   String?
   dob         DateTime
   gender      Gender
   currentLat  Float?
   currentLng  Float?
   currentCity String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
- 
-  auth    Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
-  payment Payment?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  payment     Payment?
+  auth        Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
 }
- 
-// ─────────────────────────────────────────
-// OwnerProfile  (role = OWNER)
-// ─────────────────────────────────────────
- 
+
 model OwnerProfile {
-  id            String    @id @default(uuid())
-  authId        String    @unique
+  id            String   @id @default(uuid())
+  authId        String   @unique
   name          String
-  email         String    @unique
+  email         String   @unique
   contactNumber String
   avatarUrl     String?
-  aadharNumber  String    // store encrypted
+  aadharNumber  String
   aadharUrl     String?
-  isKycVerified Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
- 
-  auth    Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
-  turfs   Turf[]
-  payment Payment?
- 
+  isKycVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  auth          Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+  payment       Payment?
+  turfs         Turf[]
+
   @@index([authId])
 }
- 
-// ─────────────────────────────────────────
-// Turf
-// ─────────────────────────────────────────
- 
+
 model Turf {
-  id                  String     @id @default(uuid())
+  id                  String       @id @default(uuid())
   ownerProfileId      String
   name                String
   description         String?
   sportsType          SportsType
   turfSize            String
-  status              TurfStatus @default(ACTIVE)
- 
-  // Location
+  status              TurfStatus   @default(ACTIVE)
   address             String
   city                String
   pincode             String
   lat                 Float
   lng                 Float
- 
-  // Timings
   openTime            String
   closeTime           String
   minSlotDurationMins Int
- 
-  // Images
   groundDayUrl        String?
   groundNightUrl      String?
   entranceUrl         String?
- 
-  // Amenities
-  floodLights         Boolean    @default(false)
-  parking             Boolean    @default(false)
-  washroom            Boolean    @default(false)
-  changingRoom        Boolean    @default(false)
-  drinkingWater       Boolean    @default(false)
-  seatingArea         Boolean    @default(false)
-  cafeteria           Boolean    @default(false)
- 
-  // Pricing
+  floodLights         Boolean      @default(false)
+  parking             Boolean      @default(false)
+  washroom            Boolean      @default(false)
+  changingRoom        Boolean      @default(false)
+  drinkingWater       Boolean      @default(false)
+  seatingArea         Boolean      @default(false)
+  cafeteria           Boolean      @default(false)
   weekdayDayPrice     Float
   weekdayNightPrice   Float
   weekendDayPrice     Float
   weekendNightPrice   Float
- 
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
   deletedAt           DateTime?
- 
-  owner        OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
-  savedByUsers SavedTurf[]
+  owner               OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+  bookings            Booking[]
+  savedByUsers        SavedTurf[]
+  ratings             TurfRating[]
 
-  // ── Indexes (original — unchanged) ───────────────────────────
   @@index([ownerProfileId])
   @@index([city])
   @@index([status])
-
-  // ── Indexes (added for search) ────────────────────────────────
-  @@index([name])                           // name partial search
-  @@index([weekdayDayPrice])                // price sort + price range filter
-  @@index([createdAt])                      // newest sort
-  @@index([status, city])                   // active + city (most common query)
-  @@index([status, sportsType])             // active + sport type filter
-  @@index([status, weekdayDayPrice])        // active + price sort
-  @@index([status, city, sportsType])       // active + city + sport
-  @@index([status, city, weekdayDayPrice])  // active + city + price sort
+  @@index([name])
+  @@index([weekdayDayPrice])
+  @@index([createdAt])
+  @@index([status, city])
+  @@index([status, sportsType])
+  @@index([status, weekdayDayPrice])
+  @@index([status, city, sportsType])
+  @@index([status, city, weekdayDayPrice])
 }
- 
-// ─────────────────────────────────────────
-// Payment
-// ─────────────────────────────────────────
- 
+
 model Payment {
-  id             String   @id @default(uuid())
-  authId         String   @unique
+  id             String        @id @default(uuid())
+  authId         String        @unique
   role           Role
   upiId          String
-  userProfileId  String?  @unique
-  ownerProfileId String?  @unique
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
- 
-  auth         Auth          @relation(fields: [authId], references: [id], onDelete: Cascade)
-  userProfile  UserProfile?  @relation(fields: [userProfileId], references: [id])
-  ownerProfile OwnerProfile? @relation(fields: [ownerProfileId], references: [id])
- 
+  userProfileId  String?       @unique
+  ownerProfileId String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  auth           Auth          @relation(fields: [authId], references: [id], onDelete: Cascade)
+  ownerProfile   OwnerProfile? @relation(fields: [ownerProfileId], references: [id])
+  userProfile    UserProfile?  @relation(fields: [userProfileId], references: [id])
+
   @@index([authId])
   @@index([role])
 }
- 
-// ─────────────────────────────────────────
-// Session
-// ─────────────────────────────────────────
- 
+
 model Session {
   id        String    @id @default(uuid())
   authId    String
@@ -211,17 +141,12 @@ model Session {
   expiresAt DateTime
   createdAt DateTime  @default(now())
   revokedAt DateTime?
- 
-  auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
- 
+  auth      Auth      @relation(fields: [authId], references: [id], onDelete: Cascade)
+
   @@index([token])
   @@index([authId])
 }
- 
-// ─────────────────────────────────────────
-// OtpEntry
-// ─────────────────────────────────────────
- 
+
 model OtpEntry {
   id           String    @id @default(uuid())
   authId       String
@@ -232,32 +157,122 @@ model OtpEntry {
   resendCount  Int       @default(0)
   lastResentAt DateTime?
   createdAt    DateTime  @default(now())
- 
-  auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
- 
+  auth         Auth      @relation(fields: [authId], references: [id], onDelete: Cascade)
+
   @@index([sessionToken])
   @@index([authId])
 }
- 
-// ─────────────────────────────────────────
-// SavedTurf - User bookmarks/favorites
-// ─────────────────────────────────────────
 
 model SavedTurf {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
   turfId    String   @map("turf_id")
   createdAt DateTime @default(now()) @map("created_at")
-  notes     String?  @db.Text
-
-  user      Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes     String?
   turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
+  user      Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, turfId])
   @@index([userId])
   @@index([turfId])
   @@index([userId, createdAt])
   @@index([turfId, userId])
-  
   @@map("saved_turfs")
+}
+
+model Booking {
+  id                String        @id @default(uuid())
+  userId            String        @map("user_id")
+  turfId            String        @map("turf_id")
+  bookingDate       DateTime      @map("booking_date") @db.Date
+  startTime         String        @map("start_time")
+  endTime           String        @map("end_time")
+  durationMins      Int           @map("duration_mins")
+  bookingStatus     BookingStatus @default(PENDING) @map("booking_status")
+  paymentStatus     PaymentStatus @default(PENDING) @map("payment_status")
+  paymentType       PaymentType   @map("payment_type")
+  amount            Float
+  razorpayOrderId   String?       @map("razorpay_order_id")
+  razorpayPaymentId String?       @map("razorpay_payment_id")
+  checkInPin        String?       @map("check_in_pin")
+  pinExpiresAt      DateTime?     @map("pin_expires_at")
+  visitedAt         DateTime?     @map("visited_at")
+  cancelledAt       DateTime?     @map("cancelled_at")
+  cancelReason      String?       @map("cancel_reason")
+  notes             String?
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  turf              Turf          @relation(fields: [turfId], references: [id], onDelete: Cascade)
+  user              Auth          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating            TurfRating?
+
+  @@unique([turfId, bookingDate, startTime])
+  @@index([userId])
+  @@index([turfId])
+  @@index([bookingStatus])
+  @@index([bookingDate])
+  @@index([paymentStatus])
+  @@index([userId, bookingStatus])
+  @@index([userId, bookingDate])
+  @@index([turfId, bookingDate])
+  @@map("bookings")
+}
+
+model TurfRating {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  turfId    String   @map("turf_id")
+  bookingId String   @unique @map("booking_id")
+  rating    Int
+  review    String?
+  createdAt DateTime @default(now()) @map("created_at")
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
+  user      Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookingId])
+  @@index([turfId])
+  @@index([userId])
+  @@map("turf_ratings")
+}
+
+enum Role {
+  USER
+  OWNER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum SportsType {
+  FOOTBALL
+  CRICKET
+}
+
+enum TurfStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  ONLINE
+  CASH
 }

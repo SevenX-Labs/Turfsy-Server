@@ -11,6 +11,7 @@ import { TurfsModule } from './modules/turfs/turfs.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { UserHomeModule } from './modules/user-home/user-home.module';
 import { SavedTurfsModule } from './modules/saved-turfs/saved-turfs.module';
+import { BookingModule } from './modules/booking/booking.module';
 
 @Module({
   imports: [
@@ -25,7 +26,8 @@ import { SavedTurfsModule } from './modules/saved-turfs/saved-turfs.module';
     TurfsModule, 
     UploadModule,
     UserHomeModule,
-    SavedTurfsModule
+    SavedTurfsModule,
+    BookingModule,
   ],
   controllers: [AppController],
   providers: [
