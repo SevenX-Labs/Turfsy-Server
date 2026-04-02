@@ -183,8 +183,27 @@ export class BookingService {
     if (booking.paymentType !== 'CASH') throw new BadRequestException('This booking is not cash-based');
     if (booking.bookingStatus !== 'CONFIRMED') throw new BadRequestException('Booking is not confirmed');
     if (booking.checkInPin !== pin) throw new BadRequestException('Invalid PIN');
-    if (booking.pinExpiresAt && new Date() > booking.pinExpiresAt) {
-      throw new BadRequestException('PIN has expired');
+
+    const now = new Date();
+    const datePart = booking.bookingDate.toISOString().split('T')[0];
+    const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
+    const slotEnd = this.buildSlotDateTime(datePart, booking.endTime);
+
+    const bufferMs = 10 * 60 * 1000; // 10 minutes
+    const startWithBuffer = new Date(slotStart.getTime() - bufferMs);
+    const endWithBuffer = new Date(slotEnd.getTime() + bufferMs);
+
+    if (now < startWithBuffer) {
+      throw new BadRequestException(
+        `Too early. This PIN will be valid from 10 mins before start time (starting at ${new Date(
+          startWithBuffer,
+        ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).`,
+      );
+    }
+    if (now > endWithBuffer) {
+      throw new BadRequestException(
+        `PIN has expired. Verification is only allowed within 10 mins after the slot ends (${booking.endTime}).`,
+      );
     }
 
     const updated = await this.prisma.booking.update({
@@ -508,7 +527,11 @@ export class BookingService {
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
 
-  private buildSlotDateTime(dateStr: string, timeStr: string): Date {
+  private buildSlotDateTime(dateSource: string | Date, timeStr: string): Date {
+    const dateStr =
+      dateSource instanceof Date
+        ? dateSource.toISOString().split('T')[0]
+        : dateSource;
     return new Date(`${dateStr}T${timeStr}:00`);
   }
 }
