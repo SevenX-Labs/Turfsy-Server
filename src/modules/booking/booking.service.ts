@@ -79,6 +79,7 @@ export class BookingService {
     }
 
     const booking = await this.prisma.booking.create({ data: bookingData });
+    const result = { ...booking, displayId: this.formatBookingId(booking.id) };
 
     return {
       success: true,
@@ -86,7 +87,7 @@ export class BookingService {
         dto.paymentType === 'CASH'
           ? 'Booking confirmed. Show PIN to owner at check-in.'
           : 'Booking created. Complete payment to confirm.',
-      data: booking,
+      data: result,
     };
   }
 
@@ -148,7 +149,9 @@ export class BookingService {
       },
     });
 
-    return { success: true, message: 'Payment successful. Booking confirmed!', data: updated };
+    const result = { ...updated, displayId: this.formatBookingId(updated.id) };
+
+    return { success: true, message: 'Payment successful. Booking confirmed!', data: result };
   }
 
   // ───────────────────────────────────────────────────────
@@ -164,7 +167,9 @@ export class BookingService {
       data: { bookingStatus: 'CANCELLED', paymentStatus: 'FAILED' },
     });
 
-    return { success: true, message: 'Payment failed. Booking cancelled.', data: updated };
+    const result = { ...updated, displayId: this.formatBookingId(updated.id) };
+
+    return { success: true, message: 'Payment failed. Booking cancelled.', data: result };
   }
 
   // ───────────────────────────────────────────────────────
@@ -211,7 +216,9 @@ export class BookingService {
       data: { paymentStatus: 'SUCCESS', bookingStatus: 'COMPLETED', visitedAt: new Date() },
     });
 
-    return { success: true, message: 'Check-in verified. Booking completed!', data: updated };
+    const result = { ...updated, displayId: this.formatBookingId(updated.id) };
+
+    return { success: true, message: 'Check-in verified. Booking completed!', data: result };
   }
 
   // ───────────────────────────────────────────────────────
@@ -235,7 +242,9 @@ export class BookingService {
       data: { bookingStatus: 'COMPLETED', visitedAt: new Date() },
     });
 
-    return { success: true, message: 'Booking marked as completed.', data: updated };
+    const result = { ...updated, displayId: this.formatBookingId(updated.id) };
+
+    return { success: true, message: 'Booking marked as completed.', data: result };
   }
 
   // ───────────────────────────────────────────────────────
@@ -270,13 +279,15 @@ export class BookingService {
       },
     });
 
+    const result = { ...updated, displayId: this.formatBookingId(updated.id) };
+
     return {
       success: true,
       message:
         newPaymentStatus === 'REFUNDED'
           ? 'Booking cancelled. Refund will be processed.'
           : 'Booking cancelled. No refund (cancelled within 2 hours of slot).',
-      data: updated,
+      data: result,
     };
   }
 
@@ -299,7 +310,9 @@ export class BookingService {
       orderBy: { bookingDate: 'desc' },
     });
 
-    return { success: true, count: bookings.length, data: bookings };
+    const mapped = bookings.map((b) => ({ ...b, displayId: this.formatBookingId(b.id) }));
+
+    return { success: true, count: mapped.length, data: mapped };
   }
 
   // ───────────────────────────────────────────────────────
@@ -327,7 +340,9 @@ export class BookingService {
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.userId !== authId) throw new ForbiddenException('Not your booking');
 
-    return { success: true, data: booking };
+    const result = { ...booking, displayId: this.formatBookingId(booking.id) };
+
+    return { success: true, data: result };
   }
 
   // ───────────────────────────────────────────────────────
@@ -364,7 +379,9 @@ export class BookingService {
       orderBy: { bookingDate: status === 'upcoming' ? 'asc' : 'desc' },
     });
 
-    return { success: true, count: bookings.length, data: bookings };
+    const mapped = bookings.map((b) => ({ ...b, displayId: this.formatBookingId(b.id) }));
+
+    return { success: true, count: mapped.length, data: mapped };
   }
 
   // ───────────────────────────────────────────────────────
@@ -417,7 +434,9 @@ export class BookingService {
       orderBy: { bookingDate: 'asc' },
     });
 
-    return { success: true, count: bookings.length, data: bookings };
+    const mapped = bookings.map((b) => ({ ...b, displayId: this.formatBookingId(b.id) }));
+
+    return { success: true, count: mapped.length, data: mapped };
   }
 
   // ───────────────────────────────────────────────────────
@@ -439,7 +458,9 @@ export class BookingService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return { success: true, count: bookings.length, data: bookings };
+    const mapped = bookings.map((b) => ({ ...b, displayId: this.formatBookingId(b.id) }));
+
+    return { success: true, count: mapped.length, data: mapped };
   }
 
   // ───────────────────────────────────────────────────────
@@ -499,11 +520,14 @@ export class BookingService {
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.userId !== authId) throw new ForbiddenException('Not your booking');
 
+    const displayId = this.formatBookingId(booking.id);
+
     return {
       success: true,
       data: {
         invoiceId: `INV-${booking.id.slice(0, 8).toUpperCase()}`,
-        bookingId: booking.id,
+        bookingId: displayId,
+        internalId: booking.id,
         bookingDate: booking.bookingDate,
         slot: `${booking.startTime} - ${booking.endTime}`,
         duration: `${booking.durationMins} mins`,
@@ -523,6 +547,10 @@ export class BookingService {
   }
 
   // ─── HELPERS ───────────────────────────────────────────
+  private formatBookingId(uuid: string): string {
+    return `TRF-${uuid.slice(0, 9).toUpperCase()}`;
+  }
+
   private generatePin(): string {
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
