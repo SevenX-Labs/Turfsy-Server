@@ -7,59 +7,64 @@ Base URL: `/api/v3/booking`
 
 ## 📌 BOOKING FLOW (Read this first)
 
-### ONLINE Payment Flow
-```
-User selects turf + slot
-        ↓
-POST /api/v3/booking  (paymentType: "ONLINE")
-        ↓
-bookingStatus = PENDING, paymentStatus = PENDING
-        ↓
-Razorpay payment screen opens
-        ↓
-   ┌─── Payment SUCCESS ───┐        ┌─── Payment FAILED ───┐
-   ↓                        ↓        ↓                      ↓
-POST .../confirm-payment            POST .../payment-failed
-   ↓                                 ↓
-bookingStatus = CONFIRMED           bookingStatus = CANCELLED
-paymentStatus = SUCCESS             paymentStatus = FAILED
+### 1. ONLINE Payment Flow
+```text
+Book Now
    ↓
-User visits turf
+Select Slots & See Live Availability (GET /availability/:turfId)
    ↓
-Owner marks → PATCH .../complete
+Check Availability -> Proceed
    ↓
-bookingStatus = COMPLETED
-visitedAt = now
+Create Booking (POST /api/v3/booking) -> Status is PENDING
+   ↓
+Pay Now (Razorpay Screen opens)
+   ↓
+    ┌─── Payment SUCCESS ───┐        ┌─── Payment FAILED ───┐
+    ↓                        ↓        ↓                      ↓
+ Confirm Payment API        Payment Failed API
+ bookingStatus = CONFIRMED  bookingStatus = CANCELLED
+ paymentStatus = SUCCESS    paymentStatus = FAILED
+    ↓
+ Visit Complete
+ (Owner calls PATCH .../complete)
+    ↓
+ bookingStatus = COMPLETED
 ```
 
-### CASH Payment Flow
-```
-User selects turf + slot
-        ↓
-POST /api/v3/booking  (paymentType: "CASH")
-        ↓
-bookingStatus = CONFIRMED (auto)
-paymentStatus = PENDING
-checkInPin = 4821 (4-digit PIN generated)
-        ↓
-User arrives at turf, shows PIN to owner
-        ↓
-Owner enters PIN → POST .../verify-pin
-        ↓
+### 2. CASH Payment Flow
+```text
+Book Now
+   ↓
+Select Slots & See Live Availability
+   ↓
+Create Booking (POST /api/v3/booking with paymentType="CASH")
+   ↓
+Booking Confirmed -> checkInPin Generated
+   ↓
+User arrives at Turf -> Shows PIN
+   ↓
+Visit Complete
+(Owner verifies PIN via POST .../verify-pin)
+   ↓
 bookingStatus = COMPLETED
 paymentStatus = SUCCESS
-visitedAt = now
 ```
 
-### Cancellation Flow
-```
+### 3. Cancellation & Refund Rules
+```text
 User cancels booking → PATCH .../cancel
 
-If ONLINE + paid:
-  - Cancel ≥ 2hr before slot → paymentStatus = REFUNDED
-  - Cancel < 2hr before slot → paymentStatus = SUCCESS (no refund)
+Cancellation Policies:
+1. Online Paid Booking (Cancelled ≥ 2 HOURS before slot time):
+   - User gets full refund. 
+   - paymentStatus = REFUNDED
+   
+2. Online Paid Booking (Cancelled < 2 HOURS before slot time):
+   - No refund provided.
+   - paymentStatus = SUCCESS (payment retained by owner)
 
-bookingStatus = CANCELLED
+3. Cash / Unpaid Bookings:
+   - Simply cancels the slot for others to book.
 ```
 
 ### State Summary
