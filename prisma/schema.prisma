@@ -118,20 +118,20 @@ model Turf {
   name                String
   description         String?
   sportsType          SportsType
-  turfSize            String     // e.g. "100x60 ft"
+  turfSize            String
   status              TurfStatus @default(ACTIVE)
  
   // Location
   address             String
   city                String
-  pincode             String     // FIX: was "Stringdd" — typo
+  pincode             String
   lat                 Float
   lng                 Float
  
   // Timings
-  openTime            String     // "06:00" 24hr format
-  closeTime           String     // "23:00" 24hr format
-  minSlotDurationMins Int        // e.g. 60 for 1 hour
+  openTime            String
+  closeTime           String
+  minSlotDurationMins Int
  
   // Images
   groundDayUrl        String?
@@ -155,18 +155,29 @@ model Turf {
  
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
-  deletedAt           DateTime?  // FIX: must be optional — null until deleted
+  deletedAt           DateTime?
  
-  owner OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+  owner        OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
   savedByUsers SavedTurf[]
- 
+
+  // ── Indexes (original — unchanged) ───────────────────────────
   @@index([ownerProfileId])
   @@index([city])
   @@index([status])
+
+  // ── Indexes (added for search) ────────────────────────────────
+  @@index([name])                           // name partial search
+  @@index([weekdayDayPrice])                // price sort + price range filter
+  @@index([createdAt])                      // newest sort
+  @@index([status, city])                   // active + city (most common query)
+  @@index([status, sportsType])             // active + sport type filter
+  @@index([status, weekdayDayPrice])        // active + price sort
+  @@index([status, city, sportsType])       // active + city + sport
+  @@index([status, city, weekdayDayPrice])  // active + city + price sort
 }
  
 // ─────────────────────────────────────────
-// Payment  (shared, one row per user, role differentiates)
+// Payment
 // ─────────────────────────────────────────
  
 model Payment {
@@ -174,8 +185,8 @@ model Payment {
   authId         String   @unique
   role           Role
   upiId          String
-  userProfileId  String?  @unique  // FIX: must be optional — null if role = OWNER
-  ownerProfileId String?  @unique  // FIX: must be optional — null if role = USER
+  userProfileId  String?  @unique
+  ownerProfileId String?  @unique
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
  
@@ -217,7 +228,7 @@ model OtpEntry {
   sessionToken String    @unique @default(uuid())
   code         String
   expiresAt    DateTime
-  verifiedAt   DateTime? // FIX: must be optional — null until verified
+  verifiedAt   DateTime?
   resendCount  Int       @default(0)
   lastResentAt DateTime?
   createdAt    DateTime  @default(now())
@@ -234,23 +245,19 @@ model OtpEntry {
 
 model SavedTurf {
   id        String   @id @default(uuid())
-  userId    String   @map("user_id")  // Auth.id (the user who saved)
-  turfId    String   @map("turf_id")  // Turf.id (the saved turf)
+  userId    String   @map("user_id")
+  turfId    String   @map("turf_id")
   createdAt DateTime @default(now()) @map("created_at")
-  notes     String?  @db.Text          // Optional user notes about this turf
+  notes     String?  @db.Text
 
-  // Relations
   user      Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
   turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
 
-  // Prevent duplicate saves
   @@unique([userId, turfId])
-  
-  // Indexes for your queries
-  @@index([userId])           // Get all saved turfs for a user
-  @@index([turfId])           // Get all users who saved this turf
-  @@index([userId, createdAt]) // Get all saved turfs sorted by recent
-  @@index([turfId, userId])    // Check if specific turf is saved by user
+  @@index([userId])
+  @@index([turfId])
+  @@index([userId, createdAt])
+  @@index([turfId, userId])
   
   @@map("saved_turfs")
 }
