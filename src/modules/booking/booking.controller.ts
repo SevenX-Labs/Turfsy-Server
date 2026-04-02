@@ -140,6 +140,26 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
+  // 6.5 CRON: TRIGGER NO_SHOWS
+  // POST /api/v3/booking/cron/no-shows
+  // ──────────────────────────────────────────────
+  @Post('cron/no-shows')
+  @HttpCode(HttpStatus.OK)
+  async cronMarkNoShows() {
+    return this.bookingService.markNoShows();
+  }
+
+  // ──────────────────────────────────────────────
+  // 6.6 CRON: AUTO-COMPLETE ONLINE BOOKINGS
+  // POST /api/v3/booking/cron/auto-complete
+  // ──────────────────────────────────────────────
+  @Post('cron/auto-complete')
+  @HttpCode(HttpStatus.OK)
+  async cronAutoComplete() {
+    return this.bookingService.autoCompleteOnlineBookings();
+  }
+
+  // ──────────────────────────────────────────────
   // 7. RATE TURF
   // POST /api/v3/booking/my-bookings/:bookingId/rateTurf
   // ──────────────────────────────────────────────

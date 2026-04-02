@@ -356,6 +356,25 @@ PATCH /api/v3/booking/:bookingId/cancel
 
 ---
 
+---
+
+### 7.5 System Cron Triggers (External Triggers)
+These endpoints are designed to be hit by a cron-scheduler (like cron-job.org or AWS EventBridge) to automate background tasks.
+
+**Mark No-Shows (Call every ~5 mins):**
+```
+POST /api/v3/booking/cron/no-shows
+```
+*(Marks PENDING/CONFIRMED cash bookings as NO_SHOW if customer is 15 mins late. Forfeits deposit).*
+
+**Auto-Complete Online Bookings (Call every ~10 mins):**
+```
+POST /api/v3/booking/cron/auto-complete
+```
+*(Automatically marks ONLINE bookings as COMPLETED after their duration ends).*
+
+---
+
 ### 8. Rate Turf (only after COMPLETED)
 ```
 POST /api/v3/booking/my-bookings/:bookingId/rateTurf
