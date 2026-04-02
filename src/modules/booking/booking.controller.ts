@@ -36,13 +36,12 @@ export class BookingController {
       endTime: string;
       durationMins: number;
       paymentType: 'ONLINE' | 'CASH';
-      amount: number;
       notes?: string;
     },
   ) {
-    const { turfId, bookingDate, startTime, endTime, durationMins, paymentType, amount, notes } = body;
+    const { turfId, bookingDate, startTime, endTime, durationMins, paymentType, notes } = body;
 
-    if (!turfId || !bookingDate || !startTime || !endTime || !durationMins || !paymentType || amount === undefined) {
+    if (!turfId || !bookingDate || !startTime || !endTime || !durationMins || !paymentType) {
       throw new BadRequestException('Missing required booking fields');
     }
 
@@ -51,12 +50,25 @@ export class BookingController {
     }
 
     return this.bookingService.createBooking(req.user.authId, {
-      turfId, bookingDate, startTime, endTime, durationMins, paymentType, amount, notes,
+      turfId, bookingDate, startTime, endTime, durationMins, paymentType, notes,
     });
   }
 
   // ──────────────────────────────────────────────
-  // 2. CONFIRM ONLINE PAYMENT
+  // 2. CREATE RAZORPAY ORDER
+  // POST /api/v3/booking/:bookingId/create-order
+  // ──────────────────────────────────────────────
+  @Post(':bookingId/create-order')
+  @HttpCode(HttpStatus.OK)
+  async createOrder(
+    @Req() req: any,
+    @Param('bookingId') bookingId: string,
+  ) {
+    return this.bookingService.createRazorpayOrder(req.user.authId, bookingId);
+  }
+
+  // ──────────────────────────────────────────────
+  // 3. VERIFY PAYMENT & CONFIRM BOOKING
   // POST /api/v3/booking/:bookingId/confirm-payment
   // ──────────────────────────────────────────────
   @Post(':bookingId/confirm-payment')
@@ -64,10 +76,10 @@ export class BookingController {
   async confirmPayment(
     @Req() req: any,
     @Param('bookingId') bookingId: string,
-    @Body() body: { razorpayOrderId: string; razorpayPaymentId: string },
+    @Body() body: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string },
   ) {
-    if (!body.razorpayOrderId || !body.razorpayPaymentId) {
-      throw new BadRequestException('razorpayOrderId and razorpayPaymentId are required');
+    if (!body.razorpayOrderId || !body.razorpayPaymentId || !body.razorpaySignature) {
+      throw new BadRequestException('razorpayOrderId, razorpayPaymentId, and razorpaySignature are required');
     }
     return this.bookingService.confirmOnlinePayment(req.user.authId, bookingId, body);
   }

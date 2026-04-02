@@ -192,6 +192,7 @@ model Booking {
   paymentStatus     PaymentStatus @default(PENDING) @map("payment_status")
   paymentType       PaymentType   @map("payment_type")
   amount            Float
+  depositAmount     Float         @default(0) @map("deposit_amount")
   razorpayOrderId   String?       @map("razorpay_order_id")
   razorpayPaymentId String?       @map("razorpay_payment_id")
   checkInPin        String?       @map("check_in_pin")
@@ -263,6 +264,7 @@ enum BookingStatus {
   CONFIRMED
   COMPLETED
   CANCELLED
+  NO_SHOW
 }
 
 enum PaymentStatus {

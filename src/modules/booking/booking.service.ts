@@ -4,14 +4,32 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import Razorpay from 'razorpay';
+import * as crypto from 'crypto';
+
+// ─── CONSTANTS ───────────────────────────────────────────
+const CASH_DEPOSIT_PERCENT = 0.50;     // 50% advance for CASH bookings
+const CANCEL_REFUND_PERCENT = 0.75;    // 75% refund on cancellation
+const NIGHT_START_HOUR = 18;           // 6 PM onwards = night pricing
 
 @Injectable()
 export class BookingService {
-  constructor(private readonly prisma: PrismaService) {}
+  private razorpay: Razorpay;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.razorpay = new Razorpay({
+      key_id: this.configService.get<string>('RAZORPAY_KEY_ID') || '',
+      key_secret: this.configService.get<string>('RAZORPAY_KEY_SECRET') || '',
+    });
+  }
 
   // ───────────────────────────────────────────────────────
-  // 1. CREATE BOOKING
+  // 1. CREATE BOOKING (with auto price calculation)
   // ───────────────────────────────────────────────────────
   async createBooking(
     authId: string,
@@ -22,7 +40,6 @@ export class BookingService {
       endTime: string;
       durationMins: number;
       paymentType: 'ONLINE' | 'CASH';
-      amount: number;
       notes?: string;
     },
   ) {
@@ -31,14 +48,20 @@ export class BookingService {
     if (turf.status !== 'ACTIVE') throw new BadRequestException('Turf is not currently available');
 
     const bookingDate = new Date(dto.bookingDate);
-    // Check for ANY overlapping slot
+
+    // ── Prevent past-date bookings ──
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (bookingDate < today) {
+      throw new BadRequestException('Cannot book for a past date');
+    }
+
+    // ── Double-booking prevention (interval overlap algorithm) ──
     const overlapping = await this.prisma.booking.findFirst({
       where: {
         turfId: dto.turfId,
         bookingDate,
-        bookingStatus: { not: 'CANCELLED' },
-        // Two time ranges overlap if (A.start < B.end) AND (A.end > B.start)
-        // String comparison works perfectly for "HH:mm" format.
+        bookingStatus: { notIn: ['CANCELLED', 'NO_SHOW' as any] },
         startTime: { lt: dto.endTime },
         endTime: { gt: dto.startTime },
       },
@@ -49,13 +72,23 @@ export class BookingService {
       );
     }
 
+    // ── Turf operating hours validation ──
     if (dto.startTime < turf.openTime || dto.endTime > turf.closeTime) {
       throw new BadRequestException(`Turf operates from ${turf.openTime} to ${turf.closeTime}`);
     }
 
+    // ── Minimum duration validation ──
     if (dto.durationMins < turf.minSlotDurationMins) {
       throw new BadRequestException(`Minimum slot duration is ${turf.minSlotDurationMins} minutes`);
     }
+
+    // ── Dynamic price calculation ──
+    const amount = this.calculatePrice(turf, bookingDate, dto.startTime, dto.durationMins);
+
+    // ── Deposit amount ──
+    const depositAmount = dto.paymentType === 'CASH'
+      ? Math.round(amount * CASH_DEPOSIT_PERCENT)
+      : amount;
 
     const bookingData: any = {
       userId: authId,
@@ -65,28 +98,31 @@ export class BookingService {
       endTime: dto.endTime,
       durationMins: dto.durationMins,
       paymentType: dto.paymentType,
-      amount: dto.amount,
+      amount,
+      depositAmount,
       notes: dto.notes,
       bookingStatus: 'PENDING',
       paymentStatus: 'PENDING',
     };
 
-    // CASH → auto-confirm + generate PIN
-    if (dto.paymentType === 'CASH') {
-      bookingData.checkInPin = this.generatePin();
-      bookingData.pinExpiresAt = this.buildSlotDateTime(dto.bookingDate, dto.endTime);
-      bookingData.bookingStatus = 'CONFIRMED';
-    }
+    // ── Generate unique 4-digit PIN ──
+    bookingData.checkInPin = await this.generatePin(dto.turfId, bookingDate);
+    bookingData.pinExpiresAt = this.buildSlotDateTime(dto.bookingDate, dto.endTime);
 
     const booking = await this.prisma.booking.create({ data: bookingData });
-    const result = { ...booking, displayId: this.formatBookingId(booking.id) };
+
+    const result = {
+      ...booking,
+      displayId: this.formatBookingId(booking.id),
+      amountToPay: depositAmount,
+      remainingAmount: amount - depositAmount,
+    };
 
     return {
       success: true,
-      message:
-        dto.paymentType === 'CASH'
-          ? 'Booking confirmed. Show PIN to owner at check-in.'
-          : 'Booking created. Complete payment to confirm.',
+      message: dto.paymentType === 'CASH'
+        ? `Booking created. Pay 50% deposit (₹${depositAmount}) online. Remaining ₹${amount - depositAmount} at turf.`
+        : `Booking created. Pay full amount (₹${amount}) to confirm.`,
       data: result,
     };
   }
@@ -97,7 +133,11 @@ export class BookingService {
   async getBookedSlots(turfId: string, date: string) {
     const turf = await this.prisma.turf.findUnique({
       where: { id: turfId },
-      select: { openTime: true, closeTime: true },
+      select: {
+        openTime: true, closeTime: true,
+        weekdayDayPrice: true, weekdayNightPrice: true,
+        weekendDayPrice: true, weekendNightPrice: true,
+      },
     });
     if (!turf) throw new NotFoundException('Turf not found');
 
@@ -106,14 +146,14 @@ export class BookingService {
       where: {
         turfId,
         bookingDate,
-        bookingStatus: { not: 'CANCELLED' },
+        bookingStatus: { notIn: ['CANCELLED', 'NO_SHOW' as any] },
       },
-      select: {
-        startTime: true,
-        endTime: true,
-      },
+      select: { startTime: true, endTime: true },
       orderBy: { startTime: 'asc' },
     });
+
+    // Determine pricing for the selected date
+    const isWeekend = this.isWeekend(bookingDate);
 
     return {
       success: true,
@@ -121,29 +161,101 @@ export class BookingService {
         openTime: turf.openTime,
         closeTime: turf.closeTime,
         bookedSlots: bookings,
+        pricing: {
+          dayPrice: isWeekend ? turf.weekendDayPrice : turf.weekdayDayPrice,
+          nightPrice: isWeekend ? turf.weekendNightPrice : turf.weekdayNightPrice,
+          nightStartsAt: `${NIGHT_START_HOUR}:00`,
+          isWeekend,
+        },
       },
     };
   }
 
   // ───────────────────────────────────────────────────────
-  // 2. CONFIRM ONLINE PAYMENT
+  // 1.6 CREATE RAZORPAY ORDER
+  // ───────────────────────────────────────────────────────
+  async createRazorpayOrder(authId: string, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.userId !== authId) throw new ForbiddenException('Not your booking');
+    if (booking.bookingStatus !== 'PENDING') {
+      throw new BadRequestException('Booking is not in pending state');
+    }
+
+    const amountInPaise = (booking as any).depositAmount * 100; // Razorpay expects paise
+
+    const order = await this.razorpay.orders.create({
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: `TRF-${booking.id.slice(0, 7)}`,
+      notes: {
+        bookingId: booking.id,
+        turfId: booking.turfId,
+        paymentType: booking.paymentType,
+      },
+    });
+
+    // Store razorpay order id
+    await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { razorpayOrderId: order.id },
+    });
+
+    return {
+      success: true,
+      data: {
+        orderId: order.id,
+        amount: amountInPaise,
+        currency: 'INR',
+        bookingId: booking.id,
+        displayId: this.formatBookingId(booking.id),
+        keyId: this.configService.get<string>('RAZORPAY_KEY_ID'),
+      },
+    };
+  }
+
+  // ───────────────────────────────────────────────────────
+  // 2. VERIFY RAZORPAY PAYMENT & CONFIRM BOOKING
   // ───────────────────────────────────────────────────────
   async confirmOnlinePayment(
     authId: string,
     bookingId: string,
-    dto: { razorpayOrderId: string; razorpayPaymentId: string },
+    dto: {
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    },
   ) {
     const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.userId !== authId) throw new ForbiddenException('Not your booking');
-    if (booking.paymentType !== 'ONLINE') throw new BadRequestException('Booking is not online payment');
     if (booking.bookingStatus !== 'PENDING') throw new BadRequestException('Booking is not in pending state');
+
+    // ── Verify Razorpay signature ──
+    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+    const generatedSignature = crypto
+      .createHmac('sha256', keySecret)
+      .update(`${dto.razorpayOrderId}|${dto.razorpayPaymentId}`)
+      .digest('hex');
+
+    if (generatedSignature !== dto.razorpaySignature) {
+      // Signature mismatch → payment tampered
+      await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { bookingStatus: 'CANCELLED', paymentStatus: 'FAILED' },
+      });
+      throw new BadRequestException('Payment verification failed. Invalid signature.');
+    }
+
+    // ONLINE → full payment done → SUCCESS
+    // CASH → only 50% deposit paid → PENDING (remaining at turf)
+    const newPaymentStatus = booking.paymentType === 'ONLINE' ? 'SUCCESS' : 'PENDING';
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
       data: {
         bookingStatus: 'CONFIRMED',
-        paymentStatus: 'SUCCESS',
+        paymentStatus: newPaymentStatus,
         razorpayOrderId: dto.razorpayOrderId,
         razorpayPaymentId: dto.razorpayPaymentId,
       },
@@ -151,7 +263,13 @@ export class BookingService {
 
     const result = { ...updated, displayId: this.formatBookingId(updated.id) };
 
-    return { success: true, message: 'Payment successful. Booking confirmed!', data: result };
+    return {
+      success: true,
+      message: booking.paymentType === 'CASH'
+        ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - (booking as any).depositAmount} at turf.`
+        : 'Payment successful. Booking confirmed!',
+      data: result,
+    };
   }
 
   // ───────────────────────────────────────────────────────
@@ -173,7 +291,7 @@ export class BookingService {
   }
 
   // ───────────────────────────────────────────────────────
-  // 4. CASH CHECK-IN (Owner verifies PIN)
+  // 4. VERIFY CHECK-IN PIN (Owner verifies at turf)
   // ───────────────────────────────────────────────────────
   async verifyCheckInPin(ownerAuthId: string, bookingId: string, pin: string) {
     const booking = await this.prisma.booking.findUnique({
@@ -185,40 +303,47 @@ export class BookingService {
     if (booking.turf.owner.authId !== ownerAuthId) {
       throw new ForbiddenException('Only the turf owner can verify check-in');
     }
-    if (booking.paymentType !== 'CASH') throw new BadRequestException('This booking is not cash-based');
     if (booking.bookingStatus !== 'CONFIRMED') throw new BadRequestException('Booking is not confirmed');
     if (booking.checkInPin !== pin) throw new BadRequestException('Invalid PIN');
 
+    // ── Time-window validation: ±10 minutes buffer ──
     const now = new Date();
     const datePart = booking.bookingDate.toISOString().split('T')[0];
     const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
     const slotEnd = this.buildSlotDateTime(datePart, booking.endTime);
 
-    const bufferMs = 10 * 60 * 1000; // 10 minutes
+    const bufferMs = 10 * 60 * 1000;
     const startWithBuffer = new Date(slotStart.getTime() - bufferMs);
     const endWithBuffer = new Date(slotEnd.getTime() + bufferMs);
 
     if (now < startWithBuffer) {
       throw new BadRequestException(
-        `Too early. This PIN will be valid from 10 mins before start time (starting at ${new Date(
-          startWithBuffer,
-        ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).`,
+        `Too early. PIN valid from ${startWithBuffer.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
       );
     }
     if (now > endWithBuffer) {
       throw new BadRequestException(
-        `PIN has expired. Verification is only allowed within 10 mins after the slot ends (${booking.endTime}).`,
+        `PIN expired. Verification allowed within 10 mins after slot ends (${booking.endTime}).`,
       );
     }
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
       data: { paymentStatus: 'SUCCESS', bookingStatus: 'COMPLETED', visitedAt: new Date() },
+      include: { user: { include: { userProfile: true } } },
     });
 
-    const result = { ...updated, displayId: this.formatBookingId(updated.id) };
+    const result = {
+      ...updated,
+      displayId: this.formatBookingId(updated.id),
+      userName: updated.user?.userProfile?.name || 'Customer',
+    };
 
-    return { success: true, message: 'Check-in verified. Booking completed!', data: result };
+    return {
+      success: true,
+      message: `Check-in verified! Welcome ${result.userName}. Booking ${result.displayId} completed.`,
+      data: result,
+    };
   }
 
   // ───────────────────────────────────────────────────────
@@ -254,8 +379,9 @@ export class BookingService {
     const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.userId !== authId) throw new ForbiddenException('Not your booking');
-    if (['COMPLETED', 'CANCELLED'].includes(booking.bookingStatus)) {
-      throw new BadRequestException('Cannot cancel this booking');
+
+    if (booking.bookingStatus !== 'CONFIRMED' && booking.bookingStatus !== 'PENDING') {
+      throw new BadRequestException('Invalid booking status for cancellation');
     }
 
     const slotDateTime = this.buildSlotDateTime(
@@ -264,9 +390,18 @@ export class BookingService {
     );
     const hoursUntilSlot = (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
 
+    // ── Block cancellation within 2 hours ──
+    if (hoursUntilSlot <= 2) {
+      throw new BadRequestException('Cancellation not allowed within 2 hours of slot time');
+    }
+
+    // ── Calculate 75% refund on whatever was paid online ──
+    let refundAmount = 0;
     let newPaymentStatus = booking.paymentStatus;
-    if (booking.paymentType === 'ONLINE' && booking.paymentStatus === 'SUCCESS') {
-      newPaymentStatus = hoursUntilSlot >= 2 ? 'REFUNDED' : 'SUCCESS';
+
+    if (booking.razorpayPaymentId) {
+      refundAmount = Math.round((booking as any).depositAmount * CANCEL_REFUND_PERCENT);
+      newPaymentStatus = 'REFUNDED';
     }
 
     const updated = await this.prisma.booking.update({
@@ -279,16 +414,83 @@ export class BookingService {
       },
     });
 
-    const result = { ...updated, displayId: this.formatBookingId(updated.id) };
+    const result = {
+      ...updated,
+      displayId: this.formatBookingId(updated.id),
+      refundAmount,
+    };
 
     return {
       success: true,
-      message:
-        newPaymentStatus === 'REFUNDED'
-          ? 'Booking cancelled. Refund will be processed.'
-          : 'Booking cancelled. No refund (cancelled within 2 hours of slot).',
+      message: refundAmount > 0
+        ? `Booking cancelled. 75% refund of ₹${(booking as any).depositAmount} → ₹${refundAmount} will be processed.`
+        : 'Booking cancelled successfully.',
       data: result,
     };
+  }
+
+  // ───────────────────────────────────────────────────────
+  // 6.5 CRON: MARK NO SHOWS (15 min after slot start)
+  // ───────────────────────────────────────────────────────
+  async markNoShows() {
+    const confirmedBookings = await this.prisma.booking.findMany({
+      where: { bookingStatus: 'CONFIRMED' },
+    });
+
+    const now = new Date();
+    let updatedCount = 0;
+
+    for (const booking of confirmedBookings) {
+      const slotStart = this.buildSlotDateTime(
+        booking.bookingDate.toISOString().split('T')[0],
+        booking.startTime,
+      );
+
+      const noShowThreshold = new Date(slotStart.getTime() + 15 * 60 * 1000);
+
+      if (now > noShowThreshold) {
+        await this.prisma.booking.update({
+          where: { id: booking.id },
+          data: { bookingStatus: 'NO_SHOW' as any },
+        });
+        updatedCount++;
+      }
+    }
+
+    return { success: true, count: updatedCount, message: `Marked ${updatedCount} bookings as NO_SHOW` };
+  }
+
+  // ───────────────────────────────────────────────────────
+  // 6.6 CRON: AUTO-COMPLETE ONLINE BOOKINGS (after slot ends)
+  // ───────────────────────────────────────────────────────
+  async autoCompleteOnlineBookings() {
+    const confirmedOnline = await this.prisma.booking.findMany({
+      where: {
+        bookingStatus: 'CONFIRMED',
+        paymentType: 'ONLINE',
+        paymentStatus: 'SUCCESS',
+      },
+    });
+
+    const now = new Date();
+    let updatedCount = 0;
+
+    for (const booking of confirmedOnline) {
+      const slotEnd = this.buildSlotDateTime(
+        booking.bookingDate.toISOString().split('T')[0],
+        booking.endTime,
+      );
+
+      if (now > slotEnd) {
+        await this.prisma.booking.update({
+          where: { id: booking.id },
+          data: { bookingStatus: 'COMPLETED', visitedAt: slotEnd },
+        });
+        updatedCount++;
+      }
+    }
+
+    return { success: true, count: updatedCount, message: `Auto-completed ${updatedCount} online bookings` };
   }
 
   // ───────────────────────────────────────────────────────
@@ -360,7 +562,7 @@ export class BookingService {
     } else {
       where.OR = [
         { bookingDate: { lt: today } },
-        { bookingStatus: { in: ['COMPLETED', 'CANCELLED'] } },
+        { bookingStatus: { in: ['COMPLETED', 'CANCELLED', 'NO_SHOW'] } },
       ];
     }
 
@@ -449,12 +651,13 @@ export class BookingService {
         paymentStatus: { in: ['SUCCESS', 'REFUNDED', 'FAILED'] },
       },
       select: {
-        id: true, amount: true, paymentType: true, paymentStatus: true,
+        id: true, amount: true, depositAmount: true,
+        paymentType: true, paymentStatus: true,
         bookingStatus: true, razorpayOrderId: true, razorpayPaymentId: true,
         bookingDate: true, startTime: true, endTime: true,
         createdAt: true, cancelledAt: true,
         turf: { select: { id: true, name: true, city: true, entranceUrl: true } },
-      },
+      } as any,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -532,6 +735,7 @@ export class BookingService {
         slot: `${booking.startTime} - ${booking.endTime}`,
         duration: `${booking.durationMins} mins`,
         amount: booking.amount,
+        depositAmount: (booking as any).depositAmount,
         paymentType: booking.paymentType,
         paymentStatus: booking.paymentStatus,
         bookingStatus: booking.bookingStatus,
@@ -547,12 +751,68 @@ export class BookingService {
   }
 
   // ─── HELPERS ───────────────────────────────────────────
-  private formatBookingId(uuid: string): string {
-    return `TRF-${uuid.slice(0, 9).toUpperCase()}`;
+
+  /**
+   * Calculate price based on:
+   * - Weekday vs Weekend (Sat/Sun)
+   * - Day vs Night (before/after 6 PM)
+   * - Duration in hours
+   */
+  private calculatePrice(
+    turf: {
+      weekdayDayPrice: number;
+      weekdayNightPrice: number;
+      weekendDayPrice: number;
+      weekendNightPrice: number;
+    },
+    bookingDate: Date,
+    startTime: string,
+    durationMins: number,
+  ): number {
+    const isWeekendDay = this.isWeekend(bookingDate);
+    const startHour = parseInt(startTime.split(':')[0], 10);
+    const isNight = startHour >= NIGHT_START_HOUR;
+
+    let pricePerHour: number;
+
+    if (isWeekendDay) {
+      pricePerHour = isNight ? turf.weekendNightPrice : turf.weekendDayPrice;
+    } else {
+      pricePerHour = isNight ? turf.weekdayNightPrice : turf.weekdayDayPrice;
+    }
+
+    const hours = durationMins / 60;
+    return Math.round(pricePerHour * hours);
   }
 
-  private generatePin(): string {
-    return Math.floor(1000 + Math.random() * 9000).toString();
+  private isWeekend(date: Date): boolean {
+    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+    return day === 0 || day === 6;
+  }
+
+  private formatBookingId(uuid: string): string {
+    return `TRF-${uuid.slice(0, 7).toUpperCase()}`;
+  }
+
+  private async generatePin(turfId: string, bookingDate: Date): Promise<string> {
+    let pin = '';
+    let isUnique = false;
+    let attempts = 0;
+
+    while (!isUnique && attempts < 15) {
+      attempts++;
+      pin = Math.floor(1000 + Math.random() * 9000).toString();
+      const existing = await this.prisma.booking.findFirst({
+        where: {
+          turfId,
+          bookingDate,
+          checkInPin: pin,
+          bookingStatus: { notIn: ['CANCELLED', 'NO_SHOW' as any] },
+        },
+      });
+      if (!existing) isUnique = true;
+    }
+    return pin;
   }
 
   private buildSlotDateTime(dateSource: string | Date, timeStr: string): Date {
