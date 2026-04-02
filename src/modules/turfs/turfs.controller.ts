@@ -19,7 +19,7 @@ import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express
 import { TurfsService } from './turfs.service';
 import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { TurfStatus } from '@prisma/client';
+import { TurfStatus, SportsType } from '@prisma/client';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
 
@@ -120,6 +120,68 @@ export class TurfsController {
   @HttpCode(HttpStatus.OK)
   async getMyTurfs(@Req() req: any) {
     return this.turfsService.getMyTurfs(req.user.authId);
+  }
+
+  // 4. Basic Search (Text based)
+  @Get('search')
+  @HttpCode(HttpStatus.OK)
+  async searchTurfs(@Query('q') q: string) {
+    if (!q) throw new BadRequestException('Search query "q" is required');
+    return this.turfsService.searchTurfs(q);
+  }
+
+  // 5. Advanced Filtration & Sorting
+  @Get('filter')
+  @HttpCode(HttpStatus.OK)
+  async filterTurfs(
+    @Query('city') city?: string,
+    @Query('sportsType') sportsType?: SportsType,
+    @Query('minPrice') minPrice?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('sortBy') sortBy?: 'price_low' | 'price_high' | 'distance' | 'popular' | 'newest',
+    @Query('userLat') userLat?: string,
+    @Query('userLng') userLng?: string,
+  ) {
+    let parsedMinPrice: number | undefined;
+    let parsedMaxPrice: number | undefined;
+
+    if (minPrice) {
+      parsedMinPrice = parseFloat(minPrice);
+      if (isNaN(parsedMinPrice)) throw new BadRequestException('minPrice must be a valid number');
+    }
+
+    if (maxPrice) {
+      parsedMaxPrice = parseFloat(maxPrice);
+      if (isNaN(parsedMaxPrice)) throw new BadRequestException('maxPrice must be a valid number');
+    }
+
+    let parsedLat: number | undefined;
+    let parsedLng: number | undefined;
+
+    if (sortBy === 'distance') {
+      if (!userLat || !userLng) {
+        throw new BadRequestException('userLat and userLng are required when sorting by distance');
+      }
+      parsedLat = parseFloat(userLat);
+      parsedLng = parseFloat(userLng);
+      if (isNaN(parsedLat) || isNaN(parsedLng)) {
+        throw new BadRequestException('userLat and userLng must be valid numbers');
+      }
+    } else if (userLat && userLng) {
+      // Optional even if not sorting by distance, just to attach distance metric
+      parsedLat = parseFloat(userLat);
+      parsedLng = parseFloat(userLng);
+    }
+
+    return this.turfsService.filterTurfs({
+      city,
+      sportsType,
+      minPrice: parsedMinPrice,
+      maxPrice: parsedMaxPrice,
+      sortBy: sortBy || 'newest',
+      userLat: parsedLat,
+      userLng: parsedLng,
+    });
   }
 
   // 3. Update Turf (lat and lng are omitted to prevent constant changes)

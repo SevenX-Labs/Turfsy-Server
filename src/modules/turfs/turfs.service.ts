@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
-import { TurfStatus } from '@prisma/client';
+import { TurfStatus, SportsType } from '@prisma/client';
 
 @Injectable()
 export class TurfsService {
@@ -301,6 +301,124 @@ export class TurfsService {
       rating: 0,
       reviewCount: 0,
     }));
+
+    return {
+      success: true,
+      count: formatted.length,
+      data: formatted,
+    };
+  }
+
+  // 6. Basic Search
+  async searchTurfs(q: string) {
+    const turfs = await this.prisma.turf.findMany({
+      where: {
+        status: 'ACTIVE',
+        deletedAt: null,
+        name: { contains: q, mode: 'insensitive' },
+      },
+      include: {
+        owner: { select: { name: true, contactNumber: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const formatted = turfs.map((turf) => ({
+      ...turf,
+      images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
+      rating: 0,
+      reviewCount: 0,
+    }));
+
+    return {
+      success: true,
+      count: formatted.length,
+      data: formatted,
+    };
+  }
+
+  // 7. Advanced Filtration
+  async filterTurfs(params: {
+    city?: string;
+    sportsType?: SportsType;
+    minPrice?: number;
+    maxPrice?: number;
+    sortBy?: 'price_low' | 'price_high' | 'distance' | 'popular' | 'newest';
+    userLat?: number;
+    userLng?: number;
+  }) {
+    const { city, sportsType, minPrice, maxPrice, sortBy, userLat, userLng } = params;
+
+    const where: any = {
+      status: 'ACTIVE',
+      deletedAt: null,
+    };
+
+    if (city) {
+      where.city = { equals: city, mode: 'insensitive' };
+    }
+
+    if (sportsType) {
+      where.sportsType = sportsType;
+    }
+
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      where.weekdayDayPrice = {};
+      if (minPrice !== undefined) where.weekdayDayPrice.gte = minPrice;
+      if (maxPrice !== undefined) where.weekdayDayPrice.lte = maxPrice;
+    }
+
+    let prismaOrderBy: any = { createdAt: 'desc' };
+    if (sortBy === 'price_low') prismaOrderBy = { weekdayDayPrice: 'asc' };
+    else if (sortBy === 'price_high') prismaOrderBy = { weekdayDayPrice: 'desc' };
+    else if (sortBy === 'popular') prismaOrderBy = { savedByUsers: { _count: 'desc' } };
+    else if (sortBy === 'newest') prismaOrderBy = { createdAt: 'desc' };
+
+    const turfs = await this.prisma.turf.findMany({
+      where,
+      include: {
+        owner: { select: { name: true, contactNumber: true } },
+      },
+      orderBy: sortBy === 'distance' ? undefined : prismaOrderBy,
+      take: sortBy === 'distance' ? 200 : 50,
+    });
+
+    const haversine = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+      const R = 6371;
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLng = ((lng2 - lng1) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    let formatted = turfs.map((turf) => {
+      let distanceKm: number | undefined;
+      if (userLat !== undefined && userLng !== undefined && turf.lat && turf.lng) {
+        distanceKm = parseFloat(haversine(userLat, userLng, turf.lat, turf.lng).toFixed(2));
+      }
+
+      return {
+        ...turf,
+        distanceKm,
+        images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
+        rating: 0,
+        reviewCount: 0,
+      };
+    });
+
+    if (sortBy === 'distance' && userLat !== undefined && userLng !== undefined) {
+      formatted = formatted
+        .filter((t) => t.distanceKm !== undefined)
+        .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0))
+        .slice(0, 50);
+    }
 
     return {
       success: true,
