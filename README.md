@@ -1,244 +1,161 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Turfsy Backend Server
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A robust, scalable backend for the Turfsy Application — a platform connecting Turf Owners with Sports Enthusiasts for turf discovery and booking management. 
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🚀 Tech Stack
+* **Framework**: NestJS (Node.js)
+* **Language**: TypeScript
+* **Database**: PostgreSQL (hosted on Supabase)
+* **ORM**: Prisma
+* **Authentication**: Custom OTP-based Authentication with JWT Tokens
+* **Storage**: Fast/Secure Cloud Storage for image uploads
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Project setup
+## 📁 Folder Structure
 
-```bash
-$ npm install
+```text
+src/
+ ├── prisma/                 # Global Prisma Client and connections
+ ├── modules/                # Enterprise scoped feature modules
+ │   ├── auth/               # OTP, Sessions, JWT, Role Selection
+ │   ├── user-profile/       # Customer profiles 
+ │   ├── owner-profile/      # Turf Owner profiles & KYC
+ │   ├── upload/             # Global file handling
+ │   ├── turfs/              # CRUD Turfs, Pricing, Timings
+ │   ├── user-home/          # Nearby & Popular feeds
+ │   ├── saved-turfs/        # Bookmarking logic
+ │   └── booking/            # Creation, Payments, Overlaps, Cancels
+ ├── app.module.ts           # Root module mapping
+ └── main.ts                 # NestJS bootstrap
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ npm run start
+## ✅ What is Done (Implemented Features)
 
-# watch mode
-$ npm run start:dev
+### 1. Unified Authentication
+- Password-less OTP authentication.
+- Single login splits into `USER` or `OWNER` workspaces via secure Role Selection.
+- JWT Access & Session Tokens.
 
-# production mode
-$ npm run start:prod
-```
+### 2. Multi-tenant Profiles
+- Complete Customer profiles (Name, Email, Phone linked).
+- Complete Owner profiles (Name, Email, Emergency Contacts, KYC details).
 
-## Run tests
+### 3. Turf Management (Owner Side)
+- Post new Turfs with multiple images, geo-location mapping, and operational hours.
+- Set complex pricing templates (Weekday/Weekend + Day/Night differentiation).
+- Toggle turf status (`ACTIVE`, `INACTIVE`, `MAINTENANCE`).
 
-```bash
-# unit tests
-$ npm run test
+### 4. Discovery & Search (Customer Side)
+- **Home Feed**: Nearby algorithms, popular algorithms, fetch by Sports Type.
+- **Search System**: Multi-faceted filter sorting by price (Low to High), ratings, and exact names/cities.
+- **Saved Turfs**: Bookmark and retrieve favorite turfs effortlessly.
 
-# e2e tests
-$ npm run test:e2e
+### 5. Production-Grade Booking Engine
+- **Slot Architecture**: Prevent double bookings using strict overlapping validations (`openTimes` & `closeTimes` strict barriers).
+- **Payment Lifecycle**: 
+  - Supports `CASH` (Generates secure 4-digit check-in PIN).
+  - Supports `ONLINE` (Stops bookings pending Razorpay confirmations).
+- **Cancellation**: Smart cancellation handling (Automatic full refunds if cancelled $\ge$ 2 hours before slot, no refunds if cancelled late).
+- **Invoicing & History**: Dedicated transaction tracking, invoice generation, and post-visit review system.
 
-# test coverage
-$ npm run test:cov
-```
+---
 
-## Deployment
+## 🌊 Overall Project Flow
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+### Customer Flow:
+1. `Login` using phone.
+2. `Verify OTP`, select Role=`USER`.
+3. Fill `User Profile`.
+4. Browse Home Page (`Nearby`, `Popular`).
+5. `Search & Filter` for turfs.
+6. `Save` favorite turfs for later.
+7. Tap a Turf $\to$ Check `Availability`.
+8. `Book Slot` (Cash or Online).
+9. Show generated PIN at owner's desk (if CASH) $\to$ Visit Complete.
+10. `Rate Turf` post-visit check.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Owner Flow:
+1. `Login` using phone $\to$ Role=`OWNER`.
+2. Fill `Owner Profile`.
+3. Target `Turf Creation` $\to$ Upload multiple images $\to$ Define pricing & times.
+4. Dashboard to manage turf availability.
+5. `Verify PIN` $\to$ Approves user check-ins securely.
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+---
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## 📖 Testing & Documentation Redirects
 
-## Resources
+If you need the **exact JSON Request bodies & JSON Responses** for testing via Postman, please refer to the extremely detailed markdown files existing in the `/docs` folder:
 
-Check out a few resources that may come in handy when working with NestJS:
+* `docs/auth_readme.md`
+* `docs/userProfile_creation_readme.md`
+* `docs/ownerProfile_creation_readme.md`
+* `docs/turf_creation_readme.md`
+* `docs/user_home_readme.md`
+* `docs/search-filter-turfs_readme.md`
+* `docs/saved-turfs_readme.md`
+* `docs/custoner_booking_api_readme.md`
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+---
 
-## Support
+## ⚡ LINE-BY-LINE ENDPOINT LIST
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+*(All routes are prefixed with `/api/v3/`)*
 
-## Stay in touch
+### 🔐 Authentication
+* `POST   /auth/login` - Initiate OTP
+* `POST   /auth/verify-otp` - Validate OTP returns Access Token
+* `POST   /auth/select-role` - Split accounts into USER/OWNER
+* `POST   /auth/resend-otp` - Trigger rapid OTP resend
+* `GET    /auth/get-me` - Get current session details
+* `GET    /auth/logout` - Clear sessions
+* `DELETE /auth/delete-account` - Erase account
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### 👥 Profiles
+* `POST   /user/profile` - Create User Profile
+* `PATCH  /user/profile` - Update User Profile
+* `GET    /user/profile/:id` - Fetch User Profile
+* `POST   /owner/profile` - Create Owner Profile
+* `PATCH  /owner/profile` - Update Owner Profile
+* `GET    /owner/profile/:id` - Fetch Owner Profile
 
-## License
+### 📤 Global Upload
+* `POST   /upload` - Secure multipart file upload via Interceptors
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-# Turfsy-Server
+### 🏟️ Turf Management (Owners)
+* `POST   /turfs` - Create a new Turf location
+* `GET    /turfs` - List all turfs owned by this session
+* `GET    /turfs/:id` - View single turf by Owner
+* `PATCH  /turfs/:id` - Edit specific turf
+* `PATCH  /turfs/:id/status` - Change ACTIVE/INACTIVE state
+* `DELETE /turfs/:id` - Delete Turf
 
-## Authentication API
+### 🔍 Discovery & Feed (Customers)
+* `GET    /user-home/nearby` - Sort existing turfs by spatial proximity
+* `GET    /user-home/popular` - Highest rated and most booked
+* `GET    /user-home/sports` - Categories breakdown
+* `GET    /turfs/search` - Comprehensive Filter API (`?query=&city=&rating=&sortPrice=asc`)
 
-Base URL: `https://turfsy.onrender.com`
+### ❤️ Bookmarks
+* `POST   /saved-turfs/:turfId` - Toggle Bookmark (Save / Unsave)
+* `GET    /saved-turfs` - Get list of saved turfs
 
-### 1. POST /api/v3/auth/login
-
-**Request:**
-```json
-{
-  "phone": "8652601566"
-}
-```
-**Response:**
-```json
-{
-  "success": true,
-  "message": "OTP sent successfully",
-  "sessionToken": "uuid",
-  "expiresIn": 60
-}
-```
-
-### 2. POST /api/v3/auth/verify-otp
-
-**Request:**
-```json
-{
-  "phone": "8652601566",
-  "otp": "OTP_FROM_TERMINAL"
-}
-```
-**Response:**
-```json
-{
-  "success": true,
-  "message": "OTP verified",
-  "accessToken": "eyJhbGci..." // JWT token, use this for authenticated requests
-}
-```
-
-### 3. POST /api/v3/auth/select-role
-
-**Headers:**
-`Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY`
-
-**Request:**
-```json
-{
-  "role": "USER"
-}
-```
-**Response:**
-```json
-{
-  "role": "USER",
-  "isNewUser": true,
-  "profile": null,
-  "accessToken": "eyJhbGci..." // JWT token (if you want to re-issue or confirm)
-}
-```
-
-### 4. POST /api/v3/auth/resend-otp
-
-**Request:**
-```json
-{
-  "sessionToken": "SESSION_TOKEN_FROM_LOGIN"
-}
-```
-**Response:**
-```json
-{
-  "success": true,
-  "message": "OTP resent successfully",
-  "expiresIn": 60
-}
-```
-
-### 5. GET /api/v3/auth/get-me
-
-**Headers:**
-`Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY`
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "phone": "8652601566",
-    "role": "USER",
-    "isVerified": true,
-    "isActive": true,
-    "profile": {
-      "id": "uuid",
-      "name": "",
-      "email": ""
-    },
-    "payment": null
-  }
-}
-```
-
-### 6. GET /api/v3/auth/logout
-
-**Headers:**
-`Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY`
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Logged out successfully"
-}
-```
-
-### 7. DELETE /api/v3/auth/delete-account
-
-**Headers:**
-`Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY`
-
-**Request:**
-```json
-{
-  "sessionToken": "SESSION_TOKEN_FROM_LOGIN"
-}
-```
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Account deleted successfully"
-}
-```
-
-### Test Order
-
-1. POST /login         → copy sessionToken + check terminal for OTP
-2. POST /verify-otp    → copy accessToken
-3. POST /select-role   → use accessToken, select role, get isNewUser/profile
-4. GET  /get-me        → use accessToken
-5. POST /resend-otp    → use sessionToken
-6. GET  /logout        → use accessToken
-7. DELETE /delete-account → use both
+### 📅 Booking Engine
+* `GET    /booking/availability/:turfId?date=YYYY-MM-DD` - Fetch all booked overlapping slots 
+* `POST   /booking` - Create booking intent
+* `POST   /booking/:bookingId/confirm-payment` - Confirms Razorpay success
+* `POST   /booking/:bookingId/payment-failed` - Auto cancel pending payment
+* `POST   /booking/:bookingId/verify-pin` - Verify Check-in (OWNER executes)
+* `PATCH  /booking/:bookingId/complete` - Mark visit success manually (OWNER executes)
+* `PATCH  /booking/:bookingId/cancel` - Cancel booking and trigger 2-hour refund logic
+* `POST   /booking/my-bookings/:bookingId/rateTurf` - Add rating post-checkout
+* `GET    /booking/my-bookings` - Complete user booking history
+* `GET    /booking/my-bookings/:bookingId` - View specific booking invoice details
+* `GET    /booking/my-bookings/bookings?status=&filter=` - Filtered queries (Upcoming/Past/Today)
+* `GET    /booking/my-bookings/:bookingId/invoice` - Render structured invoice data
+* `GET    /booking/transaction-history` - Render isolated financial logs
