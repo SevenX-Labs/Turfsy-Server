@@ -7,75 +7,59 @@ Base URL: `/api/v3/booking`
 
 ## 📌 BOOKING FLOW (Read this first)
 
-### 1. ONLINE Payment Flow
+### 1. Unified Payment Flow (ONLINE & CASH)
 ```text
 Turf Page -> User clicks "Book Now"
    ↓
-Select Date & Duration (e.g., 3 hours)
+Select Date & Duration (e.g., 2 hours)
    ↓
 Call GET /availability/:turfId
-   ↓
-UI computes & displays Slots:
- - Show booked times in RED (Unavailable)
- - Ensure chosen standard start time + 3 hours doesn't hit a RED block
-   ↓
-User selects an Available, Green Time Slot
-   ↓
-Create Booking (POST /api/v3/booking) -> Status holds PENDING
-   ↓
-Pay Now (Razorpay Screen opens)
-   ↓
-    ┌─── Payment SUCCESS ───┐        ┌─── Payment FAILED ───┐
-    ↓                        ↓        ↓                      ↓
- Confirm Payment API        Payment Failed API
- bookingStatus = CONFIRMED  bookingStatus = CANCELLED
- paymentStatus = SUCCESS    paymentStatus = FAILED
-    ↓
- Visit Complete
- (Owner calls PATCH .../complete)
-    ↓
- bookingStatus = COMPLETED
-```
-
-### 2. CASH Payment Flow
-```text
-Turf Page -> User clicks "Book Now"
-   ↓
-Select Date & Duration (e.g., 3 hours)
-   ↓
-Check Availability (UI hides RED slots, enables Green slots)
+(UI displays available Green slots and the dynamic price for that day/time)
    ↓
 User selects an Available Time Slot
    ↓
-Create Booking (POST /api/v3/booking with paymentType="CASH")
+Create Booking (POST /api/v3/booking)
+(No amount passed! Backend automatically calculates price based on Turf's day/night + weekday/weekend rules)
    ↓
-Booking Confirmed -> checkInPin Generated (e.g. 4821)
+API returns 'amountToPay' (100% for ONLINE, 50% deposit for CASH)
    ↓
-User arrives at Turf -> Shows PIN
+Create Order (POST .../create-order) -> Gets Razorpay order ID
    ↓
-Visit Complete
-(Owner verifies PIN via POST .../verify-pin)
+User pays via Razorpay Gateway (Web/App UI)
    ↓
-bookingStatus = COMPLETED
-paymentStatus = SUCCESS
+Confirm Payment (POST .../confirm-payment with signature)
+   ↓
+   ├── Payment SUCCESS
+   │    └── bookingStatus = CONFIRMED
+   │    └── paymentStatus = SUCCESS (ONLINE) / PENDING (CASH - remaining 50% paid at turf)
+   │
+   └── Payment FAILED
+        └── bookingStatus = CANCELLED
+        └── paymentStatus = FAILED
 ```
 
-### 3. Cancellation & Refund Rules
+### 2. Visit & Verification
 ```text
-User cancels booking → PATCH .../cancel
+ONLINE Booking:
+User arrives at Turf -> Owner calls PATCH .../complete -> COMPLETED
 
-Cancellation Policies:
-1. Online Paid Booking (Cancelled ≥ 2 HOURS before slot time):
-   - User gets full refund. 
-   - paymentStatus = REFUNDED
-   
-2. Online Paid Booking (Cancelled < 2 HOURS before slot time):
-   - No refund provided.
-   - paymentStatus = SUCCESS (payment retained by owner)
-
-3. Cash / Unpaid Bookings:
-   - Simply cancels the slot for others to book.
+CASH Booking:
+Booking Confirmed -> 4-digit checkInPin Generated (e.g. 4821)
+User arrives at Turf -> Shows PIN -> Pays remaining 50%
+Owner verifies PIN (POST .../verify-pin) -> COMPLETED
+(PIN verify is strictly limited to ±10 minutes of the slot)
 ```
+
+### 3. Cancellation & No-Show Rules
+1. **Cancellation (≥ 2 hours before start):**
+   - User is allowed to cancel via `PATCH .../cancel`.
+   - **75% Refund** of whatever online amount was paid (`depositAmount`).
+   - bookingStatus = `CANCELLED`, paymentStatus = `REFUNDED`.
+2. **Cancellation (< 2 hours before start):**
+   - API blocks cancellation (`400 Bad Request`). User cannot cancel.
+3. **No-Show Tracking (Cron):**
+   - If user doesn't check in within 15 minutes of slot start time, system auto-marks as `NO_SHOW`.
+   - Deposit is forfeited (no refund).
 
 ### State Summary
 
@@ -119,12 +103,14 @@ GET /api/v3/booking/availability/:turfId?date=2026-04-05
       {
         "startTime": "14:00",
         "endTime": "15:00"
-      },
-      {
-        "startTime": "16:00",
-        "endTime": "17:30"
       }
-    ]
+    ],
+    "pricing": {
+      "dayPrice": 1200,
+      "nightPrice": 1500,
+      "nightStartsAt": "18:00",
+      "isWeekend": false
+    }
   }
 }
 ```
@@ -145,7 +131,6 @@ POST /api/v3/booking
   "endTime": "15:00",
   "durationMins": 60,
   "paymentType": "ONLINE",
-  "amount": 1200,
   "notes": "Need extra footballs"
 }
 ```
@@ -159,6 +144,7 @@ POST /api/v3/booking
   "message": "Booking created. Complete payment to confirm.",
   "data": {
     "id": "booking-uuid",
+    "displayId": "TRF-A6C1EDC",
     "userId": "auth-uuid",
     "turfId": "turf-uuid",
     "bookingDate": "2026-04-05T00:00:00.000Z",
@@ -169,6 +155,9 @@ POST /api/v3/booking
     "paymentStatus": "PENDING",
     "paymentType": "ONLINE",
     "amount": 1200,
+    "depositAmount": 1200,
+    "amountToPay": 1200,
+    "remainingAmount": 0,
     "checkInPin": null,
     "createdAt": "2026-04-02T10:30:00.000Z"
   }
@@ -179,18 +168,46 @@ POST /api/v3/booking
 ```json
 {
   "success": true,
-  "message": "Booking confirmed. Show PIN to owner at check-in.",
+  "message": "Booking created. Pay 50% deposit (₹600) online. Remaining ₹600 at turf.",
   "data": {
     "id": "booking-uuid",
-    "bookingStatus": "CONFIRMED",
+    "displayId": "TRF-A6C1EDC",
+    "bookingStatus": "PENDING",
     "paymentStatus": "PENDING",
     "paymentType": "CASH",
     "checkInPin": "4821",
     "pinExpiresAt": "2026-04-05T15:00:00.000Z",
-    "amount": 1200
+    "amount": 1200,
+    "depositAmount": 600,
+    "amountToPay": 600,
+    "remainingAmount": 600
   }
 }
 ```
+
+---
+
+### 2.5 Create Razorpay Order
+```
+POST /api/v3/booking/:bookingId/create-order
+```
+**Description:** Initializes a secure server-side Razorpay order using the `depositAmount`.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": "order_PqR1234567890",
+    "amount": 120000, 
+    "currency": "INR",
+    "bookingId": "booking-uuid",
+    "displayId": "TRF-A6C1EDC",
+    "keyId": "rzp_test_xxxxxx"
+  }
+}
+```
+*(Note: `amount` returned here is in Paise! 120000 paise = 1200 INR)*
 
 ---
 
@@ -203,7 +220,8 @@ POST /api/v3/booking/:bookingId/confirm-payment
 ```json
 {
   "razorpayOrderId": "order_PqR1234567890",
-  "razorpayPaymentId": "pay_AbC9876543210"
+  "razorpayPaymentId": "pay_AbC9876543210",
+  "razorpaySignature": "df45ecba987..."
 }
 ```
 
@@ -214,6 +232,7 @@ POST /api/v3/booking/:bookingId/confirm-payment
   "message": "Payment successful. Booking confirmed!",
   "data": {
     "id": "booking-uuid",
+    "displayId": "TRF-A6C1EDC",
     "bookingStatus": "CONFIRMED",
     "paymentStatus": "SUCCESS",
     "razorpayOrderId": "order_PqR1234567890",
