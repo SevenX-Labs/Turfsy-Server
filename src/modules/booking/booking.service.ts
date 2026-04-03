@@ -1178,6 +1178,47 @@ export class BookingService {
   }
 
   // ═══════════════════════════════════════════════════════
+  // 8.5 GET ACTIVE BOOKING (TODAY)
+  //     Layer 11: Strip PIN logic handled by mapper
+  // ═══════════════════════════════════════════════════════
+  async getActiveBookingToday(authId: string) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        userId: authId,
+        bookingDate: today,
+        bookingStatus: { in: ['CONFIRMED', 'PENDING'] },
+      },
+      include: {
+        turf: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            address: true,
+            sportsType: true,
+            entranceUrl: true,
+            groundDayUrl: true,
+            owner: { select: { name: true, contactNumber: true } },
+          },
+        },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    return {
+      success: true,
+      count: bookings.length,
+      data: bookings.map((b) => ({
+        ...b,
+        displayId: this.formatBookingId(b.id),
+      })),
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
   // 9. BOOKINGS BY STATUS (upcoming / past)
   //    Layer 11: Strip PIN
   // ═══════════════════════════════════════════════════════

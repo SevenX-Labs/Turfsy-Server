@@ -247,6 +247,17 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
+  // 10.5 GET ACTIVE BOOKING TODAY (User)
+  // GET /api/v3/booking/my-bookings/active
+  // ──────────────────────────────────────────────
+  @Get('my-bookings/active')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getActiveBooking(@Req() req: any) {
+    return this.bookingService.getActiveBookingToday(req.user.authId);
+  }
+
+  // ──────────────────────────────────────────────
   // 11. GET ALL MY BOOKINGS (User)
   // GET /api/v3/booking/my-bookings
   // ──────────────────────────────────────────────

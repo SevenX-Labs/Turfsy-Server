@@ -356,6 +356,35 @@ POST /api/v3/booking/my-bookings/:bookingId/rateTurf
 
 ---
 
+---
+
+### 8.5 Get Active Booking (Today)
+```
+GET /api/v3/booking/my-bookings/active
+```
+
+**Description:** Returns the user's bookings for the current day that are in `CONFIRMED` or `PENDING` status. Perfect for a "Quick Access" dashboard screen.
+
+**Response:**
+```json
+{
+  "success": true,
+  "count": 1,
+  "data": [
+    {
+      "id": "booking-uuid",
+      "displayId": "TRF-A6C1EDC",
+      "bookingDate": "2026-04-03T00:00:00.000Z",
+      "startTime": "18:00",
+      "endTime": "19:00",
+      ...
+    }
+  ]
+}
+```
+
+---
+
 ### 9. Get All My Bookings
 ```
 GET /api/v3/booking/my-bookings
