@@ -13,6 +13,7 @@ import { UserHomeModule } from './modules/user-home/user-home.module';
 import { SavedTurfsModule } from './modules/saved-turfs/saved-turfs.module';
 import { BookingModule } from './modules/booking/booking.module';
 import { OwnerHomeModule } from './modules/owner-home/owner-home.module';
+import { OwnerAnalyticsModule } from './modules/owner-analytics/owner-analytics.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { OwnerHomeModule } from './modules/owner-home/owner-home.module';
     SavedTurfsModule,
     BookingModule,
     OwnerHomeModule,
+    OwnerAnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
