@@ -58,10 +58,15 @@ src/
 ### 5. Production-Grade Booking Engine
 - **Slot Architecture**: Prevent double bookings using strict overlapping validations (`openTimes` & `closeTimes` strict barriers).
 - **Payment Lifecycle**: 
-  - Supports `CASH` (Generates secure 4-digit check-in PIN).
-  - Supports `ONLINE` (Stops bookings pending Razorpay confirmations).
+  - **Check-in Security**: A secure 4-digit PIN is generated universally for BOTH `CASH` and `ONLINE` workflows to verify user arrivals seamlessly.
+  - Supports `CASH` (Collect 50% deposit via online, the remaining collected offline natively verified via check-in PIN).
+  - Supports `ONLINE` (Fully atomic operations locking bookings behind Razorpay signature verifications).
 - **Cancellation**: Smart cancellation handling (Automatic full refunds if cancelled $\ge$ 2 hours before slot, no refunds if cancelled late).
 - **Invoicing & History**: Dedicated transaction tracking, invoice generation, and post-visit review system.
+
+### 6. Production Resilience & Infrastructure
+- **Connection Rotation**: Advanced `pg` connection configurations leveraging TCP Keep-Alive parameters to bypass Supabase / Supavisor idle drop timeouts.
+- **Client Deployment**: Locked down Prisma `v7` constructor configuration securely integrated inside NestJS Dependency Injection.
 
 ---
 

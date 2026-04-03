@@ -266,8 +266,8 @@ export class BookingService {
     return {
       success: true,
       message: booking.paymentType === 'CASH'
-        ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - (booking as any).depositAmount} at turf.`
-        : 'Payment successful. Booking confirmed!',
+        ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - (booking as any).depositAmount} at turf. Your Check-In PIN is ${booking.checkInPin}.`
+        : `Payment successful. Booking confirmed! Your Check-In PIN is ${booking.checkInPin}.`,
       data: result,
     };
   }
