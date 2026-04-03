@@ -12,6 +12,7 @@ import { UploadModule } from './modules/upload/upload.module';
 import { UserHomeModule } from './modules/user-home/user-home.module';
 import { SavedTurfsModule } from './modules/saved-turfs/saved-turfs.module';
 import { BookingModule } from './modules/booking/booking.module';
+import { OwnerHomeModule } from './modules/owner-home/owner-home.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BookingModule } from './modules/booking/booking.module';
     UserHomeModule,
     SavedTurfsModule,
     BookingModule,
+    OwnerHomeModule,
   ],
   controllers: [AppController],
   providers: [
