@@ -40,14 +40,11 @@ Confirm Payment (POST .../confirm-payment with signature)
 
 ### 2. Visit & Verification
 ```text
-ONLINE Booking:
-User arrives at Turf -> Owner calls PATCH .../complete -> COMPLETED
-
 CASH Booking:
 Booking Confirmed -> 4-digit checkInPin Generated (e.g. 4821)
 User arrives at Turf -> Shows PIN -> Pays remaining 50%
-Owner verifies PIN (POST .../verify-pin) -> COMPLETED
-(PIN verify is strictly limited to ±10 minutes of the slot)
+Owner verifies PIN -> Booking marked as COMPLETED
+(See Owner API documentation for verification endpoints)
 ```
 
 ### 3. Cancellation & No-Show Rules
@@ -265,55 +262,7 @@ POST /api/v3/booking/:bookingId/payment-failed
 
 ---
 
-### 5. Verify Cash PIN (Owner calls this)
-```
-POST /api/v3/booking/:bookingId/verify-pin
-```
 
-**Request Body:**
-```json
-{
-  "pin": "4821"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Check-in verified. Booking completed!",
-  "data": {
-    "id": "booking-uuid",
-    "bookingStatus": "COMPLETED",
-    "paymentStatus": "SUCCESS",
-    "visitedAt": "2026-04-05T14:05:00.000Z"
-  }
-}
-```
-
----
-
-### 6. Mark Booking Completed (Owner calls this for ONLINE bookings)
-```
-PATCH /api/v3/booking/:bookingId/complete
-```
-
-**Request Body:** None
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Booking marked as completed.",
-  "data": {
-    "id": "booking-uuid",
-    "bookingStatus": "COMPLETED",
-    "visitedAt": "2026-04-05T15:10:00.000Z"
-  }
-}
-```
-
----
 
 ### 7. Cancel Booking
 ```

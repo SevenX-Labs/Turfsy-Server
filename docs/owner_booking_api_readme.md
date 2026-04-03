@@ -1,0 +1,111 @@
+# Turfsy Owner Booking API (v3) 🏟️
+
+This documentation covers the endpoints available to **Turf Owners** for managing bookings at their turfs.
+
+## 🔐 Base URL
+`{{api_url}}/api/v3/booking`
+
+---
+
+## 🧠 Brain Recall Line
+> **“List → Filter → Detail → Verify PIN → Complete”**
+
+---
+
+## Authentication
+All endpoints require a **Bearer JWT Token** with the `OWNER` role.
+
+---
+
+## 📥 1. Get All Bookings
+Get all bookings for all turfs owned by the current owner.
+
+- **Endpoint**: `GET /owner/bookings`
+- **Success Response**: `200 OK` (Array of bookings with customer details)
+
+---
+
+## 🔍 2. Get Filtered Bookings
+Filter bookings by status, date, or relative timeframes.
+
+- **Endpoint**: `GET /owner/bookings-filtered`
+- **Query Parameters**:
+  - `status`: `upcoming` (CONFIRMED/PENDING) or `past` (COMPLETED/CANCELLED/NO_SHOW)
+  - `time`: `today`, `tomorrow`, `week`
+  - `date`: Specific date in `YYYY-MM-DD`
+- **Query Examples**:
+  - `?status=upcoming`
+  - `?status=past`
+  - `?time=today`
+  - `?time=tomorrow`
+  - `?time=week`
+  - `?date=2026-04-03`
+- **Success Response**: `200 OK`
+
+---
+
+## 📄 3. Get Single Booking Details
+Get full details of a specific booking including customer contact info.
+
+- **Endpoint**: `GET /owner/bookings/:bookingId`
+- **Success Response**: `200 OK`
+```json
+{
+  "success": true,
+  "data": {
+    "displayId": "TRF-A1B2C3D",
+    "userName": "John Doe",
+    "userPhone": "9876543210",
+    "userEmail": "john@example.com",
+    "bookingStatus": "CONFIRMED",
+    "paymentType": "CASH",
+    "bookingDate": "2026-05-05",
+    "startTime": "09:00",
+    "endTime": "10:00",
+    "totalAmount": 1000,
+    "depositAmount": 500,
+    "pendingAmount": 500,
+    ...
+  }
+}
+```
+
+---
+
+## 🔢 4. Verify PIN (CASH)
+Used to verify a customer's check-in PIN for CASH-type bookings (Pay-at-Turf) when they arrive.
+
+- **Endpoint**: `POST /:bookingId/verify-pin`
+- **Security**: OWNER role, PIN rate-limiting, Constant-time comparison.
+- **Rules**:
+  - Window: Slot start - 10 min to Slot end + 10 min.
+  - Max 5 wrong attempts before the booking is locked.
+- **Request Body**:
+```json
+{
+  "pin": "1234"
+}
+```
+- **Success Response**: `200 OK`
+
+---
+
+## ✅ 5. Manual Complete (Fallback)
+Used to mark a booking as COMPLETED manually. For CASH bookings, this is available ONLY after the slot ends.
+
+- **Endpoint**: `PATCH /:bookingId/complete`
+- **Rules**:
+  - For `ONLINE` bookings: Can be marked completed anytime after they are confirmed.
+  - For `CASH` bookings: Only available **after the PIN window expires**.
+- **Success Response**: `200 OK`
+
+---
+
+## Error Codes
+| Status | Meaning |
+| :--- | :--- |
+| `401` | Unauthorized (Invalid or expired JWT) |
+| `403` | Forbidden (Not an OWNER or doesn't own this turf) |
+| `404` | Booking not found |
+| `423` | Resource Locked (5 failed PIN attempts) |
+| `400` | Bad Request (Slot not started, or window expired) |

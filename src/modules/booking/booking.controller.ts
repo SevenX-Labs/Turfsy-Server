@@ -134,6 +134,59 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
+  // 6.1 OWNER: GET ALL BOOKINGS
+  // GET /api/v3/booking/owner/bookings
+  // ──────────────────────────────────────────────
+  @Get('owner/bookings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(HttpStatus.OK)
+  async getOwnerBookings(@Req() req: any) {
+    return this.bookingService.getOwnerBookings(req.user.authId);
+  }
+
+  // ──────────────────────────────────────────────
+  // 6.2 OWNER: FILTERED BOOKINGS
+  // GET /api/v3/booking/owner/bookings-filtered
+  // ──────────────────────────────────────────────
+  @Get('owner/bookings-filtered')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(HttpStatus.OK)
+  async getOwnerBookingsFiltered(
+    @Req() req: any,
+    @Query('status') status?: 'upcoming' | 'past',
+    @Query('time') time?: 'today' | 'tomorrow' | 'week',
+    @Query('date') date?: string,
+  ) {
+    if (status && !['upcoming', 'past'].includes(status)) {
+      throw new BadRequestException('status must be "upcoming" or "past"');
+    }
+    if (time && !['today', 'tomorrow', 'week'].includes(time)) {
+      throw new BadRequestException('time must be "today", "tomorrow", or "week"');
+    }
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
+    }
+    return this.bookingService.getOwnerBookingsFiltered(req.user.authId, { status, time, date });
+  }
+
+  // ──────────────────────────────────────────────
+  // 6.3 OWNER: SINGLE BOOKING DETAILS
+  // GET /api/v3/booking/owner/bookings/:bookingId
+  // ──────────────────────────────────────────────
+  @Get('owner/bookings/:bookingId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(HttpStatus.OK)
+  async getOwnerBookingDetails(
+    @Req() req: any,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+  ) {
+    return this.bookingService.getOwnerBookingDetails(req.user.authId, bookingId);
+  }
+
+  // ──────────────────────────────────────────────
   // 7. CANCEL BOOKING (User)
   // PATCH /api/v3/booking/:bookingId/cancel
   // Layer 1: JWT | Layer 9: Refund safety

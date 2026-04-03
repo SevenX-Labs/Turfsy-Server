@@ -783,6 +783,126 @@ export class BookingService {
   }
 
   // ═══════════════════════════════════════════════════════
+  // 5.5 OWNER: GET ALL BOOKINGS FOR OWNED TURFS
+  //     Layer 1: OWNER role + turf ownership filtering
+  // ═══════════════════════════════════════════════════════
+  async getOwnerBookings(ownerAuthId: string) {
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        turf: {
+          owner: { authId: ownerAuthId },
+        },
+      },
+      include: {
+        user: { select: { phone: true, userProfile: { select: { name: true } } } },
+        turf: { select: { name: true, city: true } },
+      },
+      orderBy: { bookingDate: 'desc' },
+    });
+
+    return {
+      success: true,
+      data: bookings.map((b) => ({
+        ...b,
+        displayId: this.formatBookingId(b.id),
+        userName: b.user?.userProfile?.name || 'Customer',
+        userPhone: b.user?.phone,
+      })),
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5.6 OWNER: FILTERED BOOKINGS
+  //     Layer 1: Filter by date/status for specific owner
+  // ═══════════════════════════════════════════════════════
+  async getOwnerBookingsFiltered(
+    ownerAuthId: string,
+    query: { status?: 'upcoming' | 'past'; time?: 'today' | 'tomorrow' | 'week'; date?: string },
+  ) {
+    const { status, time, date } = query;
+    const where: any = {
+      turf: { owner: { authId: ownerAuthId } },
+    };
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    // Status filtering
+    if (status === 'upcoming') {
+      where.bookingDate = { gte: new Date(todayStr) };
+      where.bookingStatus = { in: ['CONFIRMED', 'PENDING'] };
+    } else if (status === 'past') {
+      where.bookingStatus = { in: ['COMPLETED', 'CANCELLED', 'NO_SHOW'] };
+    }
+
+    // Date/Filter logic
+    if (date) {
+      where.bookingDate = new Date(date);
+    } else if (time === 'today') {
+      where.bookingDate = new Date(todayStr);
+    } else if (time === 'tomorrow') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      where.bookingDate = new Date(tomorrow.toISOString().split('T')[0]);
+    } else if (time === 'week') {
+      const weekEnd = new Date();
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      where.bookingDate = {
+        gte: new Date(todayStr),
+        lte: new Date(weekEnd.toISOString().split('T')[0]),
+      };
+    }
+
+    const bookings = await this.prisma.booking.findMany({
+      where,
+      include: {
+        user: { select: { phone: true, userProfile: { select: { name: true } } } },
+        turf: { select: { name: true, city: true } },
+      },
+      orderBy: { bookingDate: 'asc' },
+    });
+
+    return {
+      success: true,
+      data: bookings.map((b) => ({
+        ...b,
+        displayId: this.formatBookingId(b.id),
+        userName: b.user?.userProfile?.name || 'Customer',
+        userPhone: b.user?.phone,
+      })),
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5.7 OWNER: GET SINGLE BOOKING DETAILS
+  // ═══════════════════════════════════════════════════════
+  async getOwnerBookingDetails(ownerAuthId: string, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        user: { select: { phone: true, userProfile: { select: { name: true, email: true } } } },
+        turf: { include: { owner: true } },
+      },
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.turf.owner.authId !== ownerAuthId) {
+      throw new ForbiddenException('Access denied.');
+    }
+
+    return {
+      success: true,
+      data: {
+        ...booking,
+        displayId: this.formatBookingId(booking.id),
+        userName: booking.user?.userProfile?.name || 'Customer',
+        userPhone: booking.user?.phone,
+        userEmail: booking.user?.userProfile?.email,
+      },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
   // 6. CANCEL BOOKING
   //    Layer 2: Idempotency (already cancelled/refunded?)
   //    Layer 5: State Machine
