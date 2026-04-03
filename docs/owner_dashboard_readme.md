@@ -4,18 +4,18 @@ This documentation details the business intelligence and dashboard endpoints des
 
 ---
 
-## 🔐 Base URL
-`/api/v3/owner-home`
-
-**Authorization:** Required (`Bearer <JWT_TOKEN>` with `OWNER` role).
+## 🔐 Configuration
+- **Host**: `{{BASE_URL}}` (e.g., `https://api.turfsy.com`)
+- **Common Prefix**: `/api/v3`
+- **Authorization**: Required (`Bearer <JWT_TOKEN>` with `OWNER` role).
 
 ---
 
 ## 📈 1. Master Dashboard Statistics
-Get the complete dashboard state in a single call.
+Get the complete dashboard state in a single call. Useful for initial page load.
 
 - **Method**: `GET`
-- **Endpoint**: `/dashboard`
+- **Full Endpoint**: `/api/v3/owner-home/dashboard`
 - **Request Body**: `None`
 - **Expected Response**: `200 OK`
 ```json
@@ -44,10 +44,10 @@ Get the complete dashboard state in a single call.
 ---
 
 ## 💰 2. Get Revenue Summary
-Quick access to daily/monthly financial performance.
+Quick access to daily/monthly financial performance for small widgets.
 
 - **Method**: `GET`
-- **Endpoint**: `/revenue-summary`
+- **Full Endpoint**: `/api/v3/owner-home/revenue-summary`
 - **Request Body**: `None`
 - **Expected Response**: `200 OK`
 ```json
@@ -60,10 +60,10 @@ Quick access to daily/monthly financial performance.
 ---
 
 ## 📊 3. Get Booking Statistics
-Aggregated counts of all booking statuses.
+Aggregated counts of all booking statuses for the "Stats Grid" widget.
 
 - **Method**: `GET`
-- **Endpoint**: `/booking-statistics`
+- **Full Endpoint**: `/api/v3/owner-home/booking-statistics`
 - **Request Body**: `None`
 - **Expected Response**: `200 OK`
 ```json
@@ -76,10 +76,10 @@ Aggregated counts of all booking statuses.
 ---
 
 ## 🕒 4. Get Recent Activity
-Fetch the latest booking logs for the dashboard's activity list.
+Fetch the latest booking logs for the "Recent Activity" feed.
 
 - **Method**: `GET`
-- **Endpoint**: `/recent-activity`
+- **Full Endpoint**: `/api/v3/owner-home/recent-activity`
 - **Request Body**: `None`
 - **Expected Response**: `200 OK`
 ```json
@@ -94,10 +94,10 @@ Fetch the latest booking logs for the dashboard's activity list.
 ---
 
 ## 📉 5. Get Revenue & Volume Trends
-Data for the 7-day revenue/booking charts (typically used for Bar or Line charts).
+Historical data for 7-day charts.
 
 - **Method**: `GET`
-- **Endpoint**: `/trends`
+- **Full Endpoint**: `/api/v3/owner-home/trends`
 - **Request Body**: `None`
 - **Expected Response**: `200 OK`
 ```json
@@ -110,10 +110,10 @@ Data for the 7-day revenue/booking charts (typically used for Bar or Line charts
 ---
 
 ## 💳 6. Get Payment Distribution
-Online vs Cash breakdown for processing preferences.
+Online vs Cash split breakdown for pie charts.
 
 - **Method**: `GET`
-- **Endpoint**: `/payment-distribution`
+- **Full Endpoint**: `/api/v3/owner-home/payment-distribution`
 - **Request Body**: `None`
 - **Expected Response**: `200 OK`
 ```json
@@ -132,7 +132,7 @@ Online vs Cash breakdown for processing preferences.
 Ranking of your turfs by their revenue contribution.
 
 - **Method**: `GET`
-- **Endpoint**: `/turf-performance`
+- **Full Endpoint**: `/api/v3/owner-home/turf-performance`
 - **Request Body**: `None`
 - **Expected Response**: `200 OK`
 ```json
@@ -147,8 +147,51 @@ Ranking of your turfs by their revenue contribution.
 
 ---
 
-## 🎯 Important Implementation Notes
-1. **Context Isolation**: You don't need to pass a `turfId` or `ownerId` in the body. The system identifies your turfs automatically from your logged-in JWT token.
+## 📉 Deep Analytics (New Module)
+The new `OwnerAnalytics` module provides a technical deep-dive into your business performance.
+
+### 🚀 Overall Analytics Deep-Dive
+Use this for full-screen "Report" pages with many graphs.
+
+- **Method**: `GET`
+- **Full Endpoint**: `/api/v3/owner-analytics/overall`
+- **Request Body**: `None`
+- **Expected Response**: `200 OK`
+```json
+{
+  "success": true,
+  "data": {
+    "totalRevenue": 250000,
+    "totalBookings": 150,
+    "completedBookings": 120,
+    "cancelledBookings": 25,
+    "noShowBookings": 5,
+    "revenueByDate": [
+      { "date": "2026-04-01", "revenue": 5000 },
+      { "date": "2026-04-02", "revenue": 8000 }
+    ],
+    "bookingsByDate": [
+      { "date": "2026-04-01", "count": 4 },
+      { "date": "2026-04-02", "count": 7 }
+    ],
+    "cashVsOnline": {
+      "cashAmount": 80000,
+      "onlineAmount": 170000
+    },
+    "peakHours": [
+      { "hour": "18:00", "count": 45 },
+      { "hour": "19:00", "count": 42 }
+    ],
+    "cancellationRate": "16.7%",
+    "noShowRate": "3.3%"
+  }
+}
+```
+
+---
+
+## 🎯 Implementation Notes
+1. **Context Isolation**: The frontend **does not** need to construct a payload or calculate rates (like Cancellation/No-show rates). All intelligence is calculated on the server and returned ready-to-display.
 2. **REST Standards**: These are pure `GET` endpoints fetching read-only analytics data.
 3. **Frontend Strategy**:
    - For high-performance mobile/web apps, fetch the individual widgets (Stats, Trends, Activity) separately using their respective endpoints.
