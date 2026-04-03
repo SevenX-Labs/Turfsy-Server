@@ -44,6 +44,12 @@ export class CreateBookingDto {
   @IsString()
   @MaxLength(200, { message: 'Notes maximum 200 characters' })
   notes?: string;
+
+  @IsOptional()
+  @IsInt({ message: 'playersCount must be an integer' })
+  @Min(1, { message: 'Minimum 1 player' })
+  @Max(100, { message: 'Maximum 100 players' })
+  playersCount?: number;
 }
 
 export class ConfirmPaymentDto {

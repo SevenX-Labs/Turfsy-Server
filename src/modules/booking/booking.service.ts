@@ -60,6 +60,7 @@ export class BookingService {
       durationMins: number;
       paymentType: 'ONLINE' | 'CASH';
       notes?: string;
+      playersCount?: number;
     },
     ip?: string,
   ) {
@@ -144,9 +145,10 @@ export class BookingService {
           checkInPin,
           pinExpiresAt,
           notes: sanitizedNotes,
+          playersCount: dto.playersCount,
           bookingStatus: 'PENDING',
           paymentStatus: 'PENDING',
-        },
+        } as any,
       });
     });
 
@@ -1512,6 +1514,7 @@ export class BookingService {
         id: true, amount: true, depositAmount: true,
         paymentType: true, paymentStatus: true,
         bookingStatus: true, razorpayOrderId: true,
+        playersCount: true,
         bookingDate: true, startTime: true, endTime: true,
         createdAt: true, cancelledAt: true,
         turf: { select: { id: true, name: true, city: true, entranceUrl: true } },

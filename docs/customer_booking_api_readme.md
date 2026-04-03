@@ -128,7 +128,8 @@ POST /api/v3/booking
   "endTime": "15:00",
   "durationMins": 60,
   "paymentType": "ONLINE",
-  "notes": "Need extra footballs"
+  "notes": "Need extra footballs",
+  "playersCount": 12
 }
 ```
 

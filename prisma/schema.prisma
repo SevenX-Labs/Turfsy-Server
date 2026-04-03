@@ -204,6 +204,7 @@ model Booking {
   cancelledAt       DateTime?     @map("cancelled_at")
   cancelReason      String?       @map("cancel_reason")
   notes             String?
+  playersCount      Int?          @map("players_count")
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
   turf              Turf          @relation(fields: [turfId], references: [id], onDelete: Cascade)

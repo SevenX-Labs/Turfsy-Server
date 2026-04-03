@@ -74,6 +74,7 @@ export class OwnerHomeService {
         turfName: b.turf.name,
         amount: b.amount,
         status: b.bookingStatus,
+        playersCount: (b as any).playersCount,
         createdAt: b.createdAt,
       })),
     };

@@ -117,6 +117,10 @@ export class OwnerAnalyticsService {
         completedBookings: completed.length,
         cancelledBookings: cancelled.length,
         noShowBookings: noShows.length,
+        totalPlayersCount: bookings.reduce((sum, b: any) => sum + (b.playersCount || 0), 0),
+        avgPlayersPerBooking: totalBookings > 0 
+          ? (bookings.reduce((sum, b: any) => sum + (b.playersCount || 0), 0) / totalBookings).toFixed(1)
+          : 0,
         cancellationRate: totalBookings > 0 ? ((cancelled.length / totalBookings) * 100).toFixed(1) + '%' : '0%',
         noShowRate: totalBookings > 0 ? ((noShows.length / totalBookings) * 100).toFixed(1) + '%' : '0%',
       }
