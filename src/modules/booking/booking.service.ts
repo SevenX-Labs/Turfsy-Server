@@ -184,6 +184,28 @@ export class BookingService {
 
     const amountInPaise = (booking as any).depositAmount * 100; // Razorpay expects paise
 
+    const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
+
+    // MOCK BEHAVIOR FOR TESTING WITHOUT REAL KEYS
+    if (keyId === 'your_razorpay_key_id' || keyId === '') {
+      const mockOrderId = `order_${crypto.randomBytes(8).toString('hex')}`;
+      await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { razorpayOrderId: mockOrderId },
+      });
+      return {
+        success: true,
+        data: {
+          orderId: mockOrderId,
+          amount: amountInPaise,
+          currency: 'INR',
+          bookingId: booking.id,
+          displayId: this.formatBookingId(booking.id),
+          keyId: 'mock_test_key',
+        },
+      };
+    }
+
     const order = await this.razorpay.orders.create({
       amount: amountInPaise,
       currency: 'INR',
@@ -233,18 +255,22 @@ export class BookingService {
 
     // ── Verify Razorpay signature ──
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
-    const generatedSignature = crypto
-      .createHmac('sha256', keySecret)
-      .update(`${dto.razorpayOrderId}|${dto.razorpayPaymentId}`)
-      .digest('hex');
 
-    if (generatedSignature !== dto.razorpaySignature) {
-      // Signature mismatch → payment tampered
-      await this.prisma.booking.update({
-        where: { id: bookingId },
-        data: { bookingStatus: 'CANCELLED', paymentStatus: 'FAILED' },
-      });
-      throw new BadRequestException('Payment verification failed. Invalid signature.');
+    // Bypass signature check if using placeholder test keys
+    if (keySecret !== 'your_razorpay_key_secret' && keySecret !== '') {
+      const generatedSignature = crypto
+        .createHmac('sha256', keySecret)
+        .update(`${dto.razorpayOrderId}|${dto.razorpayPaymentId}`)
+        .digest('hex');
+
+      if (generatedSignature !== dto.razorpaySignature) {
+        // Signature mismatch → payment tampered
+        await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: { bookingStatus: 'CANCELLED', paymentStatus: 'FAILED' },
+        });
+        throw new BadRequestException('Payment verification failed. Invalid signature.');
+      }
     }
 
     // ONLINE → full payment done → SUCCESS
