@@ -615,13 +615,14 @@ export class BookingService {
       throw new HttpException('Resource locked.', HttpStatus.LOCKED); // 423
     }
 
-    // ── Layer 8: Time window check (±10 min from slot start) ──
+    // ── Layer 8: Time window check (-10 min from start, +10 min from end) ──
     const now = new Date();
     const datePart = booking.bookingDate.toISOString().split('T')[0];
     const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
+    const slotEnd = this.buildSlotDateTime(datePart, booking.endTime);
 
     const windowStart = new Date(slotStart.getTime() - PIN_WINDOW_MINUTES * 60 * 1000);
-    const windowEnd = new Date(slotStart.getTime() + PIN_WINDOW_MINUTES * 60 * 1000);
+    const windowEnd = new Date(slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000);
 
     if (now < windowStart) {
       throw new BadRequestException(
@@ -739,14 +740,30 @@ export class BookingService {
       throw new BadRequestException('Only confirmed bookings can be completed');
     }
 
-    // ── Layer 5: Payment type check ──
-    if (booking.paymentType !== 'ONLINE') {
-      throw new BadRequestException('Use verify-pin for CASH bookings');
+    // ── Layer 5 & Layer 8: Payment type check & Fallback Override ──
+    if (booking.paymentType === 'CASH') {
+      // For CASH, allow manual completion ONLY if the PIN window has expired
+      const now = new Date();
+      const datePart = booking.bookingDate.toISOString().split('T')[0];
+      const slotEnd = this.buildSlotDateTime(datePart, booking.endTime);
+      const windowEnd = new Date(slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000);
+
+      if (now <= windowEnd) {
+        throw new BadRequestException(
+          'Use Verify-PIN for active CASH bookings. Manual override is only available after the slot ends.',
+        );
+      }
     }
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
-      data: { bookingStatus: 'COMPLETED', visitedAt: new Date() },
+      data: {
+        bookingStatus: 'COMPLETED',
+        paymentStatus: 'SUCCESS', // For CASH fallback, we assume money collected
+        visitedAt: new Date(),
+        checkInPin: null,         // Clean up unused PIN
+        pinAttempts: 0,
+      },
     });
 
     this.paymentLogger.log({
