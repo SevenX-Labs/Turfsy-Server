@@ -12,8 +12,10 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Res,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -187,6 +189,49 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
+  // 6.4 OWNER: ACTIVE BOOKINGS TODAY
+  // GET /api/v3/booking/owner/bookings/active
+  // ──────────────────────────────────────────────
+  @Get('owner/bookings/active')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(HttpStatus.OK)
+  async getOwnerActiveBookings(@Req() req: any) {
+    return this.bookingService.getOwnerActiveBookings(req.user.authId);
+  }
+
+  // ──────────────────────────────────────────────
+  // 6.5 OWNER: ANALYTICS & REPORTS
+  // ──────────────────────────────────────────────
+  @Get('owner/analytics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(HttpStatus.OK)
+  async getOwnerAnalytics(@Req() req: any) {
+    return this.bookingService.getOwnerAnalytics(req.user.authId);
+  }
+
+  @Get('owner/analytics/csv')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async exportAnalyticsCsv(@Req() req: any, @Res() res: any) {
+    const csv = await this.bookingService.getOwnerAnalyticsCsv(req.user.authId);
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`turfsy_analytics_${new Date().getTime()}.csv`);
+    return res.send(csv);
+  }
+
+  @Get('owner/analytics/pdf')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async exportAnalyticsPdf(@Req() req: any, @Res() res: any) {
+    const buffer = await this.bookingService.getOwnerAnalyticsPdf(req.user.authId);
+    res.header('Content-Type', 'application/pdf');
+    res.attachment(`turfsy_report_${new Date().getTime()}.pdf`);
+    return res.send(buffer);
+  }
+
+  // ──────────────────────────────────────────────
   // 7. CANCEL BOOKING (User)
   // PATCH /api/v3/booking/:bookingId/cancel
   // Layer 1: JWT | Layer 9: Refund safety
@@ -321,6 +366,19 @@ export class BookingController {
     @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
     return this.bookingService.getInvoice(req.user.authId, bookingId);
+  }
+
+  @Get('my-bookings/:bookingId/invoice/pdf')
+  @UseGuards(JwtAuthGuard)
+  async downloadInvoicePdf(
+    @Req() req: any,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+    @Res() res: any,
+  ) {
+    const buffer = await this.bookingService.getInvoicePdf(req.user.authId, bookingId);
+    res.header('Content-Type', 'application/pdf');
+    res.attachment(`turfsy_invoice_${bookingId.slice(0, 8)}.pdf`);
+    return res.send(buffer);
   }
 
   // ──────────────────────────────────────────────

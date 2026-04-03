@@ -14,6 +14,9 @@ import { RateLimiterService, RATE_LIMITS } from '../../common/services/rate-limi
 import { PaymentStatus } from '@prisma/client';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
+import { Parser } from 'json2csv';
+import * as PDFDocument from 'pdfkit';
+import { Readable } from 'stream';
 
 // ─── CONSTANTS ───────────────────────────────────────────
 const CASH_DEPOSIT_PERCENT = 0.50;     // 50% advance for CASH bookings
@@ -903,6 +906,175 @@ export class BookingService {
   }
 
   // ═══════════════════════════════════════════════════════
+  // 5.8 OWNER: GET ACTIVE BOOKINGS (TODAY)
+  // ═══════════════════════════════════════════════════════
+  async getOwnerActiveBookings(ownerAuthId: string) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        turf: { owner: { authId: ownerAuthId } },
+        bookingDate: today,
+        bookingStatus: { in: ['CONFIRMED', 'PENDING'] },
+      },
+      include: {
+        user: { select: { phone: true, userProfile: { select: { name: true } } } },
+        turf: { select: { name: true, city: true } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    return {
+      success: true,
+      count: bookings.length,
+      data: bookings.map((b) => ({
+        ...b,
+        displayId: this.formatBookingId(b.id),
+        userName: b.user?.userProfile?.name || 'Customer',
+        userPhone: b.user?.phone,
+      })),
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5.9 OWNER: GET ANALYTICS
+  // ═══════════════════════════════════════════════════════
+  async getOwnerAnalytics(ownerAuthId: string) {
+    const turfs = await this.prisma.turf.findMany({
+      where: { owner: { authId: ownerAuthId } },
+      select: { id: true, name: true },
+    });
+
+    const turfIds = turfs.map((t) => t.id);
+
+    const bookings = await this.prisma.booking.findMany({
+      where: { turfId: { in: turfIds } },
+    });
+
+    const totalBookings = bookings.length;
+    const completed = bookings.filter((b) => b.bookingStatus === 'COMPLETED').length;
+    const cancelled = bookings.filter((b) => b.bookingStatus === 'CANCELLED').length;
+    const noShow = bookings.filter((b) => b.bookingStatus === 'NO_SHOW').length;
+
+    const totalRevenue = bookings
+      .filter((b) => b.bookingStatus === 'COMPLETED')
+      .reduce((sum, b) => sum + b.amount, 0);
+
+    const pendingRevenue = bookings
+      .filter((b) => b.bookingStatus === 'CONFIRMED' || b.bookingStatus === 'PENDING')
+      .reduce((sum, b) => sum + (b.amount - b.depositAmount), 0);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    return {
+      success: true,
+      data: {
+        counts: {
+          total: totalBookings,
+          completed,
+          cancelled,
+          noShow,
+          activeToday: bookings.filter(b => 
+            b.bookingDate.toISOString().split('T')[0] === todayStr && 
+            ['CONFIRMED', 'PENDING'].includes(b.bookingStatus)
+          ).length
+        },
+        revenue: {
+          total: totalRevenue,
+          pending: pendingRevenue,
+        },
+        turfs: turfs.map(t => ({
+          ...t,
+          bookingCount: bookings.filter(b => b.turfId === t.id).length
+        }))
+      }
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5.10 OWNER: EXPORT CSV
+  // ═══════════════════════════════════════════════════════
+  async getOwnerAnalyticsCsv(ownerAuthId: string) {
+    const bookings = await this.prisma.booking.findMany({
+      where: { turf: { owner: { authId: ownerAuthId } } },
+      include: {
+        turf: { select: { name: true } },
+        user: { select: { phone: true, userProfile: { select: { name: true } } } }
+      },
+      orderBy: { bookingDate: 'desc' }
+    });
+
+    const fields = [
+      { label: 'Booking ID', value: 'id' },
+      { label: 'Date', value: (row: any) => row.bookingDate.toISOString().split('T')[0] },
+      { label: 'Start Time', value: 'startTime' },
+      { label: 'End Time', value: 'endTime' },
+      { label: 'Total Amount', value: 'amount' },
+      { label: 'Deposit', value: 'depositAmount' },
+      { label: 'Payment', value: 'paymentType' },
+      { label: 'Status', value: 'bookingStatus' },
+      { label: 'Turf', value: 'turf.name' },
+      { label: 'Customer', value: 'user.userProfile.name' },
+      { label: 'Phone', value: 'user.phone' }
+    ];
+
+    const parser = new Parser({ fields });
+    return parser.parse(bookings);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5.11 OWNER: EXPORT PDF
+  // ═══════════════════════════════════════════════════════
+  async getOwnerAnalyticsPdf(ownerAuthId: string): Promise<Buffer> {
+    const analytics = await this.getOwnerAnalytics(ownerAuthId);
+    const bookings = await this.prisma.booking.findMany({
+      where: { turf: { owner: { authId: ownerAuthId } } },
+      include: { turf: { select: { name: true } } },
+      orderBy: { bookingDate: 'desc' },
+      take: 30
+    });
+
+    return new Promise((resolve, reject) => {
+      const doc = new (PDFDocument as any)({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // Header
+      doc.fontSize(24).fillColor('#2E7D32').text('Turfsy Analytics Report', { align: 'center' });
+      doc.fontSize(10).fillColor('#666').text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Summary Box
+      doc.rect(50, doc.y, 500, 100).fill('#f5f5f5');
+      doc.fillColor('#000').fontSize(16).text('Business Overview', 70, doc.y + 10);
+      doc.fontSize(12);
+      doc.text(`Total Revenue: INR ${analytics.data.revenue.total}`, 70, doc.y + 25);
+      doc.text(`Total Bookings: ${analytics.data.counts.total}`, 70, doc.y + 15);
+      doc.text(`Completed: ${analytics.data.counts.completed} | Cancelled: ${analytics.data.counts.cancelled}`, 70, doc.y + 15);
+      
+      doc.y = 230; // Reset Y after box
+      doc.moveDown(2);
+
+      // Recent Activity
+      doc.fontSize(16).fillColor('#2E7D32').text('Recent Activity', { underline: true });
+      doc.moveDown();
+
+      doc.fontSize(9).fillColor('#333');
+      bookings.forEach((b, i) => {
+        const d = b.bookingDate.toISOString().split('T')[0];
+        doc.text(`${i + 1}. [${d}] ${b.startTime}-${b.endTime} | ${b.turf.name} | INR ${b.amount} | ${b.bookingStatus}`);
+        doc.moveDown(0.5);
+      });
+
+      doc.end();
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
   // 6. CANCEL BOOKING
   //    Layer 2: Idempotency (already cancelled/refunded?)
   //    Layer 5: State Machine
@@ -1460,6 +1632,79 @@ export class BookingService {
         createdAt: booking.createdAt,
       },
     };
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 12. GET INVOICE PDF
+  // ═══════════════════════════════════════════════════════
+  async getInvoicePdf(authId: string, bookingId: string): Promise<Buffer> {
+    const invoice = await this.getInvoice(authId, bookingId);
+    const data = invoice.data;
+
+    return new Promise((resolve, reject) => {
+      const doc = new (PDFDocument as any)({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // --- LOGO / HEADER ---
+      doc.fillColor('#2E7D32').fontSize(28).text('TURFSY', { align: 'right' });
+      doc.fillColor('#444').fontSize(10).text('Premium Turf Booking Platform', { align: 'right' });
+      doc.moveDown();
+
+      // --- INVOICE INFO ---
+      doc.fillColor('#000').fontSize(20).text('INVOICE', 50, 100);
+      doc.fontSize(10).text(`Invoice No: ${data.invoiceId}`, 50, 130);
+      doc.text(`Booking ID: ${data.bookingId}`, 50, 145);
+      doc.text(`Issued Date: ${new Date().toLocaleDateString()}`, 50, 160);
+
+      // --- BILLING SECTION ---
+      doc.rect(50, 180, 500, 1).fill('#EEE'); // Horizontal Line
+      
+      doc.fontSize(12).fillColor('#2E7D32').text('Billed By:', 50, 200);
+      doc.fillColor('#000').fontSize(14).text(data.turf.name, 50, 215);
+      doc.fontSize(10).text(data.turf.address, 50, 235);
+      doc.text(`${data.turf.city} - ${data.turf.pincode || ''}`, 50, 250);
+      doc.text(`Contact: ${data.turf.owner.contactNumber}`, 50, 265);
+
+      doc.fontSize(12).fillColor('#2E7D32').text('Billed To:', 300, 200);
+      doc.fillColor('#000').fontSize(14).text(data.customer.name, 300, 215);
+      doc.fontSize(10).text(`Phone: ${data.customer.phone}`, 300, 235);
+      doc.text(`Email: ${data.customer.email}`, 300, 250);
+
+      // --- TABLE HEADER ---
+      doc.rect(50, 300, 500, 25).fill('#2E7D32');
+      doc.fillColor('#FFF').fontSize(10).text('Description', 70, 308);
+      doc.text('Slot Details', 250, 308);
+      doc.text('Amount', 450, 308);
+
+      // --- TABLE ROWS ---
+      doc.fillColor('#000').fontSize(11).text(`Turf Booking - ${data.turf.sportsType}`, 70, 340);
+      doc.fontSize(9).text(`${new Date(data.bookingDate).toDateString()}`, 250, 340);
+      doc.text(data.slot, 250, 355);
+      doc.fontSize(11).text(`INR ${data.amount}`, 450, 340);
+
+      doc.rect(50, 380, 500, 1).fill('#EEE');
+
+      // --- SUMMARY ---
+      const summaryY = 400;
+      doc.fontSize(10).text('Payment Type:', 350, summaryY);
+      doc.text(data.paymentType, 450, summaryY);
+      
+      doc.text('Booking Status:', 350, summaryY + 15);
+      doc.fillColor(data.bookingStatus === 'CANCELLED' ? '#D32F2F' : '#2E7D32').text(data.bookingStatus, 450, summaryY + 15);
+      
+      doc.fillColor('#000').fontSize(12).text('TOTAL PAID:', 350, summaryY + 40);
+      doc.fontSize(14).text(`INR ${data.depositAmount || data.amount}`, 450, summaryY + 38);
+
+      // --- FOOTER ---
+      doc.fontSize(10).fillColor('#777').text('Thank you for choosing Turfsy!', 50, 700, { align: 'center' });
+      doc.fontSize(8).text('This is a computer generated invoice and does not require a physical signature.', 50, 715, { align: 'center' });
+
+      doc.end();
+    });
   }
 
   // ─── HELPERS ───────────────────────────────────────────

@@ -307,24 +307,34 @@ PATCH /api/v3/booking/:bookingId/cancel
 
 ---
 
-### 7.5 System Cron Triggers (External Triggers)
-These endpoints are designed to be hit by a cron-scheduler (like cron-job.org or AWS EventBridge) to automate background tasks.
+### 8. Get Active Booking (Today)
+```
+GET /api/v3/booking/my-bookings/active
+```
 
-**Mark No-Shows (Call every ~5 mins):**
-```
-POST /api/v3/booking/cron/no-shows
-```
-*(Marks PENDING/CONFIRMED cash bookings as NO_SHOW if customer is 15 mins late. Forfeits deposit).*
+**Description:** Returns the user's bookings for the current day that are in `CONFIRMED` or `PENDING` status. Perfect for a "Quick Access" dashboard screen.
 
-**Auto-Complete Online Bookings (Call every ~10 mins):**
+**Response:**
+```json
+{
+  "success": true,
+  "count": 1,
+  "data": [
+    {
+      "id": "booking-uuid",
+      "displayId": "TRF-A6C1EDC",
+      "bookingDate": "2026-04-03T00:00:00.000Z",
+      "startTime": "18:00",
+      "endTime": "19:00",
+      ...
+    }
+  ]
+}
 ```
-POST /api/v3/booking/cron/auto-complete
-```
-*(Automatically marks ONLINE bookings as COMPLETED after their duration ends).*
 
 ---
 
-### 8. Rate Turf (only after COMPLETED)
+### 9. Rate Turf (only after COMPLETED)
 ```
 POST /api/v3/booking/my-bookings/:bookingId/rateTurf
 ```
@@ -356,36 +366,7 @@ POST /api/v3/booking/my-bookings/:bookingId/rateTurf
 
 ---
 
----
-
-### 8.5 Get Active Booking (Today)
-```
-GET /api/v3/booking/my-bookings/active
-```
-
-**Description:** Returns the user's bookings for the current day that are in `CONFIRMED` or `PENDING` status. Perfect for a "Quick Access" dashboard screen.
-
-**Response:**
-```json
-{
-  "success": true,
-  "count": 1,
-  "data": [
-    {
-      "id": "booking-uuid",
-      "displayId": "TRF-A6C1EDC",
-      "bookingDate": "2026-04-03T00:00:00.000Z",
-      "startTime": "18:00",
-      "endTime": "19:00",
-      ...
-    }
-  ]
-}
-```
-
----
-
-### 9. Get All My Bookings
+### 10. Get All My Bookings
 ```
 GET /api/v3/booking/my-bookings
 ```
@@ -426,7 +407,7 @@ GET /api/v3/booking/my-bookings
 
 ---
 
-### 10. Get Single Booking Details
+### 11. Get Single Booking Details
 ```
 GET /api/v3/booking/my-bookings/:bookingId
 ```
@@ -480,50 +461,26 @@ GET /api/v3/booking/my-bookings/:bookingId
 
 ---
 
-### 11. Get Invoice
+### 12. Get Invoice (JSON)
 ```
 GET /api/v3/booking/my-bookings/:bookingId/invoice
 ```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "invoiceId": "INV-A6C1EDC8",
-    "bookingId": "booking-uuid",
-    "bookingDate": "2026-04-05T00:00:00.000Z",
-    "slot": "14:00 - 15:00",
-    "duration": "60 mins",
-    "amount": 1200,
-    "paymentType": "ONLINE",
-    "paymentStatus": "SUCCESS",
-    "bookingStatus": "COMPLETED",
-    "turf": {
-      "name": "Champions Arena",
-      "city": "Mumbai",
-      "address": "123 Sports Complex",
-      "pincode": "400001",
-      "sportsType": "FOOTBALL",
-      "owner": {
-        "name": "Rahul Shah",
-        "contactNumber": "9876543210",
-        "email": "rahul@example.com"
-      }
-    },
-    "customer": {
-      "name": "Sahil Hode",
-      "email": "sahil@example.com",
-      "phone": "9999999999"
-    },
-    "createdAt": "2026-04-02T10:30:00.000Z"
-  }
-}
-```
+*Returns the invoice data in JSON format.*
 
 ---
 
-### 12. Filtered Bookings (Status / Filter / Date)
+### 12.5 Download Invoice (PDF)
+```
+GET /api/v3/booking/my-bookings/:bookingId/invoice/pdf
+```
+
+**Description:** Returns a professionally formatted PDF invoice for a specific booking.
+
+**Action:** Directly downloads a `.pdf` file.
+
+---
+
+### 13. Filtered Bookings (Status / Filter / Date)
 ```
 GET /api/v3/booking/my-bookings/bookings?status=upcoming
 GET /api/v3/booking/my-bookings/bookings?status=past
@@ -550,7 +507,7 @@ GET /api/v3/booking/my-bookings/bookings?date=2026-04-05
 
 ---
 
-### 13. Transaction History
+### 14. Transaction History
 ```
 GET /api/v3/booking/transaction-history
 ```
@@ -580,27 +537,25 @@ GET /api/v3/booking/transaction-history
         "city": "Mumbai",
         "entranceUrl": "https://..."
       }
-    },
-    {
-      "id": "booking-uuid-2",
-      "amount": 900,
-      "paymentType": "ONLINE",
-      "paymentStatus": "REFUNDED",
-      "bookingStatus": "CANCELLED",
-      "bookingDate": "2026-04-03T00:00:00.000Z",
-      "cancelledAt": "2026-04-02T08:00:00.000Z",
-      "turf": {
-        "id": "turf-uuid-2",
-        "name": "Mumbai Premier Turf",
-        "city": "Mumbai",
-        "entranceUrl": null
-      }
     }
   ]
 }
 ```
 
 ---
+
+### 15. System Cron Triggers (External Triggers)
+These endpoints are designed to be hit by a cron-scheduler (like cron-job.org or AWS EventBridge) to automate background tasks.
+
+**Mark No-Shows (Call every ~5 mins):**
+```
+POST /api/v3/booking/cron/no-shows
+```
+
+**Auto-Complete Online Bookings (Call every ~10 mins):**
+```
+POST /api/v3/booking/cron/auto-complete
+```
 
 ## 🧪 Quick Test Sequence (Postman)
 

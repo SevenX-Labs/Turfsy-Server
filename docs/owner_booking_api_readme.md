@@ -8,7 +8,7 @@ This documentation covers the endpoints available to **Turf Owners** for managin
 ---
 
 ## 🧠 Brain Recall Line
-> **“List → Filter → Detail → Verify PIN → Complete”**
+> **“List → Filter → Active → Detail → Analytics → Verify PIN → Complete”**
 
 ---
 
@@ -72,7 +72,45 @@ Get full details of a specific booking including customer contact info.
 
 ---
 
-## 🔢 4. Verify PIN (CASH)
+## 📈 4. Get Business Analytics
+Get high-level business intelligence (Revenue, counts, trends) for all your turfs.
+
+- **Endpoint**: `GET /owner/analytics`
+- **Success Response**: `200 OK`
+```json
+{
+  "success": true,
+  "data": {
+    "counts": { "total": 150, "completed": 120, "cancelled": 15, "noShow": 5, "activeToday": 12 },
+    "revenue": { "total": 145000, "pending": 25000 }
+  }
+}
+```
+
+---
+
+## 📥 5. Download Analytics (CSV/PDF)
+Export your booking records for accounting or offline viewing.
+
+**CSV Export:**
+- **Endpoint**: `GET /owner/analytics/csv`
+- **Action**: Downloads a `.csv` file with all columns.
+
+**PDF Report:**
+- **Endpoint**: `GET /owner/analytics/pdf`
+- **Action**: Downloads a professional `.pdf` summary report.
+
+---
+
+## 📅 6. Get Active Bookings (Today)
+Quickly see all bookings for today that are confirmed or pending.
+
+- **Endpoint**: `GET /owner/bookings/active`
+- **Success Response**: `200 OK` (Array of today's bookings)
+
+---
+
+## 🔢 7. Verify PIN (CASH)
 Used to verify a customer's check-in PIN for CASH-type bookings (Pay-at-Turf) when they arrive.
 
 - **Endpoint**: `POST /:bookingId/verify-pin`
@@ -90,7 +128,7 @@ Used to verify a customer's check-in PIN for CASH-type bookings (Pay-at-Turf) wh
 
 ---
 
-## ✅ 5. Manual Complete (Fallback)
+## ✅ 8. Manual Complete (Fallback)
 Used to mark a booking as COMPLETED manually. For CASH bookings, this is available ONLY after the slot ends.
 
 - **Endpoint**: `PATCH /:bookingId/complete`
