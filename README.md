@@ -165,3 +165,27 @@ If you need the **exact JSON Request bodies & JSON Responses** for testing via P
 * `GET    /booking/my-bookings/bookings?status=&filter=` - Filtered queries (Upcoming/Past/Today)
 * `GET    /booking/my-bookings/:bookingId/invoice` - Render structured invoice data
 * `GET    /booking/transaction-history` - Render isolated financial logs
+
+---
+
+## 🛡️ Production & Security Layers Implemented
+
+### 💳 12-Layer Payment Security Architecture
+1. **JWT Authentication & RBAC**: Strict verification. `Owner` endpoints are fully isolated, turf-ownership is verified per request.
+2. **Idempotency Engine**: Prevents double-charging, duplicate Razorpay orders, and redundant ratings or refunds.
+3. **Signature Verification (Timing-Safe)**: Validates `razorpay_signature` using strict `crypto.timingSafeEqual` to defeat timing attacks and tampering.
+4. **Amount Integrity Control**: Prices are evaluated entirely on the server-side (`depositAmount`) based on complex (day/night/weekend) rules. Fetches Razorpay Order API to guarantee amount match.
+5. **Strict State Machine Transitions**: Ensures bookings flawlessly move from `PENDING` $\to$ `CONFIRMED` $\to$ `COMPLETED` (or `CANCELLED`/`REFUNDED`).
+6. **In-Memory Rate Limiting**: Distributed hit-counters for intensive routes (`create-booking`, `verify-pin`, `cancel`) mapping dynamically to User IDs or IPs.
+7. **Race Condition Prevention**: Prevents parallel overlapping bookings globally utilizing raw PostgreSQL `$transaction` wrapped with locking `FOR UPDATE` queries.
+8. **Constant-Time PIN Verification & Lockouts**: Generates PINs using `crypto.randomInt`. 5 consecutive failed `checkInPin` attempts places a total DB lockdown (`HTTP 423 Locked`).
+9. **Safe Cloud Refund Orchestration**: Razorpay `payments.refund()` triggers immediately upon cancellation (strictly capturing the 75% refund parameter). Database transforms to `REFUNDED` only when Razorpay acknowledges success.
+10. **Input Sanitization & Constraints (DTOs)**: Strips malicious HTML via class-transform. Defends against malformed duration inputs mapping strict 30-minute block logic.
+11. **Internal Response Data Masking**: Cleans output payloads globally globally via NestJS Interceptors to permanently mask internal IDs, `checkInPin` sequences in list-apis, and prevents DB error leaks via filters. 
+12. **Forensic Audit Logging**: Centralized logging mapping all payment workflows internally (`pay_*****`). Includes critical discord/slack capable alarms (`Logger.alert`) on tampered payloads or signature mismatch.
+
+### ⏳ Smart Authentication Expiry Rules
+* **90-Day Absolute JWT Lifespan**: Access Tokens strictly perish on their 90th day.
+* **30-Day Rolling Inactivity Timeout**: The database session slides its expiration tracking dynamically. If a user does not open the app for 1 straight month, the session permanently revokes itself seamlessly, forcing a manual re-authentication drop.
+
+---

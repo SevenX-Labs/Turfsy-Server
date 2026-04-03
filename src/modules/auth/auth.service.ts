@@ -165,10 +165,8 @@ export class AuthService {
       data: { verifiedAt: new Date() },
     });
 
-    // Create session
-    const expiresAt = new Date(
-      Date.now() + parseInt(this.config.get('SESSION_EXPIRY_DAYS', '7')) * 86400000,
-    );
+    // Create session (30-day inactivity window)
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const session = await this.prisma.session.create({
       data: { authId: otpEntry.authId, expiresAt },
     });

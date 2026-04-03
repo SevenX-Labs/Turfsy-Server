@@ -55,8 +55,21 @@ export class JwtAuthGuard implements CanActivate {
     if (session.revokedAt) {
       throw new UnauthorizedException('Session has been revoked');
     }
-    if (new Date() > session.expiresAt) {
-      throw new UnauthorizedException('Session expired');
+    const now = new Date();
+    if (now > session.expiresAt) {
+      throw new UnauthorizedException('Session expired due to inactivity');
+    }
+
+    // Rolling window: Extend session if more than 1 day has passed since last update
+    // This implements the "30 days inactivity = logout" rule automatically
+    const msIn30Days = 30 * 24 * 60 * 60 * 1000;
+    const msIn29Days = 29 * 24 * 60 * 60 * 1000;
+    
+    if (session.expiresAt.getTime() - now.getTime() < msIn29Days) {
+      this.prisma.session.update({
+        where: { id: sessionId },
+        data: { expiresAt: new Date(now.getTime() + msIn30Days) }
+      }).catch(err => console.error('[AUTH] Failed to update session activity:', err.message));
     }
   }
 }

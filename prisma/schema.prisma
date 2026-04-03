@@ -196,8 +196,11 @@ model Booking {
   razorpayOrderId   String?       @map("razorpay_order_id")
   razorpayPaymentId String?       @map("razorpay_payment_id")
   checkInPin        String?       @map("check_in_pin")
+  pinAttempts       Int           @default(0) @map("pin_attempts")
+  pinLocked         Boolean       @default(false) @map("pin_locked")
   pinExpiresAt      DateTime?     @map("pin_expires_at")
   visitedAt         DateTime?     @map("visited_at")
+  razorpayRefundId  String?       @map("razorpay_refund_id")
   cancelledAt       DateTime?     @map("cancelled_at")
   cancelReason      String?       @map("cancel_reason")
   notes             String?

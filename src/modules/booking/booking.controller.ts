@@ -8,192 +8,208 @@ import {
   Query,
   Req,
   UseGuards,
+  UseInterceptors,
   HttpCode,
   HttpStatus,
   BadRequestException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { CronGuard } from '../../common/guards/cron.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { ResponseSanitizerInterceptor } from '../../common/interceptors/response-sanitizer.interceptor';
+import {
+  CreateBookingDto,
+  ConfirmPaymentDto,
+  VerifyPinDto,
+  RateTurfDto,
+  CancelBookingDto,
+} from './dto/booking.dto';
 
 @Controller('api/v3/booking')
-@UseGuards(JwtAuthGuard)
+@UseInterceptors(ResponseSanitizerInterceptor)
 export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
 
   // ──────────────────────────────────────────────
-  // 1. CREATE BOOKING
+  // 1. CREATE BOOKING (User)
   // POST /api/v3/booking
+  // Layer 1: JWT Auth | Layer 10: DTO Validation
   // ──────────────────────────────────────────────
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('USER')
   @HttpCode(HttpStatus.CREATED)
   async createBooking(
     @Req() req: any,
-    @Body()
-    body: {
-      turfId: string;
-      bookingDate: string;
-      startTime: string;
-      endTime: string;
-      durationMins: number;
-      paymentType: 'ONLINE' | 'CASH';
-      notes?: string;
-    },
+    @Body() dto: CreateBookingDto,
   ) {
-    const { turfId, bookingDate, startTime, endTime, durationMins, paymentType, notes } = body;
-
-    if (!turfId || !bookingDate || !startTime || !endTime || !durationMins || !paymentType) {
-      throw new BadRequestException('Missing required booking fields');
-    }
-
-    if (!['ONLINE', 'CASH'].includes(paymentType)) {
-      throw new BadRequestException('paymentType must be ONLINE or CASH');
-    }
-
-    return this.bookingService.createBooking(req.user.authId, {
-      turfId, bookingDate, startTime, endTime, durationMins, paymentType, notes,
-    });
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.createBooking(req.user.authId, dto, ip);
   }
 
   // ──────────────────────────────────────────────
-  // 2. CREATE RAZORPAY ORDER
+  // 2. CREATE RAZORPAY ORDER (User)
   // POST /api/v3/booking/:bookingId/create-order
+  // Layer 1: JWT Auth | Layer 10: UUID Validation
   // ──────────────────────────────────────────────
   @Post(':bookingId/create-order')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async createOrder(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
-    return this.bookingService.createRazorpayOrder(req.user.authId, bookingId);
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.createRazorpayOrder(req.user.authId, bookingId, ip);
   }
 
   // ──────────────────────────────────────────────
-  // 3. VERIFY PAYMENT & CONFIRM BOOKING
+  // 3. VERIFY PAYMENT & CONFIRM BOOKING (User)
   // POST /api/v3/booking/:bookingId/confirm-payment
+  // Layer 1: JWT | Layer 3: Signature | Layer 10: DTO
   // ──────────────────────────────────────────────
   @Post(':bookingId/confirm-payment')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async confirmPayment(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
-    @Body() body: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string },
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+    @Body() dto: ConfirmPaymentDto,
   ) {
-    if (!body.razorpayOrderId || !body.razorpayPaymentId || !body.razorpaySignature) {
-      throw new BadRequestException('razorpayOrderId, razorpayPaymentId, and razorpaySignature are required');
-    }
-    return this.bookingService.confirmOnlinePayment(req.user.authId, bookingId, body);
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.confirmOnlinePayment(req.user.authId, bookingId, dto, ip);
   }
 
   // ──────────────────────────────────────────────
-  // 3. MARK PAYMENT FAILED
+  // 4. MARK PAYMENT FAILED (User)
   // POST /api/v3/booking/:bookingId/payment-failed
   // ──────────────────────────────────────────────
   @Post(':bookingId/payment-failed')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async paymentFailed(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
-    return this.bookingService.failOnlinePayment(req.user.authId, bookingId);
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.failOnlinePayment(req.user.authId, bookingId, ip);
   }
 
   // ──────────────────────────────────────────────
-  // 4. VERIFY CASH PIN (Owner side)
+  // 5. VERIFY CASH PIN (Owner only)
   // POST /api/v3/booking/:bookingId/verify-pin
+  // Layer 1: JWT + OWNER role | Layer 8: PIN security
   // ──────────────────────────────────────────────
   @Post(':bookingId/verify-pin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
   @HttpCode(HttpStatus.OK)
   async verifyPin(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
-    @Body() body: { pin: string },
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+    @Body() dto: VerifyPinDto,
   ) {
-    if (!body.pin) throw new BadRequestException('PIN is required');
-    return this.bookingService.verifyCheckInPin(req.user.authId, bookingId, body.pin);
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.verifyCheckInPin(req.user.authId, bookingId, dto.pin, ip);
   }
 
   // ──────────────────────────────────────────────
-  // 5. MARK BOOKING COMPLETED (Owner side)
+  // 6. MARK BOOKING COMPLETED (Owner only, ONLINE)
   // PATCH /api/v3/booking/:bookingId/complete
+  // Layer 1: JWT + OWNER role
   // ──────────────────────────────────────────────
   @Patch(':bookingId/complete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
   @HttpCode(HttpStatus.OK)
   async completeBooking(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
-    return this.bookingService.completeBooking(req.user.authId, bookingId);
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.completeBooking(req.user.authId, bookingId, ip);
   }
 
   // ──────────────────────────────────────────────
-  // 6. CANCEL BOOKING
+  // 7. CANCEL BOOKING (User)
   // PATCH /api/v3/booking/:bookingId/cancel
+  // Layer 1: JWT | Layer 9: Refund safety
   // ──────────────────────────────────────────────
   @Patch(':bookingId/cancel')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async cancelBooking(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
-    @Body() body: { reason?: string },
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+    @Body() dto: CancelBookingDto,
   ) {
-    return this.bookingService.cancelBooking(req.user.authId, bookingId, body.reason);
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.cancelBooking(req.user.authId, bookingId, dto.reason, ip);
   }
 
   // ──────────────────────────────────────────────
-  // 6.5 CRON: TRIGGER NO_SHOWS
+  // 8. CRON: MARK NO SHOWS
   // POST /api/v3/booking/cron/no-shows
+  // Layer 1: CronGuard (X-Cron-Secret, no JWT)
   // ──────────────────────────────────────────────
   @Post('cron/no-shows')
+  @UseGuards(CronGuard)
   @HttpCode(HttpStatus.OK)
-  async cronMarkNoShows() {
-    return this.bookingService.markNoShows();
+  async cronMarkNoShows(@Req() req: any) {
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.markNoShows(ip);
   }
 
   // ──────────────────────────────────────────────
-  // 6.6 CRON: AUTO-COMPLETE ONLINE BOOKINGS
+  // 9. CRON: AUTO-COMPLETE ONLINE BOOKINGS
   // POST /api/v3/booking/cron/auto-complete
+  // Layer 1: CronGuard
   // ──────────────────────────────────────────────
   @Post('cron/auto-complete')
+  @UseGuards(CronGuard)
   @HttpCode(HttpStatus.OK)
-  async cronAutoComplete() {
-    return this.bookingService.autoCompleteOnlineBookings();
+  async cronAutoComplete(@Req() req: any) {
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.autoCompleteOnlineBookings(ip);
   }
 
   // ──────────────────────────────────────────────
-  // 7. RATE TURF
+  // 10. RATE TURF (User)
   // POST /api/v3/booking/my-bookings/:bookingId/rateTurf
+  // Layer 2: Idempotency | Layer 10: DTO validation
   // ──────────────────────────────────────────────
   @Post('my-bookings/:bookingId/rateTurf')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   async rateTurf(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
-    @Body() body: { rating: number; review?: string },
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+    @Body() dto: RateTurfDto,
   ) {
-    if (!body.rating) throw new BadRequestException('rating is required (1-5)');
-    return this.bookingService.rateTurf(req.user.authId, bookingId, body);
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.rateTurf(req.user.authId, bookingId, dto, ip);
   }
 
   // ──────────────────────────────────────────────
-  // 8. GET ALL MY BOOKINGS
+  // 11. GET ALL MY BOOKINGS (User)
   // GET /api/v3/booking/my-bookings
   // ──────────────────────────────────────────────
   @Get('my-bookings')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getMyBookings(@Req() req: any) {
     return this.bookingService.getMyBookings(req.user.authId);
   }
 
   // ──────────────────────────────────────────────
-  // 9. BOOKINGS BY STATUS & FILTER
-  // GET /api/v3/booking/my-bookings/bookings?status=upcoming
-  // GET /api/v3/booking/my-bookings/bookings?status=past
-  // GET /api/v3/booking/my-bookings/bookings?filter=today
-  // GET /api/v3/booking/my-bookings/bookings?filter=tomorrow
-  // GET /api/v3/booking/my-bookings/bookings?filter=week
-  // GET /api/v3/booking/my-bookings/bookings?date=2024-02-22
+  // 12. BOOKINGS BY STATUS & FILTER
+  // GET /api/v3/booking/my-bookings/bookings
   // ──────────────────────────────────────────────
   @Get('my-bookings/bookings')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getBookingsFiltered(
     @Req() req: any,
@@ -219,53 +235,62 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
-  // 10. TRANSACTION HISTORY
+  // 13. TRANSACTION HISTORY
   // GET /api/v3/booking/transaction-history
   // ──────────────────────────────────────────────
   @Get('transaction-history')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getTransactionHistory(@Req() req: any) {
     return this.bookingService.getTransactionHistory(req.user.authId);
   }
 
   // ──────────────────────────────────────────────
-  // 11. INVOICE
+  // 14. INVOICE
   // GET /api/v3/booking/my-bookings/:bookingId/invoice
   // ──────────────────────────────────────────────
   @Get('my-bookings/:bookingId/invoice')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getInvoice(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
     return this.bookingService.getInvoice(req.user.authId, bookingId);
   }
 
   // ──────────────────────────────────────────────
-  // 12. GET SINGLE BOOKING DETAILS
+  // 15. GET SINGLE BOOKING DETAILS
   // GET /api/v3/booking/my-bookings/:bookingId
   // ──────────────────────────────────────────────
   @Get('my-bookings/:bookingId')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getBookingDetails(
     @Req() req: any,
-    @Param('bookingId') bookingId: string,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
     return this.bookingService.getBookingDetails(req.user.authId, bookingId);
   }
+
   // ──────────────────────────────────────────────
-  // 13. GET TURF AVAILABILITY (BOOKED SLOTS)
-  // GET /api/v3/booking/availability/:turfId?date=2026-04-05
+  // 16. GET TURF AVAILABILITY
+  // GET /api/v3/booking/availability/:turfId
   // ──────────────────────────────────────────────
   @Get('availability/:turfId')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getAvailability(
-    @Param('turfId') turfId: string,
+    @Req() req: any,
+    @Param('turfId', new ParseUUIDPipe({ version: '4' })) turfId: string,
     @Query('date') date: string,
   ) {
     if (!date) {
       throw new BadRequestException('date query parameter is required (YYYY-MM-DD)');
     }
-    return this.bookingService.getBookedSlots(turfId, date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
+    }
+    return this.bookingService.getBookedSlots(turfId, date, req.user.authId);
   }
 }
