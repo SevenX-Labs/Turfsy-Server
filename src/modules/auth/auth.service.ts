@@ -45,22 +45,22 @@ export class AuthService {
     console.log(`[OTP] Phone: ${phone} | OTP: ${otp}`);
     try {
       const response = await axios.post(
-        'https://control.msg91.com/api/v5/otp',
+        'https://www.fast2sms.com/dev/bulkV2',
         {
-          template_id: this.config.get<string>('MSG91_TEMPLATE_ID'),
-          mobile: `91${phone}`,
-          otp: otp,
+          route: 'otp',
+          variables_values: otp,
+          numbers: phone,
         },
         {
           headers: {
-            authkey: this.config.get<string>('MSG91_AUTH_KEY'),
+            authorization: this.config.get<string>('OTP_API_KEY') || '',
             'Content-Type': 'application/json',
           },
         },
       );
-      console.log(`[MSG91] Response:`, response.data);
+      console.log(`[Fast2SMS] Response:`, response.data);
     } catch (err) {
-      console.error(`[MSG91] Error:`, JSON.stringify(err?.response?.data || err.message));
+      console.error(`[Fast2SMS] Error:`, JSON.stringify(err?.response?.data || err.message));
     }
   }
 
