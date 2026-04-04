@@ -15,6 +15,7 @@ import { BookingModule } from './modules/booking/booking.module';
 import { OwnerHomeModule } from './modules/owner-home/owner-home.module';
 import { OwnerAnalyticsModule } from './modules/owner-analytics/owner-analytics.module';
 import { OwnerSettingsModule } from './modules/owner-settings/owner-settings.module';
+import { UserGamificationModule } from './modules/user-gamification/user-gamification.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { OwnerSettingsModule } from './modules/owner-settings/owner-settings.mod
     OwnerHomeModule,
     OwnerAnalyticsModule,
     OwnerSettingsModule,
+    UserGamificationModule,
   ],
   controllers: [AppController],
   providers: [
