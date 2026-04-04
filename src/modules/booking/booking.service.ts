@@ -17,6 +17,7 @@ import * as crypto from 'crypto';
 import { Parser } from 'json2csv';
 import * as PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
+import { UserGamificationService } from '../user-gamification/user-gamification.service';
 
 // ─── CONSTANTS ───────────────────────────────────────────
 const CASH_DEPOSIT_PERCENT = 0.50;     // 50% advance for CASH bookings
@@ -34,6 +35,7 @@ export class BookingService {
     private readonly configService: ConfigService,
     private readonly paymentLogger: PaymentLoggerService,
     private readonly rateLimiter: RateLimiterService,
+    private readonly userGamificationService: UserGamificationService,
   ) {
     this.razorpay = new Razorpay({
       key_id: this.configService.get<string>('RAZORPAY_KEY_ID') || '',
@@ -700,6 +702,8 @@ export class BookingService {
       include: { user: { include: { userProfile: true } } },
     });
 
+    await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+
     const userName = updated.user?.userProfile?.name || 'Customer';
 
     // ── Layer 12 ──
@@ -770,6 +774,8 @@ export class BookingService {
         pinAttempts: 0,
       },
     });
+
+    await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
 
     this.paymentLogger.log({
       userId: ownerAuthId,
@@ -1274,6 +1280,7 @@ export class BookingService {
           where: { id: booking.id },
           data: { bookingStatus: 'COMPLETED', visitedAt: slotEnd },
         });
+        await this.userGamificationService.handleBookingCompletion(booking.userId, booking.id);
         updatedCount++;
       }
     }

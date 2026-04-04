@@ -23,6 +23,7 @@ model Auth {
   bookings     Booking[]
   savedTurfs   SavedTurf[]
   ratings      TurfRating[]
+  gamification UserGamification?
 
   @@index([phone])
   @@index([role])
@@ -296,4 +297,19 @@ enum PaymentType {
 enum PayoutMethod {
   UPI
   BANK
+}
+
+model UserGamification {
+  id              String   @id @default(uuid())
+  authId          String   @unique @map("auth_id")
+  streak          Int      @default(0)
+  points          Int      @default(0)
+  totalMatches    Int      @default(0) @map("total_matches")
+  totalHours      Float    @default(0) @map("total_hours")
+  lastPlayedDate  DateTime? @map("last_played_date")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  auth            Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@map("user_gamification")
 }
