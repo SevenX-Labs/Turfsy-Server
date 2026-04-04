@@ -60,6 +60,9 @@ model OwnerProfile {
   auth          Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
   payment       Payment?
   turfs         Turf[]
+  // Notification Settings
+  bookingAlerts      Boolean @default(true)
+  cancellationAlerts Boolean @default(true)
 
   @@index([authId])
 }
@@ -94,6 +97,9 @@ model Turf {
   weekdayNightPrice   Float
   weekendDayPrice     Float
   weekendNightPrice   Float
+  // Cancellation Policy
+  cancellationAllowedBeforeHours Int   @default(2)
+  cancellationRefundPercentage   Float @default(75.0)
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
   deletedAt           DateTime?
@@ -127,6 +133,10 @@ model Payment {
   auth           Auth          @relation(fields: [authId], references: [id], onDelete: Cascade)
   ownerProfile   OwnerProfile? @relation(fields: [ownerProfileId], references: [id])
   userProfile    UserProfile?  @relation(fields: [userProfileId], references: [id])
+  bankAccount    String?       @map("bank_account")
+  payoutMethod   PayoutMethod? @default(UPI) @map("payout_method")
+  payoutFrequency String?      @default("MANUAL") @map("payout_frequency")
+  isActive       Boolean       @default(true) @map("is_active")
 
   @@index([authId])
   @@index([role])
@@ -281,4 +291,9 @@ enum PaymentStatus {
 enum PaymentType {
   ONLINE
   CASH
+}
+
+enum PayoutMethod {
+  UPI
+  BANK
 }

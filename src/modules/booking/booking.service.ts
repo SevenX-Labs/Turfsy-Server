@@ -1090,7 +1090,7 @@ export class BookingService {
     // ── Strip HTML from reason ──
     const sanitizedReason = reason ? this.stripHtml(reason) : undefined;
 
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId }, include: { turf: true } });
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.userId !== authId) throw new ForbiddenException('Access denied.');
 
@@ -1125,8 +1125,8 @@ export class BookingService {
     );
     const hoursUntilSlot = (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
 
-    if (hoursUntilSlot <= 2) {
-      throw new BadRequestException('Cannot cancel within 2 hours of slot');
+    if (hoursUntilSlot <= booking.turf.cancellationAllowedBeforeHours) {
+      throw new BadRequestException(`Cannot cancel within ${booking.turf.cancellationAllowedBeforeHours} hours of slot`);
     }
 
     // ══════════════════════════════════════════════════
@@ -1138,7 +1138,7 @@ export class BookingService {
 
     // Only refund if payment was actually successful
     if (booking.paymentStatus === 'SUCCESS' && booking.razorpayPaymentId) {
-      refundAmount = Math.floor(booking.depositAmount * CANCEL_REFUND_PERCENT);
+      refundAmount = Math.floor(booking.depositAmount * (booking.turf.cancellationRefundPercentage / 100));
 
       const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
       const isMockMode = keySecret === 'your_razorpay_key_secret' || keySecret === '';
@@ -1201,7 +1201,7 @@ export class BookingService {
     return {
       success: true,
       message: refundAmount > 0
-        ? `Booking cancelled. 75% refund of ₹${booking.depositAmount} → ₹${refundAmount} will be processed.`
+        ? `Booking cancelled. ${booking.turf.cancellationRefundPercentage}% refund of ₹${booking.depositAmount} → ₹${refundAmount} will be processed.`
         : 'Booking cancelled successfully.',
       data: {
         ...updated,

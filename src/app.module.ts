@@ -14,6 +14,7 @@ import { SavedTurfsModule } from './modules/saved-turfs/saved-turfs.module';
 import { BookingModule } from './modules/booking/booking.module';
 import { OwnerHomeModule } from './modules/owner-home/owner-home.module';
 import { OwnerAnalyticsModule } from './modules/owner-analytics/owner-analytics.module';
+import { OwnerSettingsModule } from './modules/owner-settings/owner-settings.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { OwnerAnalyticsModule } from './modules/owner-analytics/owner-analytics.
     BookingModule,
     OwnerHomeModule,
     OwnerAnalyticsModule,
+    OwnerSettingsModule,
   ],
   controllers: [AppController],
   providers: [
