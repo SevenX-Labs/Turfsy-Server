@@ -3,6 +3,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { SportsType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HomeSectionType } from './types/home-section.enum';
 import { TurfCardDto } from './dto/turf-card.dto';
@@ -36,6 +37,7 @@ type LocationContext = {
   userLng?: number;
   userCity: string | null;
   radiusKm: number;
+  preferredSport: SportsType | null;
 };
 
 // ─────────────────────────────────────────
@@ -119,6 +121,10 @@ export class UserHomeService {
       const location = await this.resolveLocation(options);
       // Fetch all active turfs once with aggregates
       const allTurfs = await this.fetchAllActiveTurfs();
+      const scopedTurfs = this.filterByPreferredSport(
+        allTurfs,
+        location.preferredSport,
+      );
 
       // Build each section in parallel for performance
       const [
@@ -131,22 +137,49 @@ export class UserHomeService {
         recentlyViewed,
       ] = await Promise.all([
         this.buildTopRecommended(
-          allTurfs,
+          scopedTurfs,
           location.userLat,
           location.userLng,
+          location.preferredSport,
         ),
-        this.buildMostRated(allTurfs, location.userLat, location.userLng),
-        this.buildBudgetFriendly(allTurfs, location.userLat, location.userLng),
+        this.buildMostRated(
+          scopedTurfs,
+          location.userLat,
+          location.userLng,
+          location.preferredSport,
+        ),
+        this.buildBudgetFriendly(
+          scopedTurfs,
+          location.userLat,
+          location.userLng,
+          location.preferredSport,
+        ),
         this.buildNearby(
-          allTurfs,
+          scopedTurfs,
           location.userLat,
           location.userLng,
           location.radiusKm,
           location.userCity ?? undefined,
+          location.preferredSport,
         ),
-        this.buildMostDemanded(allTurfs, location.userLat, location.userLng),
-        this.buildNewlyOpened(allTurfs, location.userLat, location.userLng),
-        this.buildRecentlyViewed(allTurfs, location.userLat, location.userLng),
+        this.buildMostDemanded(
+          scopedTurfs,
+          location.userLat,
+          location.userLng,
+          location.preferredSport,
+        ),
+        this.buildNewlyOpened(
+          scopedTurfs,
+          location.userLat,
+          location.userLng,
+          location.preferredSport,
+        ),
+        this.buildRecentlyViewed(
+          scopedTurfs,
+          location.userLat,
+          location.userLng,
+          location.preferredSport,
+        ),
       ]);
 
       const sections: UserHomeSectionDto[] = [
@@ -167,7 +200,7 @@ export class UserHomeService {
     } catch (error) {
       this.logger.error(
         'Failed to build home sections',
-        error instanceof Error ? error.stack : error
+        error instanceof Error ? error.stack : error,
       );
       throw new InternalServerErrorException(
         'Failed to load home data. Please try again.',
@@ -181,54 +214,69 @@ export class UserHomeService {
   ): Promise<UserHomeSectionResponseDto> {
     const location = await this.resolveLocation(options);
     const allTurfs = await this.fetchAllActiveTurfs();
+    const scopedTurfs = this.filterByPreferredSport(
+      allTurfs,
+      location.preferredSport,
+    );
 
     let section: UserHomeSectionDto;
     switch (sectionType) {
       case HomeSectionType.TOP_RECOMMENDED:
         section = this.buildTopRecommended(
-          allTurfs,
+          scopedTurfs,
           location.userLat,
           location.userLng,
+          location.preferredSport,
         );
         break;
       case HomeSectionType.MOST_RATED:
-        section = this.buildMostRated(allTurfs, location.userLat, location.userLng);
+        section = this.buildMostRated(
+          scopedTurfs,
+          location.userLat,
+          location.userLng,
+          location.preferredSport,
+        );
         break;
       case HomeSectionType.BUDGET_FRIENDLY:
         section = this.buildBudgetFriendly(
-          allTurfs,
+          scopedTurfs,
           location.userLat,
           location.userLng,
+          location.preferredSport,
         );
         break;
       case HomeSectionType.NEARBY:
         section = this.buildNearby(
-          allTurfs,
+          scopedTurfs,
           location.userLat,
           location.userLng,
           location.radiusKm,
           location.userCity,
+          location.preferredSport,
         );
         break;
       case HomeSectionType.MOST_DEMANDED:
         section = this.buildMostDemanded(
-          allTurfs,
+          scopedTurfs,
           location.userLat,
           location.userLng,
+          location.preferredSport,
         );
         break;
       case HomeSectionType.NEWLY_OPENED:
         section = this.buildNewlyOpened(
-          allTurfs,
+          scopedTurfs,
           location.userLat,
           location.userLng,
+          location.preferredSport,
         );
         break;
       case HomeSectionType.RECENTLY_VIEWED:
         section = this.buildRecentlyViewed(
-          allTurfs,
+          scopedTurfs,
           location.userLat,
           location.userLng,
+          location.preferredSport,
         );
         break;
       default:
@@ -369,22 +417,43 @@ export class UserHomeService {
     return haversineKm(userLat, userLng, turf.lat, turf.lng);
   }
 
+  private prioritizeByPreferredSport<T extends { sportsType: string }>(
+    items: T[],
+    preferredSport: SportsType | null,
+  ): T[] {
+    if (!preferredSport) return items;
+    return [...items].sort((a, b) => {
+      const aPreferred = a.sportsType === preferredSport ? 1 : 0;
+      const bPreferred = b.sportsType === preferredSport ? 1 : 0;
+      return bPreferred - aPreferred;
+    });
+  }
+
+  private filterByPreferredSport(
+    turfs: RawTurf[],
+    preferredSport: SportsType | null,
+  ): RawTurf[] {
+    if (!preferredSport) return turfs;
+    const filtered = turfs.filter((t) => t.sportsType === preferredSport);
+    return filtered.length > 0 ? filtered : turfs;
+  }
+
   private async resolveLocation(
     options: UserHomeQueryOptions,
   ): Promise<LocationContext> {
     const trimmedCity = options.queryCity?.trim();
-    const cleanCity = trimmedCity && trimmedCity.length > 0 ? trimmedCity : undefined;
+    const cleanCity =
+      trimmedCity && trimmedCity.length > 0 ? trimmedCity : undefined;
     const hasValidCoordinates =
       this.isValidLatitude(options.queryLat) &&
       this.isValidLongitude(options.queryLng);
 
-    let profileLocation:
-      | {
-          currentLat: number | null;
-          currentLng: number | null;
-          currentCity: string | null;
-        }
-      | null = null;
+    let profileLocation: {
+      currentLat: number | null;
+      currentLng: number | null;
+      currentCity: string | null;
+    } | null = null;
+    let preferredSport: SportsType | null = null;
 
     if (options.authId && (!hasValidCoordinates || !cleanCity)) {
       profileLocation = await this.prisma.userProfile.findUnique({
@@ -397,12 +466,28 @@ export class UserHomeService {
       });
     }
 
+    if (options.authId) {
+      const settings = await this.prisma.userSettings.findUnique({
+        where: { authId: options.authId },
+        select: { favoriteSport: true },
+      });
+      preferredSport = settings?.favoriteSport ?? null;
+
+      if (!preferredSport) {
+        const profile = await this.prisma.userProfile.findUnique({
+          where: { authId: options.authId },
+          select: { preferredSport: true },
+        });
+        preferredSport = profile?.preferredSport ?? null;
+      }
+    }
+
     const userLat = hasValidCoordinates
       ? options.queryLat
-      : profileLocation?.currentLat ?? undefined;
+      : (profileLocation?.currentLat ?? undefined);
     const userLng = hasValidCoordinates
       ? options.queryLng
-      : profileLocation?.currentLng ?? undefined;
+      : (profileLocation?.currentLng ?? undefined);
     const userCity = cleanCity ?? profileLocation?.currentCity ?? null;
     const requestedRadius =
       typeof options.queryRadiusKm === 'number'
@@ -415,14 +500,12 @@ export class UserHomeService {
       userLng,
       userCity,
       radiusKm,
+      preferredSport,
     };
   }
 
   private clampRadius(value: number) {
-    return Math.min(
-      MAX_RADIUS_KM,
-      Math.max(MIN_RADIUS_KM, value),
-    );
+    return Math.min(MAX_RADIUS_KM, Math.max(MIN_RADIUS_KM, value));
   }
 
   private isValidLatitude(lat?: number): boolean {
@@ -449,12 +532,12 @@ export class UserHomeService {
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
+    preferredSport: SportsType | null = null,
   ): UserHomeSectionDto {
     const MAX_DIST = 50; // km cap for proximity bonus
 
     const scored = turfs.map((t) => {
-      const rating =
-        typeof t._avg?.rating === 'number' ? t._avg.rating : 0;
+      const rating = typeof t._avg?.rating === 'number' ? t._avg.rating : 0;
       const reviews = t._count?.reviews ?? 0;
       const dist = this.getDistance(t, userLat, userLng);
 
@@ -472,10 +555,19 @@ export class UserHomeService {
       return { turf: t, dist, score };
     });
 
-    const top = scored
-      .filter((s) => (s.turf._avg?.rating ?? 0) >= MIN_RATING_THRESHOLD || (s.turf._count?.reviews ?? 0) === 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, SECTION_LIMIT);
+    const prioritized = this.prioritizeByPreferredSport(
+      scored
+        .filter(
+          (s) =>
+            (s.turf._avg?.rating ?? 0) >= MIN_RATING_THRESHOLD ||
+            (s.turf._count?.reviews ?? 0) === 0,
+        )
+        .sort((a, b) => b.score - a.score)
+        .map((s) => ({ ...s, sportsType: s.turf.sportsType })),
+      preferredSport,
+    ).map(({ sportsType: _sportsType, ...rest }) => rest);
+
+    const top = prioritized.slice(0, SECTION_LIMIT);
 
     return {
       sectionType: HomeSectionType.TOP_RECOMMENDED,
@@ -494,21 +586,25 @@ export class UserHomeService {
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
+    preferredSport: SportsType | null = null,
   ): UserHomeSectionDto {
-    const sorted = [...turfs]
-      .sort((a, b) => {
+    const sorted = this.prioritizeByPreferredSport(
+      [...turfs].sort((a, b) => {
         const rA = a._avg?.rating ?? 0;
         const rB = b._avg?.rating ?? 0;
         if (rB !== rA) return rB - rA;
         return (b._count?.reviews ?? 0) - (a._count?.reviews ?? 0);
-      })
-      .slice(0, SECTION_LIMIT);
+      }),
+      preferredSport,
+    ).slice(0, SECTION_LIMIT);
 
     return {
       sectionType: HomeSectionType.MOST_RATED,
       title: 'Most Rated',
       subtitle: 'Highest rated turfs by players',
-      turfs: sorted.map((t) => this.toCard(t, this.getDistance(t, userLat, userLng))),
+      turfs: sorted.map((t) =>
+        this.toCard(t, this.getDistance(t, userLat, userLng)),
+      ),
     };
   }
 
@@ -521,17 +617,22 @@ export class UserHomeService {
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
+    preferredSport: SportsType | null = null,
   ): UserHomeSectionDto {
-    const sorted = turfs
-      .filter((t) => t.weekdayDayPrice <= BUDGET_MAX_PRICE)
-      .sort((a, b) => a.weekdayDayPrice - b.weekdayDayPrice)
-      .slice(0, SECTION_LIMIT);
+    const sorted = this.prioritizeByPreferredSport(
+      turfs
+        .filter((t) => t.weekdayDayPrice <= BUDGET_MAX_PRICE)
+        .sort((a, b) => a.weekdayDayPrice - b.weekdayDayPrice),
+      preferredSport,
+    ).slice(0, SECTION_LIMIT);
 
     return {
       sectionType: HomeSectionType.BUDGET_FRIENDLY,
       title: 'Budget Friendly',
       subtitle: `Quality turfs under ₹${BUDGET_MAX_PRICE}/hr`,
-      turfs: sorted.map((t) => this.toCard(t, this.getDistance(t, userLat, userLng))),
+      turfs: sorted.map((t) =>
+        this.toCard(t, this.getDistance(t, userLat, userLng)),
+      ),
     };
   }
 
@@ -547,22 +648,31 @@ export class UserHomeService {
     userLng?: number,
     radiusKm: number = DEFAULT_RADIUS_KM,
     userCity?: string | null,
+    preferredSport: SportsType | null = null,
   ): UserHomeSectionDto {
     let nearbyTurfs: { turf: RawTurf; dist: number | null }[] = [];
 
     if (userLat != null && userLng != null) {
       // GPS-based
-      nearbyTurfs = turfs
-        .map((t) => ({ turf: t, dist: this.getDistance(t, userLat, userLng) }))
-        .filter((s) => s.dist != null && s.dist <= radiusKm)
-        .sort((a, b) => (a.dist ?? 999) - (b.dist ?? 999))
+      nearbyTurfs = this.prioritizeByPreferredSport(
+        turfs
+          .map((t) => ({
+            turf: t,
+            dist: this.getDistance(t, userLat, userLng),
+          }))
+          .filter((s) => s.dist != null && s.dist <= radiusKm)
+          .sort((a, b) => (a.dist ?? 999) - (b.dist ?? 999))
+          .map((s) => ({ ...s, sportsType: s.turf.sportsType })),
+        preferredSport,
+      )
+        .map(({ sportsType: _sportsType, ...rest }) => rest)
         .slice(0, SECTION_LIMIT);
     } else if (userCity) {
       // Fallback: same city
-      nearbyTurfs = turfs
-        .filter(
-          (t) => t.city.toLowerCase() === userCity.toLowerCase(),
-        )
+      nearbyTurfs = this.prioritizeByPreferredSport(
+        turfs.filter((t) => t.city.toLowerCase() === userCity.toLowerCase()),
+        preferredSport,
+      )
         .map((t) => ({ turf: t, dist: null }))
         .slice(0, SECTION_LIMIT);
     }
@@ -588,17 +698,22 @@ export class UserHomeService {
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
+    preferredSport: SportsType | null = null,
   ): UserHomeSectionDto {
     // Demand score = reviewCount * 0.6 + rating * 0.4
     // When bookings table exists: replace with actual booking count DESC
-    const scored = turfs
-      .map((t) => {
-        const reviews = t._count?.reviews ?? 0;
-        const rating = t._avg?.rating ?? 0;
-        const demandScore = reviews * 0.6 + (rating / 5) * 100 * 0.4;
-        return { turf: t, score: demandScore };
-      })
-      .sort((a, b) => b.score - a.score)
+    const scored = this.prioritizeByPreferredSport(
+      turfs
+        .map((t) => {
+          const reviews = t._count?.reviews ?? 0;
+          const rating = t._avg?.rating ?? 0;
+          const demandScore = reviews * 0.6 + (rating / 5) * 100 * 0.4;
+          return { turf: t, score: demandScore, sportsType: t.sportsType };
+        })
+        .sort((a, b) => b.score - a.score),
+      preferredSport,
+    )
+      .map(({ sportsType: _sportsType, ...rest }) => rest)
       .slice(0, SECTION_LIMIT);
 
     return {
@@ -620,17 +735,20 @@ export class UserHomeService {
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
+    preferredSport: SportsType | null = null,
   ): UserHomeSectionDto {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - NEW_TURF_DAYS);
 
-    const recent = turfs
-      .filter((t) => new Date(t.createdAt) >= cutoff)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      )
-      .slice(0, SECTION_LIMIT);
+    const recent = this.prioritizeByPreferredSport(
+      turfs
+        .filter((t) => new Date(t.createdAt) >= cutoff)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
+      preferredSport,
+    ).slice(0, SECTION_LIMIT);
 
     return {
       sectionType: HomeSectionType.NEWLY_OPENED,
@@ -646,14 +764,16 @@ export class UserHomeService {
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
+    preferredSport: SportsType | null = null,
   ): UserHomeSectionDto {
-    const sorted = [...turfs]
-      .sort((a, b) => {
+    const sorted = this.prioritizeByPreferredSport(
+      [...turfs].sort((a, b) => {
         const updatedA = new Date(a.updatedAt).getTime();
         const updatedB = new Date(b.updatedAt).getTime();
         return updatedB - updatedA;
-      })
-      .slice(0, SECTION_LIMIT);
+      }),
+      preferredSport,
+    ).slice(0, SECTION_LIMIT);
 
     return {
       sectionType: HomeSectionType.RECENTLY_VIEWED,

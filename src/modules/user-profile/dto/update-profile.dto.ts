@@ -8,7 +8,7 @@ import {
   MinLength,
   MaxLength,
 } from 'class-validator';
-import { Gender } from '@prisma/client';
+import { Gender, SportsType } from '@prisma/client';
 
 export class UpdateUserProfileDto {
   @IsOptional()
@@ -26,7 +26,9 @@ export class UpdateUserProfileDto {
   dob?: string;
 
   @IsOptional()
-  @IsEnum(Gender, { message: 'Gender must be MALE, FEMALE, OTHER or PREFER_NOT_TO_SAY' })
+  @IsEnum(Gender, {
+    message: 'Gender must be MALE, FEMALE, OTHER or PREFER_NOT_TO_SAY',
+  })
   gender?: Gender;
 
   @IsOptional()
@@ -41,4 +43,8 @@ export class UpdateUserProfileDto {
   @IsString()
   @MaxLength(100)
   currentCity?: string;
+
+  @IsOptional()
+  @IsEnum(SportsType, { message: 'preferredSport must be FOOTBALL or CRICKET' })
+  preferredSport?: SportsType;
 }

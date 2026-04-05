@@ -23,9 +23,12 @@ export class UserProfileService {
     });
 
     if (!auth) throw new NotFoundException('Account not found');
-    if (!auth.isVerified) throw new ForbiddenException('Please verify your phone number first');
-    if (auth.role !== Role.USER) throw new ForbiddenException('Only USER role can create user profile');
-    if (auth.userProfile?.name) throw new ConflictException('Profile already created');
+    if (!auth.isVerified)
+      throw new ForbiddenException('Please verify your phone number first');
+    if (auth.role !== Role.USER)
+      throw new ForbiddenException('Only USER role can create user profile');
+    if (auth.userProfile?.name)
+      throw new ConflictException('Profile already created');
 
     // Check email uniqueness
     const emailExists = await this.prisma.userProfile.findUnique({
@@ -40,16 +43,29 @@ export class UserProfileService {
         email: dto.email,
         dob: new Date(dto.dob),
         gender: dto.gender,
+        preferredSport: dto.preferredSport ?? null,
         currentLat: dto.currentLat ?? null,
         currentLng: dto.currentLng ?? null,
         currentCity: dto.currentCity ?? null,
       },
     });
 
+    const userSettings =
+      dto.preferredSport !== undefined
+        ? await this.prisma.userSettings.upsert({
+            where: { authId },
+            update: { favoriteSport: dto.preferredSport },
+            create: { authId, favoriteSport: dto.preferredSport },
+          })
+        : null;
+
     return {
       success: true,
       message: 'Profile created successfully',
-      data: profile,
+      data: {
+        ...profile,
+        preferredSport: userSettings?.favoriteSport ?? profile.preferredSport,
+      },
     };
   }
 
@@ -91,11 +107,22 @@ export class UserProfileService {
         ...(dto.email !== undefined && { email: dto.email }),
         ...(dto.dob !== undefined && { dob: new Date(dto.dob) }),
         ...(dto.gender !== undefined && { gender: dto.gender }),
+        ...(dto.preferredSport !== undefined && {
+          preferredSport: dto.preferredSport,
+        }),
         ...(dto.currentLat !== undefined && { currentLat: dto.currentLat }),
         ...(dto.currentLng !== undefined && { currentLng: dto.currentLng }),
         ...(dto.currentCity !== undefined && { currentCity: dto.currentCity }),
       },
     });
+
+    if (dto.preferredSport !== undefined) {
+      await this.prisma.userSettings.upsert({
+        where: { authId },
+        update: { favoriteSport: dto.preferredSport },
+        create: { authId, favoriteSport: dto.preferredSport },
+      });
+    }
 
     return {
       success: true,

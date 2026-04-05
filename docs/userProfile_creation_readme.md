@@ -39,29 +39,33 @@ Headers → Content-Type: application/json
 ```
 
 **Request:**
+
 ```json
 {
   "name": "John Doe",
   "email": "john@example.com",
   "dob": "2000-01-15",
   "gender": "MALE",
-  "currentLat": 19.0760,
+  "preferredSport": "CRICKET",
+  "currentLat": 19.076,
   "currentLng": 72.8777,
   "currentCity": "Mumbai"
 }
 ```
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `name` | string | ✅ | Full name |
-| `email` | string | ✅ | Must be unique |
-| `dob` | string | ✅ | Format: `"YYYY-MM-DD"` |
-| `gender` | string | ✅ | `MALE` \| `FEMALE` \| `OTHER` \| `PREFER_NOT_TO_SAY` |
-| `currentLat` | number | ❌ | Decimal latitude |
-| `currentLng` | number | ❌ | Decimal longitude |
-| `currentCity` | string | ❌ | City name |
+| Field            | Type   | Required | Notes                                                   |
+| ---------------- | ------ | -------- | ------------------------------------------------------- |
+| `name`           | string | ✅       | Full name                                               |
+| `email`          | string | ✅       | Must be unique                                          |
+| `dob`            | string | ✅       | Format: `"YYYY-MM-DD"`                                  |
+| `gender`         | string | ✅       | `MALE` \| `FEMALE` \| `OTHER` \| `PREFER_NOT_TO_SAY`    |
+| `preferredSport` | string | ❌       | `CRICKET` \| `FOOTBALL` (used to prioritize home turfs) |
+| `currentLat`     | number | ❌       | Decimal latitude                                        |
+| `currentLng`     | number | ❌       | Decimal longitude                                       |
+| `currentCity`    | string | ❌       | City name                                               |
 
 **Response `201`:**
+
 ```json
 {
   "success": true,
@@ -74,6 +78,7 @@ Headers → Content-Type: application/json
     "avatarUrl": null,
     "dob": "2000-01-15T00:00:00.000Z",
     "gender": "MALE",
+    "preferredSport": "CRICKET",
     "currentLat": 19.076,
     "currentLng": 72.8777,
     "currentCity": "Mumbai",
@@ -100,14 +105,15 @@ Body    → form-data
 
 **form-data:**
 
-| Key | Type | Value |
-|---|---|---|
+| Key    | Type | Value                    |
+| ------ | ---- | ------------------------ |
 | `file` | File | Select image from device |
 
 **Allowed types:** `image/jpeg` · `image/jpg` · `image/png` · `image/webp`
 **Max size:** `5 MB`
 
 **Response `200`:**
+
 ```json
 {
   "success": true,
@@ -138,6 +144,7 @@ Headers → Authorization: Bearer ACCESS_TOKEN
 No body.
 
 **Response `200`:**
+
 ```json
 {
   "success": true,
@@ -158,6 +165,7 @@ Headers → Authorization: Bearer ACCESS_TOKEN
 No body.
 
 **Response `200`:**
+
 ```json
 {
   "success": true,
@@ -193,6 +201,7 @@ Headers → Content-Type: application/json
 ```
 
 **Request:** (any subset)
+
 ```json
 {
   "name": "John Updated",
@@ -202,6 +211,7 @@ Headers → Content-Type: application/json
 ```
 
 **Response `200`:**
+
 ```json
 {
   "success": true,
@@ -227,6 +237,7 @@ Headers → Content-Type: application/json
 ```
 
 **Request:**
+
 ```json
 {
   "lat": 18.5204,
@@ -235,13 +246,14 @@ Headers → Content-Type: application/json
 }
 ```
 
-| Field | Type | Required |
-|---|---|---|
-| `lat` | number | ✅ |
-| `lng` | number | ✅ |
-| `city` | string | ❌ |
+| Field  | Type   | Required |
+| ------ | ------ | -------- |
+| `lat`  | number | ✅       |
+| `lng`  | number | ✅       |
+| `city` | string | ❌       |
 
 **Response `200`:**
+
 ```json
 {
   "success": true,
@@ -262,6 +274,7 @@ Headers → Content-Type: application/json
 ```
 
 **Request:**
+
 ```json
 {
   "upiId": "john@ybl"
@@ -269,6 +282,7 @@ Headers → Content-Type: application/json
 ```
 
 **Response `200`:**
+
 ```json
 {
   "success": true,

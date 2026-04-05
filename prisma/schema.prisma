@@ -32,20 +32,21 @@ model Auth {
 }
 
 model UserProfile {
-  id          String   @id @default(uuid())
-  authId      String   @unique
-  name        String
-  email       String   @unique
-  avatarUrl   String?
-  dob         DateTime
-  gender      Gender
-  currentLat  Float?
-  currentLng  Float?
-  currentCity String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  payment     Payment?
-  auth        Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+  id             String      @id @default(uuid())
+  authId         String      @unique
+  name           String
+  email          String      @unique
+  avatarUrl      String?
+  dob            DateTime
+  gender         Gender
+  preferredSport SportsType? @map("preferred_sport")
+  currentLat     Float?
+  currentLng     Float?
+  currentCity    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  payment        Payment?
+  auth           Auth        @relation(fields: [authId], references: [id], onDelete: Cascade)
 }
 
 model OwnerProfile {
