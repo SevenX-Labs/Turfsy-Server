@@ -16,6 +16,7 @@ import { OwnerHomeModule } from './modules/owner-home/owner-home.module';
 import { OwnerAnalyticsModule } from './modules/owner-analytics/owner-analytics.module';
 import { OwnerSettingsModule } from './modules/owner-settings/owner-settings.module';
 import { UserGamificationModule } from './modules/user-gamification/user-gamification.module';
+import { UserSettingsModule } from './modules/user-settings/user-settings.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { UserGamificationModule } from './modules/user-gamification/user-gamific
     OwnerAnalyticsModule,
     OwnerSettingsModule,
     UserGamificationModule,
+    UserSettingsModule,
   ],
   controllers: [AppController],
   providers: [
