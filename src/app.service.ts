@@ -473,22 +473,26 @@ export class AppService {
           {
             method: 'GET',
             path: '/payment',
-            message: 'Owner payment settings endpoint working',
+            message:
+              'Owner payment settings endpoint working (owner-settings model)',
           },
           {
             method: 'PATCH',
             path: '/payment',
-            message: 'Owner payment settings update endpoint working',
+            message:
+              'Owner payment settings update endpoint working (owner-settings model)',
           },
           {
             method: 'GET',
             path: '/payout',
-            message: 'Owner payout settings endpoint working',
+            message:
+              'Owner payout settings endpoint working (owner-settings model)',
           },
           {
             method: 'PATCH',
             path: '/payout',
-            message: 'Owner payout settings update endpoint working',
+            message:
+              'Owner payout settings update endpoint working (owner-settings model)',
           },
           {
             method: 'GET',
