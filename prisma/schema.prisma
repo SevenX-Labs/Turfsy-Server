@@ -234,6 +234,24 @@ model Booking {
   @@map("bookings")
 }
 
+model SlotLock {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  turfId      String   @map("turf_id")
+  bookingDate DateTime @map("booking_date") @db.Date
+  startTime   String   @map("start_time")
+  endTime     String   @map("end_time")
+  expiresAt   DateTime @map("expires_at")
+  bookingId   String?  @map("booking_id") @unique
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([turfId, bookingDate])
+  @@index([userId, bookingDate])
+  @@index([bookingId])
+  @@map("slot_locks")
+}
+
 model TurfRating {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")

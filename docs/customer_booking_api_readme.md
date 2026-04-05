@@ -185,6 +185,25 @@ POST /api/v3/booking
 
 ---
 
+### Slot Lock Flow (Server-controlled)
+
+This secondary layer sits between the “Book Now” tap and Razorpay payment so the backend is always in control of every slot.
+
+1. **Pre-flight lock check:** Before creating a booking entry we delete expired locks and inspect any live lock for the same turf/date with `startTime < requestedEndTime` and `endTime > requestedStartTime`. If someone else holds that lock, return `400` with “Slot is being booked.” If the same user already owns the exact slot, the lock is refreshed for another 5 minutes so retries succeed.
+2. **Create lock:** When no competing lock exists, insert a `slot_lock` row (turf/date/time/user) with `expiresAt = now + 5 minutes`. This reserves the slot while the user completes payment.
+3. **Create booking:** The existing booking transaction runs (`PENDING`, server-side amount, row-level locking) and links the new booking to the lock.
+4. **Payment outcome handling:**
+   * **Success** (Razorpay webhook or confirm-payment) → verify Razorpay, update the booking to `CONFIRMED`, then delete the lock.
+   * **Failure** → cancel the booking (`CANCELLED`, `paymentStatus = FAILED`) and delete the lock immediately.
+   * **No action** → the lock simply expires after 5 minutes and the slot becomes free again.
+
+Race-safety rules:
+* Locks cover only the requested slot, not the whole turf.
+* Overlaps use `newStart < existingEnd && newEnd > existingStart`.
+* The backend enforces every rule; the frontend is never trusted.
+
+> **One-line summary:** Lock before payment, confirm after webhook, auto-release if abandoned.
+
 ### 2.5 Create Razorpay Order
 ```
 POST /api/v3/booking/:bookingId/create-order

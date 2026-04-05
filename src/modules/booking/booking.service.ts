@@ -11,7 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentLoggerService } from '../../common/services/payment-logger.service';
 import { RateLimiterService, RATE_LIMITS } from '../../common/services/rate-limiter.service';
-import { PaymentStatus } from '@prisma/client';
+import { Booking, PaymentStatus } from '@prisma/client';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 import { Parser } from 'json2csv';
@@ -25,6 +25,7 @@ const CANCEL_REFUND_PERCENT = 0.75;    // 75% refund on cancellation
 const NIGHT_START_HOUR = 18;           // 6 PM onwards = night pricing
 const PIN_MAX_ATTEMPTS = 5;            // Lock PIN after 5 wrong attempts
 const PIN_WINDOW_MINUTES = 10;         // ±10 min for PIN verification
+const SLOT_LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes reservation window
 
 @Injectable()
 export class BookingService {
@@ -40,6 +41,89 @@ export class BookingService {
     this.razorpay = new Razorpay({
       key_id: this.configService.get<string>('RAZORPAY_KEY_ID') || '',
       key_secret: this.configService.get<string>('RAZORPAY_KEY_SECRET') || '',
+    });
+  }
+
+  private normalizeBookingDate(date: string | Date): Date {
+    const parsed = typeof date === 'string' ? new Date(date) : new Date(date);
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  }
+
+  private async acquireSlotLock(
+    authId: string,
+    dto: {
+      turfId: string;
+      bookingDate: string;
+      startTime: string;
+      endTime: string;
+    },
+  ) {
+    const bookingDate = this.normalizeBookingDate(dto.bookingDate);
+    const now = new Date();
+
+    await this.prisma.slotLock.deleteMany({
+      where: {
+        turfId: dto.turfId,
+        bookingDate,
+        expiresAt: { lte: now },
+      },
+    });
+
+    const overlappingLock = await this.prisma.slotLock.findFirst({
+      where: {
+        turfId: dto.turfId,
+        bookingDate,
+        expiresAt: { gt: now },
+        startTime: { lt: dto.endTime },
+        endTime: { gt: dto.startTime },
+      },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    const expiresAt = new Date(now.getTime() + SLOT_LOCK_TTL_MS);
+
+    if (overlappingLock) {
+      if (
+        overlappingLock.userId === authId &&
+        overlappingLock.startTime === dto.startTime &&
+        overlappingLock.endTime === dto.endTime
+      ) {
+        return this.prisma.slotLock.update({
+          where: { id: overlappingLock.id },
+          data: { expiresAt },
+        });
+      }
+
+      throw new BadRequestException('Slot is being booked by someone else.');
+    }
+
+    return this.prisma.slotLock.create({
+      data: {
+        userId: authId,
+        turfId: dto.turfId,
+        bookingDate,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        expiresAt,
+      },
+    });
+  }
+
+  private async releaseSlotLockForBooking(booking: Booking) {
+    const bookingDate = this.normalizeBookingDate(booking.bookingDate);
+    await this.prisma.slotLock.deleteMany({
+      where: {
+        OR: [
+          { bookingId: booking.id },
+          {
+            turfId: booking.turfId,
+            bookingDate,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+          },
+        ],
+      },
     });
   }
 
@@ -110,48 +194,63 @@ export class BookingService {
     const checkInPin = crypto.randomInt(1000, 9999).toString();
     const pinExpiresAt = this.buildSlotDateTime(dto.bookingDate, dto.endTime);
 
-    // ══════════════════════════════════════════════════
-    // Layer 7: Transaction with row-level lock to prevent race conditions
-    // ══════════════════════════════════════════════════
-    const booking = await this.prisma.$transaction(async (tx) => {
-      // FOR UPDATE lock on conflicting bookings
-      const overlapping = await tx.$queryRawUnsafe<any[]>(
-        `SELECT id FROM "bookings"
-         WHERE "turf_id" = $1
-         AND "booking_date" = $2
-         AND "booking_status" IN ('PENDING', 'CONFIRMED')
-         AND "start_time" < $3
-         AND "end_time" > $4
-         FOR UPDATE`,
-        dto.turfId,
-        bookingDate,
-        dto.endTime,
-        dto.startTime,
-      );
+    const slotLock = await this.acquireSlotLock(authId, {
+      turfId: dto.turfId,
+      bookingDate: dto.bookingDate,
+      startTime: dto.startTime,
+      endTime: dto.endTime,
+    });
 
-      if (overlapping && overlapping.length > 0) {
-        throw new BadRequestException('Slot already booked');
-      }
-
-      return tx.booking.create({
-        data: {
-          userId: authId,
-          turfId: dto.turfId,
+    let booking;
+    try {
+      booking = await this.prisma.$transaction(async (tx) => {
+        // FOR UPDATE lock on conflicting bookings
+        const overlapping = await tx.$queryRawUnsafe<any[]>(
+          `SELECT id FROM "bookings"
+           WHERE "turf_id" = $1
+           AND "booking_date" = $2
+           AND "booking_status" IN ('PENDING', 'CONFIRMED')
+           AND "start_time" < $3
+           AND "end_time" > $4
+           FOR UPDATE`,
+          dto.turfId,
           bookingDate,
-          startTime: dto.startTime,
-          endTime: dto.endTime,
-          durationMins: dto.durationMins,
-          paymentType: dto.paymentType,
-          amount,
-          depositAmount,
-          checkInPin,
-          pinExpiresAt,
-          notes: sanitizedNotes,
-          playersCount: dto.playersCount,
-          bookingStatus: 'PENDING',
-          paymentStatus: 'PENDING',
-        } as any,
+          dto.endTime,
+          dto.startTime,
+        );
+
+        if (overlapping && overlapping.length > 0) {
+          throw new BadRequestException('Slot already booked');
+        }
+
+        return tx.booking.create({
+          data: {
+            userId: authId,
+            turfId: dto.turfId,
+            bookingDate,
+            startTime: dto.startTime,
+            endTime: dto.endTime,
+            durationMins: dto.durationMins,
+            paymentType: dto.paymentType,
+            amount,
+            depositAmount,
+            checkInPin,
+            pinExpiresAt,
+            notes: sanitizedNotes,
+            playersCount: dto.playersCount,
+            bookingStatus: 'PENDING',
+            paymentStatus: 'PENDING',
+          } as any,
+        });
       });
+    } catch (error) {
+      await this.prisma.slotLock.deleteMany({ where: { id: slotLock.id } });
+      throw error;
+    }
+
+    await this.prisma.slotLock.update({
+      where: { id: slotLock.id },
+      data: { bookingId: booking.id },
     });
 
     // ── Layer 12: Secure Logging ──
@@ -394,6 +493,7 @@ export class BookingService {
     // Layer 2: Idempotency — already confirmed/completed?
     // ══════════════════════════════════════════════════
     if (booking.bookingStatus === 'CONFIRMED' || booking.bookingStatus === 'COMPLETED') {
+      await this.releaseSlotLockForBooking(booking);
       return {
         success: true,
         message: 'Payment already processed.',
@@ -515,6 +615,8 @@ export class BookingService {
       },
     });
 
+    await this.releaseSlotLockForBooking(updated);
+
     // ── Layer 12: Log success ──
     this.paymentLogger.log({
       userId: authId,
@@ -528,13 +630,13 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
-    return {
-      success: true,
-      message: booking.paymentType === 'CASH'
-        ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - booking.depositAmount} at turf. Your Check-In PIN is ${booking.checkInPin}.`
+      return {
+        success: true,
+        message: booking.paymentType === 'CASH'
+          ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - booking.depositAmount} at turf. Your Check-In PIN is ${booking.checkInPin}.`
         : `Payment successful. Booking confirmed! Your Check-In PIN is ${booking.checkInPin}.`,
-      data: { ...updated, displayId: this.formatBookingId(updated.id) },
-    };
+        data: { ...updated, displayId: this.formatBookingId(updated.id) },
+      };
   }
 
   // ═══════════════════════════════════════════════════════
@@ -638,18 +740,19 @@ export class BookingService {
       throw new NotFoundException('Booking not found for Razorpay webhook');
     }
 
-    if (booking.bookingStatus === 'CONFIRMED' || booking.bookingStatus === 'COMPLETED') {
-      if (!booking.razorpayPaymentId) {
-        await this.prisma.booking.update({
-          where: { id: booking.id },
-          data: { razorpayPaymentId: paymentId },
-        });
+      if (booking.bookingStatus === 'CONFIRMED' || booking.bookingStatus === 'COMPLETED') {
+        if (!booking.razorpayPaymentId) {
+          await this.prisma.booking.update({
+            where: { id: booking.id },
+            data: { razorpayPaymentId: paymentId },
+          });
+        }
+        await this.releaseSlotLockForBooking(booking);
+        return {
+          success: true,
+          message: 'Booking already confirmed.',
+        };
       }
-      return {
-        success: true,
-        message: 'Booking already confirmed.',
-      };
-    }
 
     if (booking.razorpayPaymentId) {
       throw new ConflictException('Payment already recorded for booking');
@@ -702,6 +805,8 @@ export class BookingService {
       },
     });
 
+    await this.releaseSlotLockForBooking(updated);
+
     this.paymentLogger.log({
       userId: booking.userId,
       bookingId: booking.id,
@@ -744,6 +849,8 @@ export class BookingService {
       where: { id: bookingId },
       data: { bookingStatus: 'CANCELLED', paymentStatus: 'FAILED' },
     });
+
+    await this.releaseSlotLockForBooking(updated);
 
     // ── Layer 12 ──
     this.paymentLogger.log({
