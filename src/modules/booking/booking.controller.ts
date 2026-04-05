@@ -15,7 +15,8 @@ import {
   Res,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import type { Request } from 'express';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
