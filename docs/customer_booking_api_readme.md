@@ -241,6 +241,24 @@ POST /api/v3/booking/:bookingId/confirm-payment
 
 ---
 
+### 3.1 Razorpay Server Webhook
+```
+POST /api/v3/booking/razorpay/webhook
+```
+
+Razorpay can directly confirm the backend when a payment is captured. Configure this endpoint in the Razorpay Dashboard with method `POST` and the appropriate webhook secret (set `RAZORPAY_WEBHOOK_SECRET` or fall back to `RAZORPAY_KEY_SECRET` in the environment). The endpoint expects the raw JSON payload and the `x-razorpay-signature` header; the server verifies the HMAC-SHA256 signature, validates the Razorpay order amount, and moves the associated booking from `PENDING` to `CONFIRMED` using the stored `razorpayOrderId` or the booking metadata (`notes.bookingId`).
+
+Only `payment.captured` (and `order.paid`) events are processed. Other events always return `200 OK` with a short message, while invalid signatures or missing bookings return `4xx` so Razorpay retries and alerts you.
+
+```json
+{
+  "success": true,
+  "message": "Razorpay webhook processed."
+}
+```
+
+---
+
 ### 4. Payment Failed
 ```
 POST /api/v3/booking/:bookingId/payment-failed

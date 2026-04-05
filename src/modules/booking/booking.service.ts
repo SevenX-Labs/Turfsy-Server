@@ -538,6 +538,190 @@ export class BookingService {
   }
 
   // ═══════════════════════════════════════════════════════
+  // 2.1 RAZORPAY WEBHOOK (SERVER-TO-SERVER)
+  //     Layer 3: Signature verification (timingSafeEqual)
+  //     Layer 4: Amount integrity
+  //     Layer 5: State machine (PENDING → CONFIRMED)
+  // ═══════════════════════════════════════════════════════
+  async handleRazorpayWebhook(
+    payload: any,
+    signature: string | undefined,
+    rawBody: Buffer | undefined,
+    ip?: string,
+  ) {
+    const webhookSecret =
+      this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET') ||
+      this.configService.get<string>('RAZORPAY_KEY_SECRET') ||
+      '';
+
+    if (!webhookSecret) {
+      throw new BadRequestException('Webhook secret is not configured');
+    }
+
+    if (!signature) {
+      throw new BadRequestException('Missing Razorpay webhook signature');
+    }
+    if (!rawBody) {
+      throw new BadRequestException('Missing webhook payload for signature verification');
+    }
+
+    let signatureValid = false;
+    try {
+      const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(rawBody)
+        .digest('hex');
+      const expectedBuf = Buffer.from(expectedSignature, 'hex');
+      const receivedBuf = Buffer.from(signature, 'hex');
+
+      signatureValid =
+        expectedBuf.length === receivedBuf.length &&
+        crypto.timingSafeEqual(expectedBuf, receivedBuf);
+    } catch {
+      signatureValid = false;
+    }
+
+    if (!signatureValid) {
+      this.paymentLogger.alert('Webhook signature verification failed', {
+        ip,
+        event: payload?.event ?? 'unknown',
+        accountId: payload?.account_id ?? 'unknown',
+      });
+      throw new BadRequestException('Invalid Razorpay webhook signature');
+    }
+
+    const event = payload?.event;
+    if (!event || !['payment.captured', 'order.paid'].includes(event)) {
+      return {
+        success: true,
+        message: `Webhook event '${event ?? 'unknown'}' ignored`,
+      };
+    }
+
+    const paymentEntity = payload?.payload?.payment?.entity;
+    if (!paymentEntity) {
+      throw new BadRequestException('Webhook payload missing payment entity');
+    }
+
+    if (paymentEntity.status !== 'captured') {
+      return {
+        success: true,
+        message: `Payment status '${paymentEntity.status}' ignored`,
+      };
+    }
+
+    const orderId = paymentEntity.order_id;
+    const paymentId = paymentEntity.id;
+    const notes = paymentEntity.notes || {};
+    const bookingIdFromNotes =
+      typeof notes.bookingId === 'string'
+        ? notes.bookingId
+        : typeof notes.booking_id === 'string'
+        ? notes.booking_id
+        : undefined;
+
+    let booking = null;
+    if (bookingIdFromNotes) {
+      booking = await this.prisma.booking.findUnique({ where: { id: bookingIdFromNotes } });
+    }
+    if (!booking && orderId) {
+      booking = await this.prisma.booking.findFirst({ where: { razorpayOrderId: orderId } });
+    }
+
+    if (!booking) {
+      this.paymentLogger.alert('Webhook booking not found', {
+        orderId,
+        paymentId,
+        event,
+        ip,
+      });
+      throw new NotFoundException('Booking not found for Razorpay webhook');
+    }
+
+    if (booking.bookingStatus === 'CONFIRMED' || booking.bookingStatus === 'COMPLETED') {
+      if (!booking.razorpayPaymentId) {
+        await this.prisma.booking.update({
+          where: { id: booking.id },
+          data: { razorpayPaymentId: paymentId },
+        });
+      }
+      return {
+        success: true,
+        message: 'Booking already confirmed.',
+      };
+    }
+
+    if (booking.razorpayPaymentId) {
+      throw new ConflictException('Payment already recorded for booking');
+    }
+
+    if (booking.bookingStatus !== 'PENDING') {
+      throw new BadRequestException('Invalid booking state for webhook payment');
+    }
+
+    if (booking.razorpayOrderId && orderId && booking.razorpayOrderId !== orderId) {
+      this.paymentLogger.alert('Webhook order ID tampered', {
+        bookingId: booking.id,
+        expected: booking.razorpayOrderId,
+        received: orderId,
+        ip,
+      });
+      throw new BadRequestException('Order ID mismatch');
+    }
+
+    const expectedAmountPaise = Math.round(booking.depositAmount * 100);
+    if (orderId) {
+      try {
+        const rzpOrder = await this.razorpay.orders.fetch(orderId);
+        if (rzpOrder.amount !== expectedAmountPaise) {
+          this.paymentLogger.alert('Amount mismatch detected via webhook', {
+            bookingId: booking.id,
+            dbAmount: expectedAmountPaise,
+            rzpAmount: rzpOrder.amount,
+            ip,
+          });
+          throw new BadRequestException('Amount mismatch detected');
+        }
+      } catch (err) {
+        if (err instanceof BadRequestException) {
+          throw err;
+        }
+        console.warn(`[PAYMENT] Could not fetch Razorpay order for webhook verification: ${err}`);
+      }
+    }
+
+    const newPaymentStatus = booking.paymentType === 'ONLINE' ? 'SUCCESS' : 'PENDING';
+
+    const updated = await this.prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        bookingStatus: 'CONFIRMED',
+        paymentStatus: newPaymentStatus,
+        razorpayOrderId: orderId || booking.razorpayOrderId,
+        razorpayPaymentId: paymentId,
+      },
+    });
+
+    this.paymentLogger.log({
+      userId: booking.userId,
+      bookingId: booking.id,
+      turfId: booking.turfId,
+      action: 'confirm',
+      amount: booking.depositAmount,
+      razorpayOrderId: orderId,
+      razorpayPaymentId: paymentId,
+      ip,
+      result: 'SUCCESS',
+    });
+
+    return {
+      success: true,
+      message: 'Razorpay webhook processed.',
+      data: { ...updated, displayId: this.formatBookingId(updated.id) },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
   // 3. MARK PAYMENT FAILED
   //    Layer 2: Idempotency
   //    Layer 5: State Machine (PENDING → CANCELLED)

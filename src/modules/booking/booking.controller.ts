@@ -15,7 +15,7 @@ import {
   Res,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -83,6 +83,22 @@ export class BookingController {
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
     return this.bookingService.confirmOnlinePayment(req.user.authId, bookingId, dto, ip);
+  }
+
+  @Post('razorpay/webhook')
+  @HttpCode(HttpStatus.OK)
+  async razorpayWebhook(@Req() req: Request, @Body() body: any) {
+    const signatureHeader = req.headers['x-razorpay-signature'];
+    const signature =
+      typeof signatureHeader === 'string'
+        ? signatureHeader
+        : Array.isArray(signatureHeader)
+        ? signatureHeader[0]
+        : undefined;
+    const ip = req.ip || req.connection?.remoteAddress;
+    const rawBody = (req as any).rawBody as Buffer | undefined;
+
+    return this.bookingService.handleRazorpayWebhook(body, signature, rawBody, ip);
   }
 
   // ──────────────────────────────────────────────

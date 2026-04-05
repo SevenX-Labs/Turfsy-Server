@@ -3,12 +3,23 @@ import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
+import { json } from 'express';
 import { SecurityExceptionFilter } from './common/filters/security-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors();
+
+  app.use(
+    json({
+      verify: (req, _res, buf) => {
+        if (buf?.length) {
+          (req as any).rawBody = buf;
+        }
+      },
+    }),
+  );
 
   // ── Layer 10: Global validation pipe (class-validator) ──
   // whitelist: strip unexpected fields (strict mode)
