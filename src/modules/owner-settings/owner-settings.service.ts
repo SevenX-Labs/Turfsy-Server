@@ -162,15 +162,26 @@ export class OwnerSettingsService {
   async getPaymentSettings(authId: string) {
     await this.ensureOwner(authId);
     const settings = await this.getOrCreateOwnerSettings(authId);
+    const legacyPayment = await this.prisma.payment.findUnique({
+      where: { authId },
+      select: {
+        upiId: true,
+        bankAccount: true,
+        payoutMethod: true,
+        payoutFrequency: true,
+        isActive: true,
+      },
+    });
 
     return {
       success: true,
       data: {
-        upiId: settings.upiId ?? null,
-        bankAccount: settings.bankAccount ?? null,
-        payoutMethod: settings.payoutMethod,
-        payoutFrequency: settings.payoutFrequency,
-        isActive: settings.payoutActive,
+        upiId: settings.upiId ?? legacyPayment?.upiId ?? null,
+        bankAccount: settings.bankAccount ?? legacyPayment?.bankAccount ?? null,
+        payoutMethod: settings.payoutMethod ?? legacyPayment?.payoutMethod,
+        payoutFrequency:
+          settings.payoutFrequency ?? legacyPayment?.payoutFrequency,
+        isActive: settings.payoutActive ?? legacyPayment?.isActive,
       },
     };
   }
@@ -179,10 +190,22 @@ export class OwnerSettingsService {
     await this.ensureOwner(authId);
 
     const ownerSettings = await this.getOrCreateOwnerSettings(authId);
+    const ownerProfile = await this.prisma.ownerProfile.findUnique({
+      where: { authId },
+      select: { id: true },
+    });
+    const legacyPayment = await this.prisma.payment.findUnique({
+      where: { authId },
+      select: { upiId: true, bankAccount: true },
+    });
     const resolvedPayoutMethod =
       dto.payoutMethod ?? ownerSettings.payoutMethod ?? PayoutMethod.UPI;
-    const resolvedUpiId = dto.upiId ?? ownerSettings.upiId ?? '';
-    const resolvedBankAccount = dto.bankAccount ?? ownerSettings.bankAccount;
+    const resolvedUpiId =
+      dto.upiId ?? ownerSettings.upiId ?? legacyPayment?.upiId ?? '';
+    const resolvedBankAccount =
+      dto.bankAccount ??
+      ownerSettings.bankAccount ??
+      legacyPayment?.bankAccount;
 
     if (resolvedPayoutMethod === PayoutMethod.UPI && !resolvedUpiId) {
       throw new BadRequestException(
@@ -208,6 +231,31 @@ export class OwnerSettingsService {
           payoutFrequency: dto.payoutFrequency,
         }),
         ...(dto.isActive !== undefined && { payoutActive: dto.isActive }),
+      },
+    });
+
+    await this.prisma.payment.upsert({
+      where: { authId },
+      update: {
+        ...(dto.upiId !== undefined && { upiId: dto.upiId }),
+        ...(dto.bankAccount !== undefined && { bankAccount: dto.bankAccount }),
+        ...(dto.payoutMethod !== undefined && {
+          payoutMethod: dto.payoutMethod,
+        }),
+        ...(dto.payoutFrequency !== undefined && {
+          payoutFrequency: dto.payoutFrequency,
+        }),
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      },
+      create: {
+        authId,
+        role: Role.OWNER,
+        upiId: resolvedUpiId,
+        bankAccount: resolvedBankAccount,
+        payoutMethod: dto.payoutMethod ?? ownerSettings.payoutMethod,
+        payoutFrequency: dto.payoutFrequency ?? ownerSettings.payoutFrequency,
+        isActive: dto.isActive ?? ownerSettings.payoutActive,
+        ownerProfileId: ownerProfile?.id,
       },
     });
 
