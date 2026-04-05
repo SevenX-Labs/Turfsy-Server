@@ -289,14 +289,17 @@ POST /api/v3/booking/:bookingId/payment-failed
 ```json
 {
   "success": true,
-  "message": "Payment failed. Booking cancelled.",
+  "message": "Payment failed. Booking is still pending—retry payment to confirm.",
   "data": {
     "id": "booking-uuid",
-    "bookingStatus": "CANCELLED",
-    "paymentStatus": "FAILED"
+    "bookingStatus": "PENDING",
+    "paymentStatus": "FAILED",
+    "razorpayOrderId": "order_PqR1234567890"
   }
 }
 ```
+
+The request leaves the booking in `PENDING` so the user can immediately retry payment. The frontend should surface a “Retry Payment” button that calls `POST /booking/:bookingId/create-order` (it will return the existing Razorpay order when still valid or create a fresh one if needed), then let the user pay again. Once Razorpay reports success (confirm endpoint or webhook), the booking becomes `CONFIRMED`.
 
 ---
 
@@ -340,6 +343,8 @@ PATCH /api/v3/booking/:bookingId/cancel
   }
 }
 ```
+
+> When cancelling a `PENDING` booking (payment not completed), the backend now marks `paymentStatus: FAILED` and immediately releases the slot lock so the user can freely retry or book another slot without waiting.
 
 ---
 

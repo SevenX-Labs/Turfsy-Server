@@ -847,7 +847,10 @@ export class BookingService {
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
-      data: { bookingStatus: 'CANCELLED', paymentStatus: 'FAILED' },
+      data: {
+        paymentStatus: 'FAILED',
+        razorpayPaymentId: null,
+      },
     });
 
     await this.releaseSlotLockForBooking(updated);
@@ -861,12 +864,13 @@ export class BookingService {
       amount: booking.depositAmount,
       razorpayOrderId: booking.razorpayOrderId || undefined,
       ip,
-      result: 'SUCCESS',
+      result: 'FAILED',
+      rejectionReason: 'Payment attempt failed, booking remains pending',
     });
 
     return {
       success: true,
-      message: 'Payment failed. Booking cancelled.',
+      message: 'Payment failed. Booking is still pending—retry payment to confirm.',
       data: { ...updated, displayId: this.formatBookingId(updated.id) },
     };
   }
@@ -1430,7 +1434,10 @@ export class BookingService {
     // Layer 9: Refund Safety
     // ══════════════════════════════════════════════════
     let refundAmount = 0;
-    let newPaymentStatus: PaymentStatus = booking.paymentStatus;
+    let newPaymentStatus: PaymentStatus =
+      booking.paymentStatus === 'PENDING'
+        ? 'FAILED'
+        : booking.paymentStatus;
     let razorpayRefundId: string | null = null;
 
     // Only refund if payment was actually successful
@@ -1481,6 +1488,8 @@ export class BookingService {
         razorpayRefundId,
       },
     });
+
+    await this.releaseSlotLockForBooking(updated);
 
     // ── Layer 12 ──
     this.paymentLogger.log({
