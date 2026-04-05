@@ -722,7 +722,7 @@ export class BookingService {
         ? notes.booking_id
         : undefined;
 
-    let booking = null;
+    let booking: Booking | null = null;
     if (bookingIdFromNotes) {
       booking = await this.prisma.booking.findUnique({ where: { id: bookingIdFromNotes } });
     }
