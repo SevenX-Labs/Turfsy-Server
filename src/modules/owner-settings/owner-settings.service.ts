@@ -1,18 +1,47 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateProfileSettingsDto } from './dto/profile-settings.dto';
 import { UpdateTurfSettingsDto } from './dto/turf-settings.dto';
 import { UpdatePaymentSettingsDto } from './dto/payment-settings.dto';
 import { UpdateNotificationSettingsDto } from './dto/notification-settings.dto';
 import { UpdateCancellationPolicyDto } from './dto/cancellation-policy.dto';
-import { Role } from '@prisma/client';
+import { PayoutMethod, Role } from '@prisma/client';
 
 @Injectable()
 export class OwnerSettingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // 1. Profile Settings
+  private async ensureOwner(authId: string) {
+    const auth = await this.prisma.auth.findUnique({
+      where: { id: authId },
+    });
+
+    if (!auth || !auth.isActive) {
+      throw new NotFoundException('Owner account not found');
+    }
+
+    if (auth.role !== Role.OWNER) {
+      throw new ForbiddenException('Only OWNER role can access owner settings');
+    }
+  }
+
+  private async getOrCreateOwnerSettings(authId: string) {
+    return this.prisma.ownerSettings.upsert({
+      where: { authId },
+      update: {},
+      create: { authId },
+    });
+  }
+
   async getProfileSettings(authId: string) {
+    await this.ensureOwner(authId);
+
     const profile = await this.prisma.ownerProfile.findUnique({
       where: { authId },
       select: {
@@ -31,6 +60,8 @@ export class OwnerSettingsService {
   }
 
   async updateProfileSettings(authId: string, dto: UpdateProfileSettingsDto) {
+    await this.ensureOwner(authId);
+
     const profile = await this.prisma.ownerProfile.findUnique({
       where: { authId },
     });
@@ -65,11 +96,12 @@ export class OwnerSettingsService {
     };
   }
 
-  // 2. Turf Management
   async getTurfSettings(ownerAuthId: string, turfId: string) {
+    await this.ensureOwner(ownerAuthId);
+
     const turf = await this.prisma.turf.findUnique({
       where: { id: turfId },
-      include: { owner: true },
+      include: { owner: { select: { authId: true } } },
     });
 
     if (!turf) throw new NotFoundException('Turf not found');
@@ -96,10 +128,16 @@ export class OwnerSettingsService {
     };
   }
 
-  async updateTurfSettings(ownerAuthId: string, turfId: string, dto: UpdateTurfSettingsDto) {
+  async updateTurfSettings(
+    ownerAuthId: string,
+    turfId: string,
+    dto: UpdateTurfSettingsDto,
+  ) {
+    await this.ensureOwner(ownerAuthId);
+
     const turf = await this.prisma.turf.findUnique({
       where: { id: turfId },
-      include: { owner: true },
+      include: { owner: { select: { authId: true } } },
     });
 
     if (!turf) throw new NotFoundException('Turf not found');
@@ -121,101 +159,119 @@ export class OwnerSettingsService {
     };
   }
 
-  // 3. Payment Settings
   async getPaymentSettings(authId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { authId },
-    });
+    await this.ensureOwner(authId);
+    const settings = await this.getOrCreateOwnerSettings(authId);
 
     return {
       success: true,
       data: {
-        upiId: payment?.upiId || null,
-        bankAccount: payment?.bankAccount || null,
-        payoutMethod: payment?.payoutMethod || 'UPI',
-        payoutFrequency: payment?.payoutFrequency || 'MANUAL',
-        isActive: payment?.isActive ?? false,
+        upiId: settings.upiId ?? null,
+        bankAccount: settings.bankAccount ?? null,
+        payoutMethod: settings.payoutMethod,
+        payoutFrequency: settings.payoutFrequency,
+        isActive: settings.payoutActive,
       },
     };
   }
 
   async updatePaymentSettings(authId: string, dto: UpdatePaymentSettingsDto) {
-    const profile = await this.prisma.ownerProfile.findUnique({
-      where: { authId },
-    });
-    if (!profile) throw new NotFoundException('Owner profile not found');
+    await this.ensureOwner(authId);
 
-    const payment = await this.prisma.payment.upsert({
+    const ownerSettings = await this.getOrCreateOwnerSettings(authId);
+    const resolvedPayoutMethod =
+      dto.payoutMethod ?? ownerSettings.payoutMethod ?? PayoutMethod.UPI;
+    const resolvedUpiId = dto.upiId ?? ownerSettings.upiId ?? '';
+    const resolvedBankAccount = dto.bankAccount ?? ownerSettings.bankAccount;
+
+    if (resolvedPayoutMethod === PayoutMethod.UPI && !resolvedUpiId) {
+      throw new BadRequestException(
+        'upiId is required when payoutMethod is UPI',
+      );
+    }
+
+    if (resolvedPayoutMethod === PayoutMethod.BANK && !resolvedBankAccount) {
+      throw new BadRequestException(
+        'bankAccount is required when payoutMethod is BANK',
+      );
+    }
+
+    const updatedOwnerSettings = await this.prisma.ownerSettings.update({
       where: { authId },
-      update: {
+      data: {
         ...(dto.upiId !== undefined && { upiId: dto.upiId }),
         ...(dto.bankAccount !== undefined && { bankAccount: dto.bankAccount }),
-        ...(dto.payoutMethod !== undefined && { payoutMethod: dto.payoutMethod }),
-        ...(dto.payoutFrequency !== undefined && { payoutFrequency: dto.payoutFrequency }),
-        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-      },
-      create: {
-        authId,
-        role: Role.OWNER,
-        upiId: dto.upiId || '',
-        bankAccount: dto.bankAccount,
-        payoutMethod: dto.payoutMethod || 'UPI',
-        payoutFrequency: dto.payoutFrequency || 'MANUAL',
-        isActive: dto.isActive ?? true,
-        ownerProfileId: profile.id,
+        ...(dto.payoutMethod !== undefined && {
+          payoutMethod: dto.payoutMethod,
+        }),
+        ...(dto.payoutFrequency !== undefined && {
+          payoutFrequency: dto.payoutFrequency,
+        }),
+        ...(dto.isActive !== undefined && { payoutActive: dto.isActive }),
       },
     });
 
     return {
       success: true,
       message: 'Payment settings updated successfully',
-      data: payment,
+      data: {
+        upiId: updatedOwnerSettings.upiId,
+        bankAccount: updatedOwnerSettings.bankAccount,
+        payoutMethod: updatedOwnerSettings.payoutMethod,
+        payoutFrequency: updatedOwnerSettings.payoutFrequency,
+        isActive: updatedOwnerSettings.payoutActive,
+      },
     };
   }
 
-  // 4. Notification Settings
   async getNotificationSettings(authId: string) {
-    const profile = await this.prisma.ownerProfile.findUnique({
-      where: { authId },
-      select: {
-        bookingAlerts: true,
-        cancellationAlerts: true,
-      },
-    });
-
-    if (!profile) throw new NotFoundException('Owner profile not found');
+    await this.ensureOwner(authId);
+    const settings = await this.getOrCreateOwnerSettings(authId);
 
     return {
       success: true,
-      data: profile,
+      data: {
+        bookingAlerts: settings.bookingAlerts,
+        cancellationAlerts: settings.cancellationAlerts,
+      },
     };
   }
 
-  async updateNotificationSettings(authId: string, dto: UpdateNotificationSettingsDto) {
-    const updated = await this.prisma.ownerProfile.update({
+  async updateNotificationSettings(
+    authId: string,
+    dto: UpdateNotificationSettingsDto,
+  ) {
+    await this.ensureOwner(authId);
+    await this.getOrCreateOwnerSettings(authId);
+
+    const updated = await this.prisma.ownerSettings.update({
       where: { authId },
       data: {
-        ...(dto.bookingAlerts !== undefined && { bookingAlerts: dto.bookingAlerts }),
-        ...(dto.cancellationAlerts !== undefined && { cancellationAlerts: dto.cancellationAlerts }),
-      },
-      select: {
-        bookingAlerts: true,
-        cancellationAlerts: true,
+        ...(dto.bookingAlerts !== undefined && {
+          bookingAlerts: dto.bookingAlerts,
+        }),
+        ...(dto.cancellationAlerts !== undefined && {
+          cancellationAlerts: dto.cancellationAlerts,
+        }),
       },
     });
 
     return {
       success: true,
       message: 'Notification settings updated successfully',
-      data: updated,
+      data: {
+        bookingAlerts: updated.bookingAlerts,
+        cancellationAlerts: updated.cancellationAlerts,
+      },
     };
   }
 
-  // 5. Cancellation Policy
   async getCancellationPolicy(ownerAuthId: string, turfId: string) {
+    await this.ensureOwner(ownerAuthId);
+
     const turf = await this.prisma.turf.findUnique({
       where: { id: turfId },
-      include: { owner: true },
+      include: { owner: { select: { authId: true } } },
     });
 
     if (!turf) throw new NotFoundException('Turf not found');
@@ -232,10 +288,16 @@ export class OwnerSettingsService {
     };
   }
 
-  async updateCancellationPolicy(ownerAuthId: string, turfId: string, dto: UpdateCancellationPolicyDto) {
+  async updateCancellationPolicy(
+    ownerAuthId: string,
+    turfId: string,
+    dto: UpdateCancellationPolicyDto,
+  ) {
+    await this.ensureOwner(ownerAuthId);
+
     const turf = await this.prisma.turf.findUnique({
       where: { id: turfId },
-      include: { owner: true },
+      include: { owner: { select: { authId: true } } },
     });
 
     if (!turf) throw new NotFoundException('Turf not found');
@@ -246,8 +308,12 @@ export class OwnerSettingsService {
     const updated = await this.prisma.turf.update({
       where: { id: turfId },
       data: {
-        ...(dto.allowedBeforeHours !== undefined && { cancellationAllowedBeforeHours: dto.allowedBeforeHours }),
-        ...(dto.refundPercentage !== undefined && { cancellationRefundPercentage: dto.refundPercentage }),
+        ...(dto.allowedBeforeHours !== undefined && {
+          cancellationAllowedBeforeHours: dto.allowedBeforeHours,
+        }),
+        ...(dto.refundPercentage !== undefined && {
+          cancellationRefundPercentage: dto.refundPercentage,
+        }),
       },
     });
 
@@ -261,8 +327,19 @@ export class OwnerSettingsService {
     };
   }
 
-  // 6. Support Info
-  getSupportInfo() {
+  async changePassword(authId: string) {
+    await this.ensureOwner(authId);
+
+    return {
+      success: true,
+      message:
+        'Password change is not applicable for OTP-based login. Use secure phone change flow for credential updates.',
+    };
+  }
+
+  async getSupportInfo(authId: string) {
+    await this.ensureOwner(authId);
+
     return {
       success: true,
       data: {

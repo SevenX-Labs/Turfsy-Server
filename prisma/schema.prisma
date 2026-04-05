@@ -7,24 +7,25 @@ datasource db {
 }
 
 model Auth {
-  id           String            @id @default(uuid())
-  phone        String            @unique
-  role         Role              @default(USER)
-  isVerified   Boolean           @default(false)
-  isActive     Boolean           @default(true)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  deletedAt    DateTime?
-  otpEntries   OtpEntry[]
-  ownerProfile OwnerProfile?
-  payment      Payment?
-  sessions     Session[]
-  userProfile  UserProfile?
-  bookings     Booking[]
-  savedTurfs   SavedTurf[]
-  ratings      TurfRating[]
-  gamification UserGamification?
-  userSettings UserSettings?
+  id            String            @id @default(uuid())
+  phone         String            @unique
+  role          Role              @default(USER)
+  isVerified    Boolean           @default(false)
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  deletedAt     DateTime?
+  otpEntries    OtpEntry[]
+  ownerProfile  OwnerProfile?
+  payment       Payment?
+  sessions      Session[]
+  userProfile   UserProfile?
+  bookings      Booking[]
+  savedTurfs    SavedTurf[]
+  ratings       TurfRating[]
+  gamification  UserGamification?
+  userSettings  UserSettings?
+  ownerSettings OwnerSettings?
 
   @@index([phone])
   @@index([role])
@@ -48,23 +49,20 @@ model UserProfile {
 }
 
 model OwnerProfile {
-  id                 String   @id @default(uuid())
-  authId             String   @unique
-  name               String
-  email              String   @unique
-  contactNumber      String
-  avatarUrl          String?
-  aadharNumber       String
-  aadharUrl          String?
-  isKycVerified      Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  auth               Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
-  payment            Payment?
-  turfs              Turf[]
-  // Notification Settings
-  bookingAlerts      Boolean  @default(true)
-  cancellationAlerts Boolean  @default(true)
+  id            String   @id @default(uuid())
+  authId        String   @unique
+  name          String
+  email         String   @unique
+  contactNumber String
+  avatarUrl     String?
+  aadharNumber  String
+  aadharUrl     String?
+  isKycVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  auth          Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+  payment       Payment?
+  turfs         Turf[]
 
   @@index([authId])
 }
@@ -349,4 +347,22 @@ model UserSettings {
 
   @@index([authId])
   @@map("user_settings")
+}
+
+model OwnerSettings {
+  id                 String       @id @default(uuid())
+  authId             String       @unique @map("auth_id")
+  upiId              String?      @map("upi_id")
+  bankAccount        String?      @map("bank_account")
+  bookingAlerts      Boolean      @default(true) @map("booking_alerts")
+  cancellationAlerts Boolean      @default(true) @map("cancellation_alerts")
+  payoutMethod       PayoutMethod @default(UPI) @map("payout_method")
+  payoutFrequency    String       @default("MANUAL") @map("payout_frequency")
+  payoutActive       Boolean      @default(true) @map("payout_active")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+  auth               Auth         @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@index([authId])
+  @@map("owner-settings")
 }

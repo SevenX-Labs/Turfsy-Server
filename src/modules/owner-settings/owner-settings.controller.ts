@@ -34,8 +34,14 @@ export class OwnerSettingsController {
   }
 
   @Patch('profile')
-  updateProfileSettings(@Req() req: any, @Body() dto: UpdateProfileSettingsDto) {
-    return this.ownerSettingsService.updateProfileSettings(req.user.authId, dto);
+  updateProfileSettings(
+    @Req() req: any,
+    @Body() dto: UpdateProfileSettingsDto,
+  ) {
+    return this.ownerSettingsService.updateProfileSettings(
+      req.user.authId,
+      dto,
+    );
   }
 
   // --- Turf Management (View / Edit Turf, Pricing, Images) ---
@@ -50,7 +56,11 @@ export class OwnerSettingsController {
     @Param('turfId') turfId: string,
     @Body() dto: UpdateTurfSettingsDto,
   ) {
-    return this.ownerSettingsService.updateTurfSettings(req.user.authId, turfId, dto);
+    return this.ownerSettingsService.updateTurfSettings(
+      req.user.authId,
+      turfId,
+      dto,
+    );
   }
 
   // --- Payment Settings (UPI, Bank, Status) ---
@@ -60,8 +70,14 @@ export class OwnerSettingsController {
   }
 
   @Patch('payment')
-  updatePaymentSettings(@Req() req: any, @Body() dto: UpdatePaymentSettingsDto) {
-    return this.ownerSettingsService.updatePaymentSettings(req.user.authId, dto);
+  updatePaymentSettings(
+    @Req() req: any,
+    @Body() dto: UpdatePaymentSettingsDto,
+  ) {
+    return this.ownerSettingsService.updatePaymentSettings(
+      req.user.authId,
+      dto,
+    );
   }
 
   // --- Payout Settings (Proxy to Payment) ---
@@ -72,7 +88,10 @@ export class OwnerSettingsController {
 
   @Patch('payout')
   updatePayoutSettings(@Req() req: any, @Body() dto: UpdatePaymentSettingsDto) {
-    return this.ownerSettingsService.updatePaymentSettings(req.user.authId, dto);
+    return this.ownerSettingsService.updatePaymentSettings(
+      req.user.authId,
+      dto,
+    );
   }
 
   // --- Notification Settings ---
@@ -82,14 +101,23 @@ export class OwnerSettingsController {
   }
 
   @Patch('notifications')
-  updateNotificationSettings(@Req() req: any, @Body() dto: UpdateNotificationSettingsDto) {
-    return this.ownerSettingsService.updateNotificationSettings(req.user.authId, dto);
+  updateNotificationSettings(
+    @Req() req: any,
+    @Body() dto: UpdateNotificationSettingsDto,
+  ) {
+    return this.ownerSettingsService.updateNotificationSettings(
+      req.user.authId,
+      dto,
+    );
   }
 
   // --- Cancellation Policy ---
   @Get('cancellation-policy/:turfId')
   getCancellationPolicy(@Req() req: any, @Param('turfId') turfId: string) {
-    return this.ownerSettingsService.getCancellationPolicy(req.user.authId, turfId);
+    return this.ownerSettingsService.getCancellationPolicy(
+      req.user.authId,
+      turfId,
+    );
   }
 
   @Patch('cancellation-policy/:turfId')
@@ -98,23 +126,24 @@ export class OwnerSettingsController {
     @Param('turfId') turfId: string,
     @Body() dto: UpdateCancellationPolicyDto,
   ) {
-    return this.ownerSettingsService.updateCancellationPolicy(req.user.authId, turfId, dto);
+    return this.ownerSettingsService.updateCancellationPolicy(
+      req.user.authId,
+      turfId,
+      dto,
+    );
   }
 
   // --- Security (Change Password - Placeholder for OTP based) ---
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
-  changePassword() {
-    return {
-      success: true,
-      message: 'Turfsy uses secure phone-based authentication. Use "Request Phone Change" to update your secure login method.',
-    };
+  changePassword(@Req() req: any) {
+    return this.ownerSettingsService.changePassword(req.user.authId);
   }
 
   // --- Support ---
   @Get('support')
-  getSupport() {
-    return this.ownerSettingsService.getSupportInfo();
+  getSupport(@Req() req: any) {
+    return this.ownerSettingsService.getSupportInfo(req.user.authId);
   }
 
   // --- Logout ---
