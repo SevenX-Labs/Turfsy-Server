@@ -7,13 +7,13 @@ datasource db {
 }
 
 model Auth {
-  id           String        @id @default(uuid())
-  phone        String        @unique
-  role         Role          @default(USER)
-  isVerified   Boolean       @default(false)
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id           String            @id @default(uuid())
+  phone        String            @unique
+  role         Role              @default(USER)
+  isVerified   Boolean           @default(false)
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
   deletedAt    DateTime?
   otpEntries   OtpEntry[]
   ownerProfile OwnerProfile?
@@ -24,6 +24,7 @@ model Auth {
   savedTurfs   SavedTurf[]
   ratings      TurfRating[]
   gamification UserGamification?
+  userSettings UserSettings?
 
   @@index([phone])
   @@index([role])
@@ -47,67 +48,67 @@ model UserProfile {
 }
 
 model OwnerProfile {
-  id            String   @id @default(uuid())
-  authId        String   @unique
-  name          String
-  email         String   @unique
-  contactNumber String
-  avatarUrl     String?
-  aadharNumber  String
-  aadharUrl     String?
-  isKycVerified Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  auth          Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
-  payment       Payment?
-  turfs         Turf[]
+  id                 String   @id @default(uuid())
+  authId             String   @unique
+  name               String
+  email              String   @unique
+  contactNumber      String
+  avatarUrl          String?
+  aadharNumber       String
+  aadharUrl          String?
+  isKycVerified      Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  auth               Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+  payment            Payment?
+  turfs              Turf[]
   // Notification Settings
-  bookingAlerts      Boolean @default(true)
-  cancellationAlerts Boolean @default(true)
+  bookingAlerts      Boolean  @default(true)
+  cancellationAlerts Boolean  @default(true)
 
   @@index([authId])
 }
 
 model Turf {
-  id                  String       @id @default(uuid())
-  ownerProfileId      String
-  name                String
-  description         String?
-  sportsType          SportsType
-  turfSize            String
-  status              TurfStatus   @default(ACTIVE)
-  address             String
-  city                String
-  pincode             String
-  lat                 Float
-  lng                 Float
-  openTime            String
-  closeTime           String
-  minSlotDurationMins Int
-  groundDayUrl        String?
-  groundNightUrl      String?
-  entranceUrl         String?
-  floodLights         Boolean      @default(false)
-  parking             Boolean      @default(false)
-  washroom            Boolean      @default(false)
-  changingRoom        Boolean      @default(false)
-  drinkingWater       Boolean      @default(false)
-  seatingArea         Boolean      @default(false)
-  cafeteria           Boolean      @default(false)
-  weekdayDayPrice     Float
-  weekdayNightPrice   Float
-  weekendDayPrice     Float
-  weekendNightPrice   Float
+  id                             String       @id @default(uuid())
+  ownerProfileId                 String
+  name                           String
+  description                    String?
+  sportsType                     SportsType
+  turfSize                       String
+  status                         TurfStatus   @default(ACTIVE)
+  address                        String
+  city                           String
+  pincode                        String
+  lat                            Float
+  lng                            Float
+  openTime                       String
+  closeTime                      String
+  minSlotDurationMins            Int
+  groundDayUrl                   String?
+  groundNightUrl                 String?
+  entranceUrl                    String?
+  floodLights                    Boolean      @default(false)
+  parking                        Boolean      @default(false)
+  washroom                       Boolean      @default(false)
+  changingRoom                   Boolean      @default(false)
+  drinkingWater                  Boolean      @default(false)
+  seatingArea                    Boolean      @default(false)
+  cafeteria                      Boolean      @default(false)
+  weekdayDayPrice                Float
+  weekdayNightPrice              Float
+  weekendDayPrice                Float
+  weekendNightPrice              Float
   // Cancellation Policy
-  cancellationAllowedBeforeHours Int   @default(2)
-  cancellationRefundPercentage   Float @default(75.0)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-  deletedAt           DateTime?
-  owner               OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
-  bookings            Booking[]
-  savedByUsers        SavedTurf[]
-  ratings             TurfRating[]
+  cancellationAllowedBeforeHours Int          @default(2)
+  cancellationRefundPercentage   Float        @default(75.0)
+  createdAt                      DateTime     @default(now())
+  updatedAt                      DateTime     @updatedAt
+  deletedAt                      DateTime?
+  owner                          OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+  bookings                       Booking[]
+  savedByUsers                   SavedTurf[]
+  ratings                        TurfRating[]
 
   @@index([ownerProfileId])
   @@index([city])
@@ -123,21 +124,21 @@ model Turf {
 }
 
 model Payment {
-  id             String        @id @default(uuid())
-  authId         String        @unique
-  role           Role
-  upiId          String
-  userProfileId  String?       @unique
-  ownerProfileId String?       @unique
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  auth           Auth          @relation(fields: [authId], references: [id], onDelete: Cascade)
-  ownerProfile   OwnerProfile? @relation(fields: [ownerProfileId], references: [id])
-  userProfile    UserProfile?  @relation(fields: [userProfileId], references: [id])
-  bankAccount    String?       @map("bank_account")
-  payoutMethod   PayoutMethod? @default(UPI) @map("payout_method")
-  payoutFrequency String?      @default("MANUAL") @map("payout_frequency")
-  isActive       Boolean       @default(true) @map("is_active")
+  id              String        @id @default(uuid())
+  authId          String        @unique
+  role            Role
+  upiId           String
+  userProfileId   String?       @unique
+  ownerProfileId  String?       @unique
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  auth            Auth          @relation(fields: [authId], references: [id], onDelete: Cascade)
+  ownerProfile    OwnerProfile? @relation(fields: [ownerProfileId], references: [id])
+  userProfile     UserProfile?  @relation(fields: [userProfileId], references: [id])
+  bankAccount     String?       @map("bank_account")
+  payoutMethod    PayoutMethod? @default(UPI) @map("payout_method")
+  payoutFrequency String?       @default("MANUAL") @map("payout_frequency")
+  isActive        Boolean       @default(true) @map("is_active")
 
   @@index([authId])
   @@index([role])
@@ -242,7 +243,7 @@ model SlotLock {
   startTime   String   @map("start_time")
   endTime     String   @map("end_time")
   expiresAt   DateTime @map("expires_at")
-  bookingId   String?  @map("booking_id") @unique
+  bookingId   String?  @unique @map("booking_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -318,16 +319,34 @@ enum PayoutMethod {
 }
 
 model UserGamification {
-  id              String   @id @default(uuid())
-  authId          String   @unique @map("auth_id")
-  streak          Int      @default(0)
-  points          Int      @default(0)
-  totalMatches    Int      @default(0) @map("total_matches")
-  totalHours      Float    @default(0) @map("total_hours")
-  lastPlayedDate  DateTime? @map("last_played_date")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  auth            Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+  id             String    @id @default(uuid())
+  authId         String    @unique @map("auth_id")
+  streak         Int       @default(0)
+  points         Int       @default(0)
+  totalMatches   Int       @default(0) @map("total_matches")
+  totalHours     Float     @default(0) @map("total_hours")
+  lastPlayedDate DateTime? @map("last_played_date")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  auth           Auth      @relation(fields: [authId], references: [id], onDelete: Cascade)
 
   @@map("user_gamification")
+}
+
+model UserSettings {
+  id                   String      @id @default(uuid())
+  authId               String      @unique @map("auth_id")
+  notificationsEnabled Boolean     @default(true) @map("notifications_enabled")
+  preferredTime        String?     @map("preferred_time")
+  favoriteSport        SportsType? @map("favorite_sport")
+  favoriteTurfIds      String[]    @default([]) @map("favorite_turf_ids")
+  bookingAlerts        Boolean     @default(true) @map("booking_alerts")
+  offerAlerts          Boolean     @default(true) @map("offer_alerts")
+  reminderAlerts       Boolean     @default(true) @map("reminder_alerts")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+  auth                 Auth        @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@index([authId])
+  @@map("user_settings")
 }

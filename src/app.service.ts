@@ -399,6 +399,53 @@ export class AppService {
         ],
       },
       {
+        module: 'User Settings',
+        basePath: '/api/v3/user-settings',
+        status: 'working',
+        routes: [
+          {
+            method: 'GET',
+            path: '/payment',
+            message: 'User payment settings endpoint working',
+          },
+          {
+            method: 'PATCH',
+            path: '/payment',
+            message: 'User payment settings update endpoint working',
+          },
+          {
+            method: 'POST',
+            path: '/change-password',
+            message: 'User change-password endpoint working',
+          },
+          {
+            method: 'POST',
+            path: '/change-phone',
+            message: 'User change-phone endpoint working',
+          },
+          {
+            method: 'GET',
+            path: '/preferences',
+            message: 'User preferences endpoint working',
+          },
+          {
+            method: 'PATCH',
+            path: '/preferences',
+            message: 'User preferences update endpoint working',
+          },
+          {
+            method: 'GET',
+            path: '/notifications',
+            message: 'User notifications endpoint working',
+          },
+          {
+            method: 'PATCH',
+            path: '/notifications',
+            message: 'User notifications update endpoint working',
+          },
+        ],
+      },
+      {
         module: 'Owner Settings',
         basePath: '/api/v3/owner-settings',
         status: 'working',
