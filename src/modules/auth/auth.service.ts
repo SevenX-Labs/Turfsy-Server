@@ -83,21 +83,24 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────
-  // POST /login
+  // POST /user/login  or  /owner/login
+  // Role is determined by the endpoint, not by the user
   // ─────────────────────────────────────────
 
-  async login(dto: LoginDto, ip: string, userAgent: string, forcedRole: Role) {
+  async login(dto: LoginDto, ip: string, userAgent: string, role: Role) {
     const { phone } = dto;
 
     let auth = await this.prisma.auth.findUnique({ where: { phone } });
     if (!auth) {
+      // First time user — create auth record with this role
       auth = await this.prisma.auth.create({
-        data: { phone, role: forcedRole },
+        data: { phone, role },
       });
-    } else if (auth.role !== forcedRole) {
+    } else if (auth.role !== role) {
+      // Same phone switching between apps — update role to match current app
       auth = await this.prisma.auth.update({
         where: { id: auth.id },
-        data: { role: forcedRole },
+        data: { role },
       });
     }
 
@@ -105,8 +108,7 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
-    // Invalidate all previous unverified OTPs for this account
-    // so old sessionTokens can never be reused
+    // Invalidate all previous unverified OTPs
     await this.prisma.otpEntry.deleteMany({
       where: { authId: auth.id, verifiedAt: null },
     });
@@ -115,7 +117,7 @@ export class AuthService {
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
 
-    const otpEntry = await this.prisma.otpEntry.create({
+    await this.prisma.otpEntry.create({
       data: { authId: auth.id, code: hashedOtp, expiresAt },
     });
 
@@ -129,10 +131,11 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────
-  // POST /verify-otp
+  // POST /user/verify-otp  or  /owner/verify-otp
+  // Role is determined by the endpoint
   // ─────────────────────────────────────────
 
-  async verifyOtp(dto: VerifyOtpDto, forcedRole: Role) {
+  async verifyOtp(dto: VerifyOtpDto, role: Role) {
     const { phone, otp } = dto;
 
     const auth = await this.prisma.auth.findUnique({
@@ -146,7 +149,6 @@ export class AuthService {
     const otpEntry = await this.prisma.otpEntry.findFirst({
       where: { authId: auth.id, verifiedAt: null },
       orderBy: { createdAt: 'desc' },
-      include: { auth: true },
     });
 
     if (!otpEntry) {
@@ -172,58 +174,56 @@ export class AuthService {
       data: { verifiedAt: new Date() },
     });
 
+    // Ensure role in DB matches the endpoint role
+    await this.prisma.auth.update({
+      where: { id: auth.id },
+      data: { isVerified: true, role },
+    });
+
     // Create session (30-day inactivity window)
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const session = await this.prisma.session.create({
-      data: { authId: otpEntry.authId, expiresAt },
+      data: { authId: auth.id, expiresAt },
     });
 
-    // Mark auth as verified
-    await this.prisma.auth.update({
-      where: { id: otpEntry.authId },
-      data: { isVerified: true },
-    });
+    // Initialize profile if needed and get profile data
+    const profileResult = await this.initializeAndFetchProfile(auth.id, role);
 
-    // Role is determined strictly by endpoint (user/* or owner/*).
-    const roleSelectionResult = await this.selectRole(otpEntry.authId, forcedRole);
-    const selectedRole = forcedRole;
-
-    const token = this.generateSessionToken(otpEntry.auth.id, session.id, selectedRole);
+    // Generate JWT with the role from the endpoint
+    const token = this.generateSessionToken(auth.id, session.id, role);
 
     return {
       success: true,
       message: 'OTP verified successfully',
       accessToken: token,
-      ...(roleSelectionResult
-        ? {
-            role: selectedRole,
-            isNewUser: roleSelectionResult.isNewUser,
-            profile: roleSelectionResult.profile,
-          }
-        : {}),
+      role,
+      isNewUser: profileResult.isNewUser,
+      profile: profileResult.profile,
     };
   }
 
   // ─────────────────────────────────────────
-  // POST /select-role — set role, return profile
+  // Internal: Initialize profile & fetch data
+  // Called after OTP verification — no separate endpoint needed
   // ─────────────────────────────────────────
 
-  async selectRole(authId: string, role: Role) {
+  private async initializeAndFetchProfile(authId: string, role: Role) {
     const auth = await this.prisma.auth.findUnique({
       where: { id: authId },
-      include: { userProfile: true, ownerProfile: true },
+      select: {
+        id: true,
+        phone: true,
+        role: true,
+        isVerified: true,
+        isActive: true,
+        userProfile: true,
+        ownerProfile: true,
+      },
     });
 
     if (!auth) throw new NotFoundException('Account not found');
-    if (!auth.isActive) throw new UnauthorizedException('Account is deactivated');
 
-    // Update role in DB
-    await this.prisma.auth.update({
-      where: { id: authId },
-      data: { role },
-    });
-
-    // isNewUser = true if profile has no name yet
+    // Determine if this is a new user (no profile name yet)
     const isNewUser =
       role === Role.USER
         ? !auth.userProfile || !auth.userProfile.name
@@ -261,23 +261,18 @@ export class AuthService {
             ...ownerProfile,
             turfs,
           };
-        } else {
-          profile = null;
         }
       }
     }
 
     return {
-      success: true,
-      message: isNewUser ? 'Welcome! Please complete your profile.' : 'Welcome back!',
-      role,
       isNewUser,
       profile: profile ?? null,
     };
   }
 
   // ─────────────────────────────────────────
-  // POST /resend-otp
+  // POST /user/resend-otp  or  /owner/resend-otp
   // ─────────────────────────────────────────
 
   async resendOtp(dto: ResendOtpDto) {
@@ -294,7 +289,6 @@ export class AuthService {
     const otpEntry = await this.prisma.otpEntry.findFirst({
       where: { authId: auth.id, verifiedAt: null },
       orderBy: { createdAt: 'desc' },
-      include: { auth: true },
     });
 
     if (!otpEntry) {
@@ -334,7 +328,7 @@ export class AuthService {
       },
     });
 
-    await this.sendOtpViaSms(otpEntry.auth.phone, otp);
+    await this.sendOtpViaSms(auth.phone, otp);
 
     return {
       success: true,
@@ -490,7 +484,6 @@ export class AuthService {
             data: {
               authId,
               name: '',
-              // email is unique in schema, so avoid duplicate empty-string collisions
               email: placeholderEmail,
               avatarUrl: '',
               dob: new Date(),
@@ -498,7 +491,6 @@ export class AuthService {
             },
           });
         } catch (error) {
-          // Handle concurrent first-login requests safely.
           if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
             return;
           }
@@ -517,16 +509,13 @@ export class AuthService {
             data: {
               authId,
               name: '',
-              // email is unique in schema, so avoid duplicate empty-string collisions
               email: placeholderEmail,
-              // keep placeholders unique to avoid hidden unique-index collisions
               contactNumber: placeholderContact,
               avatarUrl: '',
               aadharNumber: placeholderAadhar,
             },
           });
         } catch (error) {
-          // Handle concurrent first-login requests safely.
           if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
             return;
           }
@@ -561,8 +550,6 @@ export class AuthService {
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
 
-    // Store new phone temporarily in the OTP entry sessionToken metadata
-    // by creating OTP entry and returning the sessionToken + newPhone context
     const otpEntry = await this.prisma.otpEntry.create({
       data: { authId, code: hashedOtp, expiresAt },
     });

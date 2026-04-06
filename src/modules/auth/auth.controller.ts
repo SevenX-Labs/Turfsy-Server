@@ -22,7 +22,10 @@ import { Role } from '@prisma/client';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // User app login (role auto-set to USER)
+  // ═══════════════════════════════════════════
+  //  USER APP ENDPOINTS — role auto-set to USER
+  // ═══════════════════════════════════════════
+
   @Post('user/login')
   @HttpCode(HttpStatus.OK)
   async userLogin(
@@ -33,7 +36,22 @@ export class AuthController {
     return this.authService.login(dto, ip, userAgent, Role.USER);
   }
 
-  // Owner app login (role auto-set to OWNER)
+  @Post('user/verify-otp')
+  @HttpCode(HttpStatus.OK)
+  async userVerifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto, Role.USER);
+  }
+
+  @Post('user/resend-otp')
+  @HttpCode(HttpStatus.OK)
+  async userResendOtp(@Body() dto: ResendOtpDto) {
+    return this.authService.resendOtp(dto);
+  }
+
+  // ═══════════════════════════════════════════
+  //  OWNER APP ENDPOINTS — role auto-set to OWNER
+  // ═══════════════════════════════════════════
+
   @Post('owner/login')
   @HttpCode(HttpStatus.OK)
   async ownerLogin(
@@ -44,33 +62,21 @@ export class AuthController {
     return this.authService.login(dto, ip, userAgent, Role.OWNER);
   }
 
-  // User app OTP verify (role auto-set to USER)
-  @Post('user/verify-otp')
-  @HttpCode(HttpStatus.OK)
-  async userVerifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto, Role.USER);
-  }
-
-  // Owner app OTP verify (role auto-set to OWNER)
   @Post('owner/verify-otp')
   @HttpCode(HttpStatus.OK)
   async ownerVerifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto, Role.OWNER);
   }
 
-  // User app OTP resend (same body)
-  @Post('user/resend-otp')
-  @HttpCode(HttpStatus.OK)
-  async userResendOtp(@Body() dto: ResendOtpDto) {
-    return this.authService.resendOtp(dto);
-  }
-
-  // Owner app OTP resend (same body)
   @Post('owner/resend-otp')
   @HttpCode(HttpStatus.OK)
   async ownerResendOtp(@Body() dto: ResendOtpDto) {
     return this.authService.resendOtp(dto);
   }
+
+  // ═══════════════════════════════════════════
+  //  SHARED ENDPOINTS (both apps use these)
+  // ═══════════════════════════════════════════
 
   // Logout — revoke session
   @Get('logout')
@@ -88,7 +94,7 @@ export class AuthController {
     return this.authService.deleteAccount(req.user.authId, dto);
   }
 
-  // Get authenticated user profile
+  // Get authenticated user/owner profile
   @Get('get-me')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
