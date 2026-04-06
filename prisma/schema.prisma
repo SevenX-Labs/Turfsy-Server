@@ -34,11 +34,11 @@ model Auth {
 model UserProfile {
   id             String      @id @default(uuid())
   authId         String      @unique
-  name           String
-  email          String      @unique
+  name           String?
+  email          String?     @unique
   avatarUrl      String?
-  dob            DateTime
-  gender         Gender
+  dob            DateTime?
+  gender         Gender?
   preferredSport SportsType? @map("preferred_sport")
   currentLat     Float?
   currentLng     Float?
@@ -52,11 +52,11 @@ model UserProfile {
 model OwnerProfile {
   id            String   @id @default(uuid())
   authId        String   @unique
-  name          String
-  email         String   @unique
-  contactNumber String
+  name          String?
+  email         String?  @unique
+  contactNumber String?
   avatarUrl     String?
-  aadharNumber  String
+  aadharNumber  String?
   aadharUrl     String?
   isKycVerified Boolean  @default(false)
   createdAt     DateTime @default(now())

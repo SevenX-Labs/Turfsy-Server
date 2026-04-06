@@ -11,7 +11,8 @@ import { Gender, Role } from '@prisma/client';
 
 const mockPrisma = {
   auth: { findUnique: jest.fn() },
-  userProfile: { findUnique: jest.fn(), update: jest.fn() },
+  userProfile: { findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn() },
+  userSettings: { upsert: jest.fn() },
   payment: { upsert: jest.fn() },
 };
 
@@ -42,26 +43,46 @@ describe('UserProfileService', () => {
 
   describe('createProfile()', () => {
     it('should create profile successfully', async () => {
-      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', role: Role.USER, userProfile: { name: '' } });
+      mockPrisma.auth.findUnique.mockResolvedValue({
+        id: 'auth-1',
+        role: Role.USER,
+        isVerified: true,
+        userProfile: { name: '' },
+      });
       mockPrisma.userProfile.findUnique.mockResolvedValue(null);
-      mockPrisma.userProfile.update.mockResolvedValue({ id: 'profile-1', ...dto });
+      mockPrisma.userProfile.upsert.mockResolvedValue({ id: 'profile-1', ...dto });
 
       const result = await service.createProfile('auth-1', dto);
       expect(result.success).toBe(true);
     });
 
     it('should throw ForbiddenException if role is OWNER', async () => {
-      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', role: Role.OWNER, userProfile: null });
+      mockPrisma.auth.findUnique.mockResolvedValue({
+        id: 'auth-1',
+        role: Role.OWNER,
+        isVerified: true,
+        userProfile: null,
+      });
       await expect(service.createProfile('auth-1', dto)).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw ConflictException if profile already created', async () => {
-      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', role: Role.USER, userProfile: { name: 'Existing' } });
+      mockPrisma.auth.findUnique.mockResolvedValue({
+        id: 'auth-1',
+        role: Role.USER,
+        isVerified: true,
+        userProfile: { name: 'Existing' },
+      });
       await expect(service.createProfile('auth-1', dto)).rejects.toThrow(ConflictException);
     });
 
     it('should throw ConflictException if email already in use', async () => {
-      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', role: Role.USER, userProfile: { name: '' } });
+      mockPrisma.auth.findUnique.mockResolvedValue({
+        id: 'auth-1',
+        role: Role.USER,
+        isVerified: true,
+        userProfile: { name: '' },
+      });
       mockPrisma.userProfile.findUnique.mockResolvedValue({ id: 'other-profile' });
       await expect(service.createProfile('auth-1', dto)).rejects.toThrow(ConflictException);
     });
@@ -93,25 +114,20 @@ describe('UserProfileService', () => {
     it('should update profile successfully', async () => {
       mockPrisma.userProfile.findUnique.mockResolvedValue({ id: 'profile-1', authId: 'auth-1', email: 'old@test.com' });
       mockPrisma.userProfile.update.mockResolvedValue({ id: 'profile-1', name: 'Updated' });
-      const result = await service.updateProfile('auth-1', 'profile-1', { name: 'Updated' });
+      const result = await service.updateProfile('auth-1', { name: 'Updated' });
       expect(result.success).toBe(true);
     });
 
     it('should throw NotFoundException if profile not found', async () => {
       mockPrisma.userProfile.findUnique.mockResolvedValue(null);
-      await expect(service.updateProfile('auth-1', 'bad-id', {})).rejects.toThrow(NotFoundException);
-    });
-
-    it('should throw ForbiddenException if authId does not match', async () => {
-      mockPrisma.userProfile.findUnique.mockResolvedValue({ id: 'profile-1', authId: 'other-auth' });
-      await expect(service.updateProfile('auth-1', 'profile-1', {})).rejects.toThrow(ForbiddenException);
+      await expect(service.updateProfile('auth-1', {})).rejects.toThrow(NotFoundException);
     });
 
     it('should throw ConflictException if new email already in use', async () => {
       mockPrisma.userProfile.findUnique
         .mockResolvedValueOnce({ id: 'profile-1', authId: 'auth-1', email: 'old@test.com' })
         .mockResolvedValueOnce({ id: 'other-profile' });
-      await expect(service.updateProfile('auth-1', 'profile-1', { email: 'taken@test.com' })).rejects.toThrow(ConflictException);
+      await expect(service.updateProfile('auth-1', { email: 'taken@test.com' })).rejects.toThrow(ConflictException);
     });
   });
 

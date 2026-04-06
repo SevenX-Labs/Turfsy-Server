@@ -40,6 +40,7 @@ describe('AuthService', () => {
   let service: AuthService;
 
   beforeEach(async () => {
+    mockJwt.sign.mockReturnValue('mocked.jwt.token');
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -88,20 +89,17 @@ describe('AuthService', () => {
     };
 
     it('should verify OTP, select role, and return JWT', async () => {
-      mockPrisma.auth.findUnique.mockResolvedValueOnce({ id: 'auth-1', phone: '9876543210' });
+      mockPrisma.auth.findUnique.mockResolvedValueOnce({
+        id: 'auth-1',
+        phone: '9876543210',
+        userProfile: null,
+        ownerProfile: null,
+      });
       mockPrisma.otpEntry.findFirst.mockResolvedValue(mockOtpEntry);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       mockPrisma.otpEntry.update.mockResolvedValue({});
       mockPrisma.session.create.mockResolvedValue({ id: 'session-1' });
       mockPrisma.auth.update.mockResolvedValue({});
-      mockPrisma.auth.findUnique.mockResolvedValueOnce({
-        id: 'auth-1',
-        isActive: true,
-        userProfile: null,
-        ownerProfile: null,
-      });
-      mockPrisma.userProfile.findUnique.mockResolvedValue(null);
-      mockPrisma.userProfile.create.mockResolvedValue({});
 
       const result = await service.verifyOtp({ phone: '9876543210', otp: '123456' }, Role.USER);
 

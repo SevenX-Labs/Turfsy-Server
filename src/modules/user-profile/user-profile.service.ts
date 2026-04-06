@@ -15,7 +15,10 @@ import { Role } from '@prisma/client';
 export class UserProfileService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Create profile — only USER role, only if name is still empty
+  // Create profile — only USER role.
+  // Works for both flows:
+  // 1) no profile row exists yet (new behavior)
+  // 2) legacy empty profile row already exists
   async createProfile(authId: string, dto: CreateUserProfileDto) {
     const auth = await this.prisma.auth.findUnique({
       where: { id: authId },
@@ -36,9 +39,20 @@ export class UserProfileService {
     });
     if (emailExists) throw new ConflictException('Email already in use');
 
-    const profile = await this.prisma.userProfile.update({
+    const profile = await this.prisma.userProfile.upsert({
       where: { authId },
-      data: {
+      create: {
+        authId,
+        name: dto.name,
+        email: dto.email,
+        dob: new Date(dto.dob),
+        gender: dto.gender,
+        preferredSport: dto.preferredSport ?? null,
+        currentLat: dto.currentLat ?? null,
+        currentLng: dto.currentLng ?? null,
+        currentCity: dto.currentCity ?? null,
+      },
+      update: {
         name: dto.name,
         email: dto.email,
         dob: new Date(dto.dob),

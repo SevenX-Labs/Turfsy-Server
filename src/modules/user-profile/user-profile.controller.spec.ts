@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UserProfileController } from './user-profile.controller';
 import { UserProfileService } from './user-profile.service';
 import { Gender } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 const mockService = {
   createProfile: jest.fn(),
@@ -16,10 +17,16 @@ describe('UserProfileController', () => {
   const req = { user: { authId: 'auth-1' } };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    const moduleBuilder = Test.createTestingModule({
       controllers: [UserProfileController],
       providers: [{ provide: UserProfileService, useValue: mockService }],
-    }).compile();
+    });
+
+    moduleBuilder.overrideGuard(JwtAuthGuard).useValue({
+      canActivate: jest.fn().mockResolvedValue(true),
+    });
+
+    const module: TestingModule = await moduleBuilder.compile();
     controller = module.get<UserProfileController>(UserProfileController);
   });
 
@@ -40,10 +47,10 @@ describe('UserProfileController', () => {
     expect(result.success).toBe(true);
   });
 
-  it('PATCH /:id — updateProfile', async () => {
+  it('PATCH / — updateProfile', async () => {
     mockService.updateProfile.mockResolvedValue({ success: true });
-    const result = await controller.updateProfile(req, 'profile-1', { name: 'Updated' });
-    expect(mockService.updateProfile).toHaveBeenCalledWith('auth-1', 'profile-1', { name: 'Updated' });
+    const result = await controller.updateProfile(req, { name: 'Updated' });
+    expect(mockService.updateProfile).toHaveBeenCalledWith('auth-1', { name: 'Updated' });
     expect(result.success).toBe(true);
   });
 

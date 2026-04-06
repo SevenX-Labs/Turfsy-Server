@@ -1,12 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserGamificationService } from './user-gamification.service';
+import { PrismaService } from '../../prisma/prisma.service';
+
+const mockPrisma = {
+  booking: { findUnique: jest.fn() },
+  userGamification: {
+    findUnique: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
+  },
+};
 
 describe('UserGamificationService', () => {
   let service: UserGamificationService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [UserGamificationService],
+      providers: [
+        UserGamificationService,
+        { provide: PrismaService, useValue: mockPrisma },
+      ],
     }).compile();
 
     service = module.get<UserGamificationService>(UserGamificationService);

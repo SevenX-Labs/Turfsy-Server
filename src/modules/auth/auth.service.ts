@@ -140,6 +140,10 @@ export class AuthService {
 
     const auth = await this.prisma.auth.findUnique({
       where: { phone },
+      include: {
+        userProfile: true,
+        ownerProfile: true,
+      },
     });
 
     if (!auth) {
@@ -186,8 +190,8 @@ export class AuthService {
       data: { authId: auth.id, expiresAt },
     });
 
-    // Initialize profile if needed and get profile data
-    const profileResult = await this.initializeAndFetchProfile(auth.id, role);
+    // Determine if this is a new user (no profile yet)
+    const isNewUser = role === Role.USER ? !auth.userProfile : !auth.ownerProfile;
 
     // Generate JWT with the role from the endpoint
     const token = this.generateSessionToken(auth.id, session.id, role);
@@ -197,77 +201,12 @@ export class AuthService {
       message: 'OTP verified successfully',
       accessToken: token,
       role,
-      isNewUser: profileResult.isNewUser,
-      profile: profileResult.profile,
-    };
-  }
-
-  // ─────────────────────────────────────────
-  // Internal: Initialize profile & fetch data
-  // Called after OTP verification — no separate endpoint needed
-  // ─────────────────────────────────────────
-
-  private async initializeAndFetchProfile(authId: string, role: Role) {
-    const auth = await this.prisma.auth.findUnique({
-      where: { id: authId },
-      select: {
-        id: true,
-        phone: true,
-        role: true,
-        isVerified: true,
-        isActive: true,
-        userProfile: true,
-        ownerProfile: true,
-      },
-    });
-
-    if (!auth) throw new NotFoundException('Account not found');
-
-    // Determine if this is a new user (no profile name yet)
-    const isNewUser =
-      role === Role.USER
-        ? !auth.userProfile || !auth.userProfile.name
-        : !auth.ownerProfile || !auth.ownerProfile.name;
-
-    // Create empty profile row if first time
-    await this.createProfileIfNotExists(authId, role);
-
-    // Fetch full profile for returning users
-    let profile: Record<string, any> | null = null;
-    if (!isNewUser) {
-      if (role === Role.USER) {
-        profile = await this.prisma.userProfile.findUnique({
-          where: { authId },
-          include: { payment: true },
-        });
-      } else {
-        const ownerProfile = await this.prisma.ownerProfile.findUnique({
-          where: { authId },
-          include: { payment: true },
-        });
-
-        if (ownerProfile) {
-          await this.normalizeOwnerTurfStatuses(authId);
-
-          const turfs = await this.prisma.turf.findMany({
-            where: {
-              owner: { authId },
-              deletedAt: null,
-            },
-            orderBy: { createdAt: 'desc' },
-          });
-
-          profile = {
-            ...ownerProfile,
-            turfs,
-          };
-        }
-      }
-    }
-
-    return {
       isNewUser,
-      profile: profile ?? null,
+      auth: {
+        id: auth.id,
+        phone: auth.phone,
+        role: role,
+      },
     };
   }
 
@@ -463,66 +402,16 @@ export class AuthService {
       };
     }
 
+    // Include phone number in the result specifically
     return {
       success: true,
       data: {
         ...authData,
+        phone: auth.phone,
         profile,
         payment,
       },
     };
-  }
-
-  // Create empty profile row on first login
-  private async createProfileIfNotExists(authId: string, role: Role) {
-    if (role === Role.USER) {
-      const exists = await this.prisma.userProfile.findUnique({ where: { authId } });
-      if (!exists) {
-        const placeholderEmail = `user_${authId}@placeholder.turfsy.local`;
-        try {
-          await this.prisma.userProfile.create({
-            data: {
-              authId,
-              name: '',
-              email: placeholderEmail,
-              avatarUrl: '',
-              dob: new Date(),
-              gender: 'PREFER_NOT_TO_SAY' as any,
-            },
-          });
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            return;
-          }
-          throw error;
-        }
-      }
-    } else if (role === Role.OWNER) {
-      const exists = await this.prisma.ownerProfile.findUnique({ where: { authId } });
-      if (!exists) {
-        const placeholderEmail = `owner_${authId}@placeholder.turfsy.local`;
-        const compactAuth = authId.replace(/-/g, '');
-        const placeholderContact = `9${compactAuth.slice(0, 9).padEnd(9, '0')}`;
-        const placeholderAadhar = compactAuth.slice(0, 12).padEnd(12, '0');
-        try {
-          await this.prisma.ownerProfile.create({
-            data: {
-              authId,
-              name: '',
-              email: placeholderEmail,
-              contactNumber: placeholderContact,
-              avatarUrl: '',
-              aadharNumber: placeholderAadhar,
-            },
-          });
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            return;
-          }
-          throw error;
-        }
-      }
-    }
   }
 
   // ─────────────────────────────────────────

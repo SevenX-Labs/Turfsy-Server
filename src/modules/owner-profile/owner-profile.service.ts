@@ -57,9 +57,16 @@ export class OwnerProfileService {
     });
     if (emailExists) throw new ConflictException('Email already in use');
 
-    const profile = await this.prisma.ownerProfile.update({
+    const profile = await this.prisma.ownerProfile.upsert({
       where: { authId },
-      data: {
+      create: {
+        authId,
+        name: dto.name,
+        email: dto.email,
+        contactNumber: auth.phone,
+        aadharNumber: dto.aadharNumber,
+      },
+      update: {
         name: dto.name,
         email: dto.email,
         contactNumber: auth.phone,
