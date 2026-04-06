@@ -165,7 +165,6 @@ Headers:
 {
   "name": "Owner Test",
   "email": "owner@example.com",
-  "contactNumber": "9876543210",
-  "aadharNumber": "123412341234"
+  "contactNumber": "9876543210"
 }
 ```

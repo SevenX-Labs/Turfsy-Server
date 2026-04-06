@@ -64,13 +64,11 @@ export class OwnerProfileService {
         name: dto.name,
         email: dto.email,
         contactNumber: auth.phone,
-        aadharNumber: dto.aadharNumber,
       },
       update: {
         name: dto.name,
         email: dto.email,
         contactNumber: auth.phone,
-        aadharNumber: dto.aadharNumber,
       },
     });
 

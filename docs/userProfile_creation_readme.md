@@ -1,45 +1,49 @@
-# User Profile API — Endpoint Test Guide
+# User Profile API - Endpoint Test Guide
 
 Base URL: `http://localhost:3000`
 
-> All endpoints require `Authorization: Bearer <accessToken>`.
-> Get your token from `POST /api/v3/auth/verify-otp` → then `POST /api/v3/auth/select-role`.
+All endpoints require:
+- `Authorization: Bearer <accessToken>`
 
----
+Get token from:
+1. `POST /api/v3/auth/user/login`
+2. `POST /api/v3/auth/user/verify-otp`
+
+There is no `/api/v3/auth/select-role` in current code.
 
 ## Recommended Test Flow
 
-```
-1. POST  /api/v3/auth/login                     → get sessionToken (check terminal for OTP)
-2. POST  /api/v3/auth/verify-otp                → get accessToken
-3. POST  /api/v3/auth/select-role  (role: USER) → empty profile row auto-created in DB
-4. POST  /api/v3/user-profile                   → create profile (fill in name, email, etc.)
-5. POST  /api/v3/user-profile/upload-avatar     → upload image (file name uses profile name)
-6. GET   /api/v3/user-profile                   → verify full profile with avatarUrl
-7. PATCH /api/v3/user-profile                   → update any fields
-8. POST  /api/v3/user-profile/location          → update GPS location
-9. POST  /api/v3/user-profile/payment-details   → save UPI ID
-10. DELETE /api/v3/user-profile/upload-avatar                      → delete image (avatarUrl → null)
-```
+1. `POST /api/v3/auth/user/login`
+2. `POST /api/v3/auth/user/verify-otp`
+3. `GET /api/v3/auth/get-me` (shows login phone in `data.phone`)
+4. `POST /api/v3/user-profile`
+5. `POST /api/v3/user-profile/upload-avatar`
+6. `GET /api/v3/user-profile`
+7. `PATCH /api/v3/user-profile`
+8. `POST /api/v3/user-profile/location`
+9. `POST /api/v3/user-profile/payment-details`
+10. `DELETE /api/v3/user-profile/upload-avatar`
 
-> **Upload order note:** Upload avatar after profile creation, so storage file name can include user name.
+## 1. Get Current Account (phone included)
 
----
+`GET /api/v3/auth/get-me`
 
-## 1. POST /api/v3/user-profile — Create Profile
+Headers:
+- `Authorization: Bearer <accessToken>`
 
-> Fills in the profile details first. Then call upload-avatar so file name uses user name.
-> Do not pass `avatarUrl` manually here.
+Notes:
+- Returns `data.phone` (the same mobile number used at login).
+- Returns `data.profile` and `data.payment`.
 
-```
-Method  → POST
-URL     → http://localhost:3000/api/v3/user-profile
-Headers → Content-Type: application/json
-          Authorization: Bearer ACCESS_TOKEN
-```
+## 2. Create Profile
 
-**Request:**
+`POST /api/v3/user-profile`
 
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
+
+Request:
 ```json
 {
   "name": "John Doe",
@@ -53,19 +57,11 @@ Headers → Content-Type: application/json
 }
 ```
 
-| Field            | Type   | Required | Notes                                                   |
-| ---------------- | ------ | -------- | ------------------------------------------------------- |
-| `name`           | string | ✅       | Full name                                               |
-| `email`          | string | ✅       | Must be unique                                          |
-| `dob`            | string | ✅       | Format: `"YYYY-MM-DD"`                                  |
-| `gender`         | string | ✅       | `MALE` \| `FEMALE` \| `OTHER` \| `PREFER_NOT_TO_SAY`    |
-| `preferredSport` | string | ❌       | `CRICKET` \| `FOOTBALL` (used to prioritize home turfs) |
-| `currentLat`     | number | ❌       | Decimal latitude                                        |
-| `currentLng`     | number | ❌       | Decimal longitude                                       |
-| `currentCity`    | string | ❌       | City name                                               |
+Rules:
+- `gender`: `MALE | FEMALE | OTHER | PREFER_NOT_TO_SAY`
+- `preferredSport`: `FOOTBALL | CRICKET` (optional)
 
-**Response `201`:**
-
+Success response:
 ```json
 {
   "success": true,
@@ -74,98 +70,43 @@ Headers → Content-Type: application/json
     "id": "uuid",
     "authId": "uuid",
     "name": "John Doe",
-    "email": "john@example.com",
-    "avatarUrl": null,
-    "dob": "2000-01-15T00:00:00.000Z",
-    "gender": "MALE",
-    "preferredSport": "CRICKET",
-    "currentLat": 19.076,
-    "currentLng": 72.8777,
-    "currentCity": "Mumbai",
-    "createdAt": "2026-03-25T13:00:00.000Z",
-    "updatedAt": "2026-03-25T13:00:00.000Z"
+    "email": "john@example.com"
   }
 }
 ```
 
----
+## 3. Upload Avatar
 
-## 2. POST /api/v3/user-profile/upload-avatar — Upload Profile Picture
+`POST /api/v3/user-profile/upload-avatar`
 
-> Stores image in Supabase Storage → `uploads/users/{authId}/{user-name}.jpg` (or `.png`/`.webp`)
-> Saves public URL as `avatarUrl` in DB. **No image binary in DB.**
-> File name uses profile `name` (sanitized to lowercase slug). Re-upload keeps only one avatar file.
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: multipart/form-data`
 
-```
-Method  → POST
-URL     → http://localhost:3000/api/v3/user-profile/upload-avatar
-Headers → Authorization: Bearer ACCESS_TOKEN
-Body    → form-data
-```
+form-data:
+- `file` (required)
 
-**form-data:**
+Allowed types:
+- `image/jpeg`, `image/jpg`, `image/png`, `image/webp`
 
-| Key    | Type | Value                    |
-| ------ | ---- | ------------------------ |
-| `file` | File | Select image from device |
+Max size:
+- `5 MB`
 
-**Allowed types:** `image/jpeg` · `image/jpg` · `image/png` · `image/webp`
-**Max size:** `5 MB`
+## 4. Delete Avatar
 
-**Response `200`:**
+`DELETE /api/v3/user-profile/upload-avatar`
 
-```json
-{
-  "success": true,
-  "avatarUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/users/{authId}/john-doe.jpg"
-}
-```
+Headers:
+- `Authorization: Bearer <accessToken>`
 
-**Errors:**
-| Status | Reason |
-|---|---|
-| `400` | Field name wrong (must be `file`) / invalid type / exceeds 5 MB / profile name not set |
-| `401` | Missing or invalid token |
-| `404` | Profile row not found (did you call select-role first?) |
-| `500` | Supabase upload failed |
+## 5. Get Profile
 
----
+`GET /api/v3/user-profile`
 
-## 3. DELETE /api/v3/user-profile/upload-avatar — Delete Profile Picture
+Headers:
+- `Authorization: Bearer <accessToken>`
 
-> Removes image from Supabase Storage and sets `avatarUrl = null` in DB.
-
-```
-Method  → DELETE
-URL     → http://localhost:3000/api/v3/user-profile/upload-avatar
-Headers → Authorization: Bearer ACCESS_TOKEN
-```
-
-No body.
-
-**Response `200`:**
-
-```json
-{
-  "success": true,
-  "message": "Profile image deleted successfully"
-}
-```
-
----
-
-## 4. GET /api/v3/user-profile — Get Own Profile
-
-```
-Method  → GET
-URL     → http://localhost:3000/api/v3/user-profile
-Headers → Authorization: Bearer ACCESS_TOKEN
-```
-
-No body.
-
-**Response `200`:**
-
+Success response:
 ```json
 {
   "success": true,
@@ -174,70 +115,38 @@ No body.
     "authId": "uuid",
     "name": "John Doe",
     "email": "john@example.com",
-    "avatarUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/users/{authId}/john-doe.jpg",
-    "dob": "2000-01-15T00:00:00.000Z",
-    "gender": "MALE",
-    "currentLat": 19.076,
-    "currentLng": 72.8777,
-    "currentCity": "Mumbai",
-    "createdAt": "2026-03-25T13:00:00.000Z",
-    "updatedAt": "2026-03-25T13:00:00.000Z",
     "payment": null
   }
 }
 ```
 
----
+## 6. Update Profile
 
-## 5. PATCH /api/v3/user-profile — Update Profile
+`PATCH /api/v3/user-profile`
 
-> Send only the fields you want to update.
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
 
-```
-Method  → PATCH
-URL     → http://localhost:3000/api/v3/user-profile
-Headers → Content-Type: application/json
-          Authorization: Bearer ACCESS_TOKEN
-```
-
-**Request:** (any subset)
-
+Request (any subset):
 ```json
 {
   "name": "John Updated",
   "email": "john.new@example.com",
-  "currentCity": "Pune"
+  "currentCity": "Pune",
+  "preferredSport": "FOOTBALL"
 }
 ```
 
-**Response `200`:**
+## 7. Update Location
 
-```json
-{
-  "success": true,
-  "message": "Profile updated successfully",
-  "data": {
-    "id": "uuid",
-    "name": "John Updated",
-    "email": "john.new@example.com",
-    "currentCity": "Pune"
-  }
-}
-```
+`POST /api/v3/user-profile/location`
 
----
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
 
-## 6. POST /api/v3/user-profile/location — Update Location
-
-```
-Method  → POST
-URL     → http://localhost:3000/api/v3/user-profile/location
-Headers → Content-Type: application/json
-          Authorization: Bearer ACCESS_TOKEN
-```
-
-**Request:**
-
+Request:
 ```json
 {
   "lat": 18.5204,
@@ -246,60 +155,28 @@ Headers → Content-Type: application/json
 }
 ```
 
-| Field  | Type   | Required |
-| ------ | ------ | -------- |
-| `lat`  | number | ✅       |
-| `lng`  | number | ✅       |
-| `city` | string | ❌       |
+## 8. Save Payment Details
 
-**Response `200`:**
+`POST /api/v3/user-profile/payment-details`
 
-```json
-{
-  "success": true,
-  "message": "Location updated successfully",
-  "data": { "lat": 18.5204, "lng": 73.8567, "city": "Pune" }
-}
-```
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
 
----
-
-## 7. POST /api/v3/user-profile/payment-details — Save UPI
-
-```
-Method  → POST
-URL     → http://localhost:3000/api/v3/user-profile/payment-details
-Headers → Content-Type: application/json
-          Authorization: Bearer ACCESS_TOKEN
-```
-
-**Request:**
-
+Request:
 ```json
 {
   "upiId": "john@ybl"
 }
 ```
 
-**Response `200`:**
-
+Success response:
 ```json
 {
   "success": true,
   "message": "Payment details saved successfully",
-  "data": { "upiId": "john@ybl" }
+  "data": {
+    "upiId": "john@ybl"
+  }
 }
 ```
-
----
-
-## Storage Reference
-
-```
-Bucket  : uploads
-Path    : users/{authId}/{user-name}.{ext}
-Access  : Public (must be enabled in Supabase Dashboard → Storage)
-```
-
-> Uploading a new image keeps only one file inside `users/{authId}/` (old avatar file is deleted first).
-> The `authId` comes from the JWT automatically — you never pass it manually.

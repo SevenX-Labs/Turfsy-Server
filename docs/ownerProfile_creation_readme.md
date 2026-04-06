@@ -1,155 +1,83 @@
-# Owner Profile API
+# Owner Profile API - Endpoint Test Guide
 
-All endpoints require authentication (JWT in Authorization header).
-Role must be **OWNER** (set via `/api/v3/auth/select-role`).
+Base URL: `http://localhost:3000`
 
-Base URL: `https://turfsy.onrender.com`
+All owner profile endpoints require:
+- `Authorization: Bearer <accessToken>`
 
----
+Get owner token from:
+1. `POST /api/v3/auth/owner/login`
+2. `POST /api/v3/auth/owner/verify-otp`
+
+There is no `/api/v3/auth/select-role` in current code.
+
+## A) Owner Profile Endpoints
 
 ## 1. Create Owner Profile
 
-**POST** `/api/v3/ownerProfile`
+`POST /api/v3/ownerProfile`
 
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: application/json`
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
 
-**Body:**
+Request:
 ```json
 {
   "name": "Rahul Shah",
   "email": "rahul@example.com",
-  "contactNumber": "9876543210",
-  "aadharNumber": "123456789012"
+  "contactNumber": "9876543210"
 }
 ```
 
-> ⚠️ Can only be called once. Profile is considered "created" once `name` is set.
-> Avatar is uploaded separately via the `upload-avatar` endpoint.
+Important rule:
+- `contactNumber` must match the verified login phone number.
 
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Owner profile created successfully",
-  "data": {
-    "id": "uuid",
-    "authId": "uuid",
-    "name": "Rahul Shah",
-    "email": "rahul@example.com",
-    "contactNumber": "9876543210",
-    "aadharNumber": "123456789012",
-    "avatarUrl": "",
-    "isKycVerified": false,
-    "createdAt": "2026-03-24T...",
-    "updatedAt": "2026-03-24T..."
-  }
-}
-```
+## 2. Get Owner Profile
 
----
+`GET /api/v3/ownerProfile`
 
-## 2. Get Own Profile
+Headers:
+- `Authorization: Bearer <accessToken>`
 
-**GET** `/api/v3/ownerProfile`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-
-No body.
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "authId": "uuid",
-    "name": "Rahul Shah",
-    "email": "rahul@example.com",
-    "contactNumber": "9876543210",
-    "avatarUrl": "https://turfsy.onrender.com/uploads/avatars/owners/uuid-123.jpg",
-    "isKycVerified": false,
-    "turfs": [ /* array of turf objects */ ],
-    "payment": { "upiId": "rahul@upi" }
-  }
-}
-```
-
----
+Returns owner profile + `payment` + `turfs`.
 
 ## 3. Update Owner Profile
 
-**PATCH** `/api/v3/ownerProfile`
+`PATCH /api/v3/ownerProfile`
 
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: application/json`
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
 
-**Body:** (any subset of fields)
+Request (any subset):
 ```json
 {
   "name": "Rahul Shah Updated",
   "email": "rahulnew@example.com",
-  "contactNumber": "9123456789"
+  "contactNumber": "9876543210"
 }
 ```
 
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Owner profile updated successfully",
-  "data": { /* updated owner profile object */ }
-}
-```
+Note:
+- If `contactNumber` is sent, it must still match verified login phone.
 
----
+## 4. Save Payment Details
 
-## 4. Upload Owner Avatar
+`POST /api/v3/ownerProfile/payment-details`
 
-**PATCH** `/api/v3/ownerProfile/upload-avatar`
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
 
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: multipart/form-data`
-
-**Body (form-data):**
-```
-Key:   avatar
-Value: [Image File — jpg/jpeg/png/webp, Max 5MB]
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Avatar updated successfully",
-  "data": {
-    "avatarUrl": "https://turfsy.onrender.com/uploads/avatars/owners/uuid-123456789.jpg"
-  }
-}
-```
-
----
-
-## 5. Save Payment Details (UPI)
-
-**POST** `/api/v3/ownerProfile/payment-details`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: application/json`
-
-**Body:**
+Request:
 ```json
 {
   "upiId": "rahul@upi"
 }
 ```
 
-**Success Response:**
+Success response:
 ```json
 {
   "success": true,
@@ -160,205 +88,104 @@ Value: [Image File — jpg/jpeg/png/webp, Max 5MB]
 }
 ```
 
----
+## B) Owner Turf Endpoints (Current Code)
 
-## 6. Create Turf
+Turf endpoints are under `/api/v3/turfs`, not `/api/v3/ownerProfile/turfs`.
 
-**POST** `/api/v3/ownerProfile/turfs`
+## 5. Create Turf
 
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: application/json`
+`POST /api/v3/turfs`
 
-> ⚠️ Owner must have a completed profile (name set) before creating a turf.
-> Turf images are uploaded separately via `/turfs/:turfId/images`.
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: multipart/form-data`
 
-**Body:**
-```json
-{
-  "name": "Green Arena",
-  "description": "Premium football turf with floodlights",
-  "sportsType": "FOOTBALL",
-  "turfSize": "100x60 ft",
-  "address": "123, MG Road",
-  "city": "Mumbai",
-  "pincode": "400001",
-  "lat": 19.076,
-  "lng": 72.877,
-  "openTime": "06:00",
-  "closeTime": "23:00",
-  "minSlotDurationMins": 60,
-  "floodLights": true,
-  "parking": true,
-  "washroom": true,
-  "changingRoom": false,
-  "drinkingWater": true,
-  "seatingArea": false,
-  "cafeteria": false,
-  "weekdayDayPrice": 800,
-  "weekdayNightPrice": 1200,
-  "weekendDayPrice": 1000,
-  "weekendNightPrice": 1500
-}
-```
+Body:
+- Turf fields from `CreateTurfDto`
+- Optional image files at create time:
+  - `entrance`
+  - `dayTurf`
+  - `nightTurf`
 
-**Enum values:**
-- `sportsType`: `FOOTBALL` | `CRICKET`
+## 6. Get My Turfs
 
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Turf created successfully",
-  "data": {
-    "id": "uuid",
-    "ownerProfileId": "uuid",
-    "name": "Green Arena",
-    "status": "ACTIVE",
-    "groundDayUrl": "",
-    "entranceUrl": "",
-    ...
-  }
-}
-```
+`GET /api/v3/turfs/my`
 
----
+Headers:
+- `Authorization: Bearer <accessToken>`
 
-## 7. Get All My Turfs
+## 7. Update Turf
 
-**GET** `/api/v3/ownerProfile/turfs`
+`PATCH /api/v3/turfs/:turfId`
 
-**Headers:**
-`Authorization: Bearer <accessToken>`
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: multipart/form-data`
 
-No body.
+Supports turf field updates + optional image replacements (`entrance`, `dayTurf`, `nightTurf`).
 
-**Success Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid",
-      "name": "Green Arena",
-      "city": "Mumbai",
-      "status": "ACTIVE",
-      "sportsType": "FOOTBALL",
-      "weekdayDayPrice": 800,
-      ...
-    }
-  ]
-}
-```
+## 8. Update Turf Status
 
----
+`PATCH /api/v3/turfs/:turfId/status`
 
-## 8. Update Turf
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
 
-**PATCH** `/api/v3/ownerProfile/turfs/:turfId`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: application/json`
-
-**Body:** (any subset of turf fields)
-```json
-{
-  "name": "Green Arena Elite",
-  "weekdayDayPrice": 900,
-  "floodLights": true,
-  "closeTime": "23:30"
-}
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Turf updated successfully",
-  "data": { /* updated turf object */ }
-}
-```
-
----
-
-## 9. Upload Turf Images
-
-**POST** `/api/v3/ownerProfile/turfs/:turfId/images`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: multipart/form-data`
-
-**Body (form-data — all fields optional, at least one required):**
-```
-Key: groundDay     → [Image File — main ground day photo]
-Key: groundNight   → [Image File — ground night photo]
-Key: entrance      → [Image File — entrance photo]
-Key: seatingArea   → [Image File — seating area photo]
-```
-
-> Max file size: 10MB per image. Formats: jpg/jpeg/png/webp.
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Turf images updated successfully",
-  "data": {
-    "groundDayUrl": "https://turfsy.onrender.com/uploads/turfs/uuid-123.jpg",
-    "groundNightUrl": "https://turfsy.onrender.com/uploads/turfs/uuid-456.jpg",
-    "entranceUrl": "https://turfsy.onrender.com/uploads/turfs/uuid-789.jpg",
-    "seatingAreaUrl": null
-  }
-}
-```
-
----
-
-## 10. Update Turf Status
-
-**PATCH** `/api/v3/ownerProfile/turfs/:turfId/status`
-
-**Headers:**
-`Authorization: Bearer <accessToken>`
-`Content-Type: application/json`
-
-**Body:**
+Request:
 ```json
 {
   "status": "ACTIVE"
 }
 ```
 
-**Enum values:**
-- `status`: `ACTIVE` | `INACTIVE`
+Allowed values:
+- `ACTIVE`
+- `INACTIVE`
 
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Turf status updated to ACTIVE",
-  "data": {
-    "id": "uuid",
-    "status": "ACTIVE"
-  }
-}
-```
+## 9. Upload Turf Images
 
----
+`POST /api/v3/turfs/:turfId/images`
 
-## Test Order
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: multipart/form-data`
 
-```
-1. POST /select-role           → role: "OWNER"
-2. POST /ownerProfile          → fill name, email, contact, aadhar
-3. PATCH /ownerProfile/upload-avatar  → upload profile picture
-4. POST /ownerProfile/payment-details → save UPI ID
-5. POST /ownerProfile/turfs    → create turf (no images yet)
-6. POST /ownerProfile/turfs/:id/images → upload ground/entrance photos
-7. PATCH /ownerProfile/turfs/:id/status → toggle ACTIVE/INACTIVE when needed
-8. GET  /ownerProfile          → verify full profile with turfs + payment
-9. PATCH /ownerProfile         → update any profile field anytime
-10. PATCH /ownerProfile/turfs/:id → update any turf field anytime
-```
+Form-data keys:
+- `entrance` (optional)
+- `dayTurf` (optional)
+- `nightTurf` (optional)
+
+At least one image is required.
+
+Current file size limit in controller:
+- `5 MB`
+
+## 10. Upload Single Turf Image
+
+`PATCH /api/v3/turfs/:turfId/upload-image/:type`
+
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: multipart/form-data`
+
+Path param `type`:
+- `entrance`
+- `dayTurf`
+- `nightTurf`
+
+Form-data key:
+- `file`
+
+## Current Test Order
+
+1. `POST /api/v3/auth/owner/login`
+2. `POST /api/v3/auth/owner/verify-otp`
+3. `POST /api/v3/ownerProfile`
+4. `POST /api/v3/ownerProfile/payment-details`
+5. `POST /api/v3/turfs`
+6. `POST /api/v3/turfs/:turfId/images`
+7. `PATCH /api/v3/turfs/:turfId/status`
+8. `GET /api/v3/ownerProfile`
+9. `PATCH /api/v3/ownerProfile`
+10. `PATCH /api/v3/turfs/:turfId`

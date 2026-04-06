@@ -23,7 +23,6 @@ describe('OwnerProfileService', () => {
     name: 'Owner One',
     email: 'owner@test.com',
     contactNumber: '9876543210',
-    aadharNumber: '123456789012',
   };
 
   beforeEach(async () => {
@@ -70,13 +69,11 @@ describe('OwnerProfileService', () => {
           name: createDto.name,
           email: createDto.email,
           contactNumber: '9876543210',
-          aadharNumber: createDto.aadharNumber,
         },
         update: {
           name: createDto.name,
           email: createDto.email,
           contactNumber: '9876543210',
-          aadharNumber: createDto.aadharNumber,
         },
       });
     });

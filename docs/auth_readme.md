@@ -1,35 +1,29 @@
-# Turfsy Auth API — Endpoint Test Bodies
+# Turfsy Auth API - Test Guide
 
-Base URL: `https://turfsy.onrender.com`
+Base URL: `http://localhost:3000`
 
----
+All auth endpoints are under: `/api/v3/auth`
 
-## Auth Split (Important)
+## Role Flow (Important)
 
-Role is selected by endpoint, not by request body:
+Role is decided by endpoint:
+- User app: `/api/v3/auth/user/*`
+- Owner app: `/api/v3/auth/owner/*`
 
-- User app uses `/api/v3/auth/user/*`
-- Owner app uses `/api/v3/auth/owner/*`
-- No `/select-role` step in this flow
+There is no `/select-role` endpoint in current code.
 
----
+## 1. User Login (Send OTP)
 
-## 1. POST /api/v3/auth/user/login
+`POST /api/v3/auth/user/login`
 
-```
-Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/user/login
-Header  → Content-Type: application/json
-```
-
-**Request:**
+Request:
 ```json
 {
-  "phone": "8652601566"
+  "phone": "9876543210"
 }
 ```
 
-**Response:**
+Success response:
 ```json
 {
   "success": true,
@@ -38,25 +32,19 @@ Header  → Content-Type: application/json
 }
 ```
 
----
+## 2. User Verify OTP
 
-## 2. POST /api/v3/auth/user/verify-otp
+`POST /api/v3/auth/user/verify-otp`
 
-```
-Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/user/verify-otp
-Header  → Content-Type: application/json
-```
-
-**Request:**
+Request:
 ```json
 {
-  "phone": "8652601566",
+  "phone": "9876543210",
   "otp": "123456"
 }
 ```
 
-**Response:**
+Success response:
 ```json
 {
   "success": true,
@@ -64,28 +52,26 @@ Header  → Content-Type: application/json
   "accessToken": "eyJhbGci...",
   "role": "USER",
   "isNewUser": true,
-  "profile": null
+  "auth": {
+    "id": "auth-uuid",
+    "phone": "9876543210",
+    "role": "USER"
+  }
 }
 ```
 
----
+## 3. User Resend OTP
 
-## 3. POST /api/v3/auth/user/resend-otp
+`POST /api/v3/auth/user/resend-otp`
 
-```
-Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/user/resend-otp
-Header  → Content-Type: application/json
-```
-
-**Request:**
+Request:
 ```json
 {
-  "phone": "8652601566"
+  "phone": "9876543210"
 }
 ```
 
-**Response:**
+Success response:
 ```json
 {
   "success": true,
@@ -94,133 +80,92 @@ Header  → Content-Type: application/json
 }
 ```
 
----
+## 4. Owner Login (Send OTP)
 
-## 4. POST /api/v3/auth/owner/login
+`POST /api/v3/auth/owner/login`
 
-```
-Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/owner/login
-Header  → Content-Type: application/json
-```
-
-**Request:**
+Request:
 ```json
 {
-  "phone": "8652601566"
+  "phone": "9123456789"
 }
 ```
 
-**Response:**
+## 5. Owner Verify OTP
+
+`POST /api/v3/auth/owner/verify-otp`
+
+Request:
 ```json
 {
-  "success": true,
-  "message": "OTP sent successfully",
-  "expiresIn": 60
-}
-```
-
----
-
-## 5. POST /api/v3/auth/owner/verify-otp
-
-```
-Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/owner/verify-otp
-Header  → Content-Type: application/json
-```
-
-**Request:**
-```json
-{
-  "phone": "8652601566",
+  "phone": "9123456789",
   "otp": "123456"
 }
 ```
 
-**Response:**
+Success response shape is same as user verify, with `role: "OWNER"`.
+
+## 6. Owner Resend OTP
+
+`POST /api/v3/auth/owner/resend-otp`
+
+Request:
 ```json
 {
-  "success": true,
-  "message": "OTP verified successfully",
-  "accessToken": "eyJhbGci...",
-  "role": "OWNER",
-  "isNewUser": true,
-  "profile": null
+  "phone": "9123456789"
 }
 ```
 
----
+## 7. Get Current Account
 
-## 6. POST /api/v3/auth/owner/resend-otp
+`GET /api/v3/auth/get-me`
 
-```
-Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/owner/resend-otp
-Header  → Content-Type: application/json
-```
+Header:
+- `Authorization: Bearer <accessToken>`
 
-**Request:**
-```json
-{
-  "phone": "8652601566"
-}
-```
+Returns auth info plus role-based profile and payment. It includes the login `phone` in `data`.
 
-**Response:**
-```json
-{
-  "success": true,
-  "message": "OTP resent successfully",
-  "expiresIn": 60
-}
-```
-
----
-
-## 7. GET /api/v3/auth/get-me
-
-```
-Method  → GET
-URL     → https://turfsy.onrender.com/api/v3/auth/get-me
-Header  → Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
-```
-
-No body.
-
-**Response:**
+Sample response:
 ```json
 {
   "success": true,
   "data": {
-    "id": "uuid",
+    "id": "3810354a-a2d0-4964-bba4-19a218b205ed",
     "phone": "8652601566",
     "role": "USER",
     "isVerified": true,
     "isActive": true,
+    "createdAt": "2026-04-06T14:28:03.715Z",
+    "updatedAt": "2026-04-06T14:28:22.472Z",
+    "deletedAt": null,
     "profile": {
-      "id": "uuid",
-      "name": "",
-      "email": ""
+      "id": "d3c13f36-39be-4a61-a225-33845ae84d81",
+      "authId": "3810354a-a2d0-4964-bba4-19a218b205ed",
+      "name": "Sahil Hode",
+      "email": "sahilhode67@gmail.com",
+      "avatarUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/users/3810354a-a2d0-4964-bba4-19a218b205ed/sahil-hode.jpg",
+      "dob": "2000-01-20T00:00:00.000Z",
+      "gender": "MALE",
+      "preferredSport": "CRICKET",
+      "currentLat": 28.6139,
+      "currentLng": 77.209,
+      "currentCity": "New Delhi",
+      "createdAt": "2026-04-06T14:30:25.867Z",
+      "updatedAt": "2026-04-06T14:32:23.802Z"
     },
     "payment": null
   }
 }
 ```
 
----
+## 8. Logout
 
-## 8. GET /api/v3/auth/logout
+`GET /api/v3/auth/logout`
 
-```
-Method  → GET
-URL     → https://turfsy.onrender.com/api/v3/auth/logout
-Header  → Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
-```
+Header:
+- `Authorization: Bearer <accessToken>`
 
-No body.
-
-**Response:**
+Success response:
 ```json
 {
   "success": true,
@@ -228,25 +173,22 @@ No body.
 }
 ```
 
----
+## 9. Delete Account
 
-## 9. DELETE /api/v3/auth/delete-account
+`DELETE /api/v3/auth/delete-account`
 
-```
-Method  → DELETE
-URL     → https://turfsy.onrender.com/api/v3/auth/delete-account
-Header  → Content-Type: application/json
-         Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
-```
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
 
-**Request:**
+Request:
 ```json
 {
   "sessionToken": "any-string"
 }
 ```
 
-**Response:**
+Success response:
 ```json
 {
   "success": true,
@@ -254,26 +196,61 @@ Header  → Content-Type: application/json
 }
 ```
 
----
+## 10. Request Phone Change
 
-## Test Order (User App)
+`POST /api/v3/auth/request-phone-change`
 
-```
-1. POST /user/login       → check terminal/SMS for OTP
-2. POST /user/verify-otp  → copy accessToken
-3. GET  /get-me           → use accessToken
-4. POST /user/resend-otp  → uses phone (when needed)
-5. GET  /logout           → use accessToken
-6. DELETE /delete-account → use accessToken
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
+
+Request:
+```json
+{
+  "newPhone": "9988776655"
+}
 ```
 
-## Test Order (Owner App)
+Success response:
+```json
+{
+  "success": true,
+  "message": "OTP sent to 9988776655",
+  "sessionToken": "session-token",
+  "newPhone": "9988776655",
+  "expiresIn": 60
+}
+```
 
+## 11. Verify Phone Change
+
+`POST /api/v3/auth/verify-phone-change`
+
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
+
+Request:
+```json
+{
+  "sessionToken": "session-token",
+  "newPhone": "9988776655",
+  "otp": "123456"
+}
 ```
-1. POST /owner/login       → check terminal/SMS for OTP
-2. POST /owner/verify-otp  → copy accessToken
-3. GET  /get-me            → use accessToken
-4. POST /owner/resend-otp  → uses phone (when needed)
-5. GET  /logout            → use accessToken
-6. DELETE /delete-account  → use accessToken
+
+Success response:
+```json
+{
+  "success": true,
+  "message": "Phone number updated successfully",
+  "data": {
+    "phone": "9988776655"
+  }
+}
 ```
+
+## Validation Notes
+
+- `phone` must be a valid Indian mobile number (`en-IN`).
+- `otp` must be exactly 6 characters.

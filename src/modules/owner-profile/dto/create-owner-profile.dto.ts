@@ -19,9 +19,4 @@ export class CreateOwnerProfileDto {
   @IsNumberString({}, { message: 'Contact number must be digits only' })
   @Length(10, 10, { message: 'Contact number must be exactly 10 digits' })
   contactNumber: string;
-
-  @IsString()
-  @MinLength(12)
-  @MaxLength(12)
-  aadharNumber: string;
 }
