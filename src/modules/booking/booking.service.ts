@@ -206,12 +206,12 @@ export class BookingService {
       booking = await this.prisma.$transaction(async (tx) => {
         // FOR UPDATE lock on conflicting bookings
         const overlapping = await tx.$queryRawUnsafe<any[]>(
-          `SELECT id FROM "bookings"
-           WHERE "turf_id" = $1
-           AND "booking_date" = $2
-           AND "booking_status" IN ('PENDING', 'CONFIRMED')
-           AND "start_time" < $3
-           AND "end_time" > $4
+          `SELECT id FROM "Booking"
+           WHERE "turfId" = $1
+           AND "bookingDate" = $2
+           AND "bookingStatus" IN ('PENDING', 'CONFIRMED')
+           AND "startTime" < $3
+           AND "endTime" > $4
            FOR UPDATE`,
           dto.turfId,
           bookingDate,
@@ -1094,6 +1094,7 @@ export class BookingService {
   // ═══════════════════════════════════════════════════════
   async getOwnerBookings(ownerAuthId: string) {
     const bookings = await this.prisma.booking.findMany({
+      take: 100, // Maximum cap to prevent DoS via OOM exhaustion
       where: {
         turf: {
           owner: { authId: ownerAuthId },

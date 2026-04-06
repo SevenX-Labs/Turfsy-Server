@@ -44,11 +44,4 @@ export class UserGamificationController {
     return this.userGamificationService.getLeaderboardFiltered('totalHours');
   }
 
-  /**
-   * Internal/Testing endpoint to manually trigger gamification check for a booking
-   */
-  @Post('debug/trigger-completion/:bookingId')
-  async triggerCompletion(@Req() req: any, @Param('bookingId') bookingId: string) {
-    return this.userGamificationService.handleBookingCompletion(req.user.authId, bookingId);
-  }
 }

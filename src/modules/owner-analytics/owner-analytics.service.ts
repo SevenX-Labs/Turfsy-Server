@@ -14,6 +14,7 @@ export class OwnerAnalyticsService {
     const turfIds = owner.turfs.map((t) => t.id);
     return this.prisma.booking.findMany({
       where: { turfId: { in: turfIds } },
+      take: 10000, // Maximum cap to prevent OOM
     });
   }
 

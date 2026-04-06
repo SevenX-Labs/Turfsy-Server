@@ -740,11 +740,7 @@ export class AppService {
             path: '/leaderboard/total-hours-played',
             message: 'Gamification hours leaderboard endpoint working',
           },
-          {
-            method: 'POST',
-            path: '/debug/trigger-completion/:bookingId',
-            message: 'Gamification debug completion endpoint working',
-          },
+
         ],
       },
     ];

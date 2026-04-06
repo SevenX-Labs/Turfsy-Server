@@ -68,6 +68,7 @@ export class SavedTurfsService {
 
   async getSavedTurfs(authId: string) {
     const savedTurfs = await this.prisma.savedTurf.findMany({
+      take: 500, // Hard limit to prevent OOM from malicious users
       where: { userId: authId },
       include: {
         turf: {
