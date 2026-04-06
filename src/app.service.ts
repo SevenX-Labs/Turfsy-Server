@@ -13,10 +13,61 @@ type HealthGroup = {
   routes: HealthRoute[];
 };
 
+type LiveEndpoint = {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+};
+
 @Injectable()
 export class AppService {
   getHello(): string {
     return 'Hello World!';
+  }
+
+  getLiveEndpoints(expressApp: any): LiveEndpoint[] {
+    const stack = expressApp?._router?.stack;
+    if (!Array.isArray(stack)) {
+      return [];
+    }
+
+    const allowedMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+    const endpointMap = new Map<string, LiveEndpoint>();
+
+    for (const layer of stack) {
+      const route = layer?.route;
+      if (!route || !route.path || !route.methods) continue;
+
+      const paths = Array.isArray(route.path) ? route.path : [route.path];
+      const methods = Object.keys(route.methods)
+        .filter((method) => route.methods[method])
+        .map((method) => method.toUpperCase())
+        .filter((method) => allowedMethods.has(method));
+
+      for (const rawPath of paths) {
+        const normalizedPath = this.normalizeRoutePath(String(rawPath));
+        for (const method of methods) {
+          const key = `${method} ${normalizedPath}`;
+          endpointMap.set(key, {
+            method: method as LiveEndpoint['method'],
+            path: normalizedPath,
+          });
+        }
+      }
+    }
+
+    return Array.from(endpointMap.values()).sort((a, b) => {
+      if (a.path === b.path) return a.method.localeCompare(b.method);
+      return a.path.localeCompare(b.path);
+    });
+  }
+
+  private normalizeRoutePath(path: string): string {
+    if (!path || path === '/') return '/';
+    const withLeadingSlash = path.startsWith('/') ? path : `/${path}`;
+    const withoutDuplicateSlashes = withLeadingSlash.replace(/\/{2,}/g, '/');
+    return withoutDuplicateSlashes.length > 1
+      ? withoutDuplicateSlashes.replace(/\/$/, '')
+      : withoutDuplicateSlashes;
   }
 
   getEndpointHealthCatalog(): HealthGroup[] {

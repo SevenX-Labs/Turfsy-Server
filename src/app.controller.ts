@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req } from '@nestjs/common';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -15,24 +15,14 @@ export class AppController {
   }
 
   @Get(['health', 'api/v3/health'])
-  async checkHealth() {
+  async checkHealth(@Req() req: any) {
     const endpointGroups = this.appService.getEndpointHealthCatalog();
-    const endpointCount = endpointGroups.reduce(
+    const catalogEndpointCount = endpointGroups.reduce(
       (total, group) => total + group.routes.length,
       0,
     );
-    const allEndpoints = endpointGroups.flatMap((group) =>
-      group.routes.map((route) => ({
-        module: group.module,
-        method: route.method,
-        path:
-          route.path === '/'
-            ? group.basePath
-            : `${group.basePath}${route.path.startsWith('/') ? route.path : `/${route.path}`}`,
-        status: group.status,
-        message: route.message,
-      })),
-    );
+    const allEndpoints = this.appService.getLiveEndpoints(req.app);
+    const endpointCount = allEndpoints.length;
     const numberedModules = endpointGroups.map((group, index) => ({
       index: index + 1,
       label: `${index + 1}. ${group.module} - ${group.routes.length} endpoints`,
@@ -56,7 +46,9 @@ export class AppController {
           status: 'working',
           groups: endpointGroups.length,
           endpoints: endpointCount,
-          message: 'All registered endpoint groups reported as working',
+          catalogEndpoints: catalogEndpointCount,
+          message:
+            'Live endpoint scan completed and grouped endpoint catalog loaded',
           allEndpoints,
           numberedModules,
           modules: endpointGroups,
@@ -75,7 +67,9 @@ export class AppController {
           status: 'degraded',
           groups: endpointGroups.length,
           endpoints: endpointCount,
-          message: 'Endpoint catalog loaded but database health check failed',
+          catalogEndpoints: catalogEndpointCount,
+          message:
+            'Live endpoint scan completed but database health check failed',
           allEndpoints,
           numberedModules,
           modules: endpointGroups,
