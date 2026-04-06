@@ -89,4 +89,5 @@ export const RATE_LIMITS = {
   RATE_TURF: { limit: 1, windowMs: Number.MAX_SAFE_INTEGER },     // lifetime (DB check)
   CRON: { limit: 1, windowMs: 4 * 60 * 1000 },                   // 1 req/endpoint/4min
   AVAILABILITY: { limit: 30, windowMs: 60 * 1000 },              // 30 req/user/1min
+  UPLOAD_AVATAR: { limit: 10, windowMs: 60 * 60 * 1000 },        // 10 req/user/1hour
 } as const;

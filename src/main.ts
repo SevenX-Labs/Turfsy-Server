@@ -15,7 +15,9 @@ async function bootstrap() {
 
   // ── Layer 2: Cross-Origin Resource Sharing ──
   app.enableCors({
-    origin: true,
+    origin: process.env.FRONTEND_URL 
+      ? process.env.FRONTEND_URL.split(',') 
+      : ['http://localhost:3000', 'http://localhost:5173'],
     credentials: true,
   });
 

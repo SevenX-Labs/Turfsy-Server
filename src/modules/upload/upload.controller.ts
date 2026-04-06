@@ -25,10 +25,15 @@ const tmpDiskStorage = diskStorage({
 import { UploadService } from './upload.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+import { RateLimiterService, RATE_LIMITS } from '../../common/services/rate-limiter.service';
+
 @Controller('api/v3/user-profile')
 @UseGuards(JwtAuthGuard)
 export class UploadController {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly rateLimiter: RateLimiterService,
+  ) {}
 
   /**
    * POST /api/v3/user-profile/upload-avatar
@@ -56,6 +61,8 @@ export class UploadController {
     @Req() req: any,
     @UploadedFile() file: Express.Multer.File,
   ) {
+    this.rateLimiter.check(`user:${req.user.authId}:upload-avatar`, RATE_LIMITS.UPLOAD_AVATAR);
+
     if (!file) {
       throw new BadRequestException('Image file is required (field: "file")');
     }

@@ -5,6 +5,8 @@ import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 
+import { RateLimiterService } from '../../common/services/rate-limiter.service';
+
 @Module({
   imports: [
     PrismaModule,
@@ -19,7 +21,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
     }),
   ],
   controllers: [UploadController],
-  providers: [UploadService],
+  providers: [UploadService, RateLimiterService],
   exports: [UploadService],
 })
 export class UploadModule {}
