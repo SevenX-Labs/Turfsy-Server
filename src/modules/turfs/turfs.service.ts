@@ -102,39 +102,44 @@ export class TurfsService {
 
   // 2. Get Nearby Turfs (Haversine distance calculation)
   async getNearbyTurfs(userLat: number, userLng: number, radiusKm: number) {
+    const rawIds = await this.prisma.$queryRaw<{ id: string; distanceKm: number }[]>`
+      SELECT * FROM (
+        SELECT id,
+          (6371 * acos(
+            least(1.0, cos(radians(${userLat})) * cos(radians(lat)) *
+            cos(radians(lng) - radians(${userLng})) +
+            sin(radians(${userLat})) * sin(radians(lat)))
+          )) AS "distanceKm"
+        FROM "Turf"
+        WHERE status = 'ACTIVE' AND "deletedAt" IS NULL
+      ) AS t
+      WHERE t."distanceKm" <= ${radiusKm}
+      ORDER BY t."distanceKm" ASC
+      LIMIT 50
+    `;
+
+    if (!rawIds.length) {
+      return { success: true, count: 0, radiusKm, data: [] };
+    }
+
+    const ids = rawIds.map((r) => r.id);
     const turfs = await this.prisma.turf.findMany({
-      where: { deletedAt: null, status: 'ACTIVE' },
+      where: { id: { in: ids } },
       include: {
-        owner: {
-          select: { name: true, contactNumber: true },
-        },
+        owner: { select: { name: true, contactNumber: true } },
       },
     });
 
-    // Haversine formula to calculate distance in km
-    const haversine = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-      const R = 6371; // Earth's radius in km
-      const dLat = ((lat2 - lat1) * Math.PI) / 180;
-      const dLng = ((lng2 - lng1) * Math.PI) / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos((lat1 * Math.PI) / 180) *
-          Math.cos((lat2 * Math.PI) / 180) *
-          Math.sin(dLng / 2) *
-          Math.sin(dLng / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    };
-
     const turfsWithDistance = turfs
-      .map((turf) => ({
-        ...turf,
-        distanceKm: parseFloat(haversine(userLat, userLng, turf.lat, turf.lng).toFixed(2)),
-        images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
-      }))
-      .filter((turf) => turf.distanceKm <= radiusKm)
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-      .slice(0, 50); // Hard limit to top 50 turfs for safety and payload size limit
+      .map((turf) => {
+        const distanceInfo = rawIds.find((r) => r.id === turf.id);
+        return {
+          ...turf,
+          distanceKm: distanceInfo ? parseFloat(Number(distanceInfo.distanceKm).toFixed(2)) : 0,
+          images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
+        };
+      })
+      .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
 
     return {
       success: true,
@@ -289,6 +294,7 @@ export class TurfsService {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 100, // Hard limit added to prevent OOM
     });
 
     const formatted = turfs.map((turf) => ({

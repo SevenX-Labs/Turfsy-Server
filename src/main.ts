@@ -5,14 +5,24 @@ import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
 import { json } from 'express';
 import { SecurityExceptionFilter } from './common/filters/security-exception.filter';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.enableCors();
+  // ── Layer 1: Secure HTTP Headers ──
+  app.use(helmet());
 
+  // ── Layer 2: Cross-Origin Resource Sharing ──
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
+  // ── Layer 3: Payload Size Limits & Raw Body for Webhooks ──
   app.use(
     json({
+      limit: '5mb',
       verify: (req, _res, buf) => {
         if (buf?.length) {
           (req as any).rawBody = buf;

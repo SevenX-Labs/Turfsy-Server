@@ -17,6 +17,12 @@ import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import axios from 'axios';
+import { LRUCache } from 'lru-cache';
+
+const otpRateLimitCache = new LRUCache<string, number>({
+  max: 5000,
+  ttl: 1000 * 60 * 60, // 1 hour window
+});
 
 @Injectable()
 export class AuthService {
@@ -89,6 +95,16 @@ export class AuthService {
 
   async login(dto: LoginDto, ip: string, userAgent: string, role: Role) {
     const { phone } = dto;
+
+    // ── Layer 1: Phone-based OTP Rate Limiting ──
+    const attempts = otpRateLimitCache.get(phone) || 0;
+    if (attempts >= 5) {
+      throw new HttpException(
+        { success: false, message: 'Too many OTP requests for this phone. Please try again later.' },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    otpRateLimitCache.set(phone, attempts + 1);
 
     let auth = await this.prisma.auth.findUnique({ where: { phone } });
     if (!auth) {

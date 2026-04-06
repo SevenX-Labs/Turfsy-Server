@@ -26,7 +26,7 @@ import { UserSettingsModule } from './modules/user-settings/user-settings.module
     }),
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 10,
+      limit: 100,
     }]),
     PrismaModule, 
     AuthModule, 

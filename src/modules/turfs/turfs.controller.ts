@@ -23,7 +23,17 @@ import { TurfStatus, SportsType } from '@prisma/client';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
 
-import { memoryStorage } from 'multer';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import * as os from 'os';
+
+const tmpDiskStorage = diskStorage({
+  destination: os.tmpdir(),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + extname(file.originalname || ''));
+  },
+});
 
 @Controller('api/v3/turfs')
 export class TurfsController {
@@ -44,7 +54,7 @@ export class TurfsController {
         { name: 'nightTurf', maxCount: 1 },
       ],
       {
-        storage: memoryStorage(),
+        storage: tmpDiskStorage,
         limits: { fileSize: 5 * 1024 * 1024 },
       },
     ),
@@ -196,7 +206,7 @@ export class TurfsController {
         { name: 'nightTurf', maxCount: 1 },
       ],
       {
-        storage: memoryStorage(),
+        storage: tmpDiskStorage,
         limits: { fileSize: 5 * 1024 * 1024 },
       },
     ),
@@ -265,7 +275,7 @@ export class TurfsController {
         { name: 'nightTurf', maxCount: 1 },
       ],
       {
-        storage: memoryStorage(),
+        storage: tmpDiskStorage,
         limits: { fileSize: 5 * 1024 * 1024 },
       },
     ),
@@ -303,7 +313,7 @@ export class TurfsController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: memoryStorage(),
+      storage: tmpDiskStorage,
       limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )

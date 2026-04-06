@@ -6,6 +6,12 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { LRUCache } from 'lru-cache';
+
+const sessionCache = new LRUCache<string, string>({
+  max: 5000,
+  ttl: 1000 * 60 * 5, // 5 mins
+});
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -45,6 +51,11 @@ export class JwtAuthGuard implements CanActivate {
   }
 
   protected async ensureSessionValid(sessionId: string) {
+    const cachedStatus = sessionCache.get(sessionId);
+    if (cachedStatus === 'valid') {
+      return;
+    }
+
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
     });
@@ -59,6 +70,8 @@ export class JwtAuthGuard implements CanActivate {
     if (now > session.expiresAt) {
       throw new UnauthorizedException('Session expired due to inactivity');
     }
+
+    sessionCache.set(sessionId, 'valid');
 
     // Rolling window: Extend session if more than 1 day has passed since last update
     // This implements the "30 days inactivity = logout" rule automatically

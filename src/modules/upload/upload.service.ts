@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { PrismaService } from '../../prisma/prisma.service';
+import * as fs from 'fs';
 
 @Injectable()
 export class UploadService {
@@ -75,67 +76,75 @@ export class UploadService {
   // Upload user profile image
   // ─────────────────────────────────────────
   async uploadUserProfileImage(authId: string, file: Express.Multer.File) {
-    // Validate MIME type
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new BadRequestException(
-        'Only jpeg, jpg, png, and webp images are allowed',
-      );
-    }
+    try {
+      // Validate MIME type
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new BadRequestException(
+          'Only jpeg, jpg, png, and webp images are allowed',
+        );
+      }
 
-    // Validate file size (5 MB)
-    const maxSizeBytes = 5 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      throw new BadRequestException('File size must not exceed 5 MB');
-    }
+      // Validate file size (5 MB)
+      const maxSizeBytes = 5 * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        throw new BadRequestException('File size must not exceed 5 MB');
+      }
 
-    // Ensure the user profile exists
-    const profile = await this.prisma.userProfile.findUnique({
-      where: { authId },
-    });
-    if (!profile) {
-      throw new NotFoundException('User profile not found');
-    }
-    if (!profile.name?.trim()) {
-      throw new BadRequestException(
-        'Please complete profile name before uploading avatar',
-      );
-    }
+      // Ensure the user profile exists
+      const profile = await this.prisma.userProfile.findUnique({
+        where: { authId },
+      });
+      if (!profile) {
+        throw new NotFoundException('User profile not found');
+      }
+      if (!profile.name?.trim()) {
+        throw new BadRequestException(
+          'Please complete profile name before uploading avatar',
+        );
+      }
 
-    const safeName = this.sanitizeNameForFile(profile.name || '');
-    const extension = this.getSafeFileExtension(file.mimetype);
-    const storagePath = `users/${authId}/${safeName}.${extension}`;
+      const safeName = this.sanitizeNameForFile(profile.name || '');
+      const extension = this.getSafeFileExtension(file.mimetype);
+      const storagePath = `users/${authId}/${safeName}.${extension}`;
 
-    // Keep only one avatar file per user in storage.
-    await this.clearUserAvatarFolder(authId);
+      // Keep only one avatar file per user in storage.
+      await this.clearUserAvatarFolder(authId);
+      
+      const fileBuffer = file.buffer || await fs.promises.readFile(file.path);
 
-    const { error: uploadError } = await this.supabase.storage
-      .from(this.bucket)
-      .upload(storagePath, file.buffer, {
-        contentType: file.mimetype,
-        upsert: true, // overwrite any existing file
+      const { error: uploadError } = await this.supabase.storage
+        .from(this.bucket)
+        .upload(storagePath, fileBuffer, {
+          contentType: file.mimetype,
+          upsert: true, // overwrite any existing file
+        });
+
+      if (uploadError) {
+        throw new InternalServerErrorException(
+          `Supabase upload failed: ${uploadError.message}`,
+        );
+      }
+
+      // Retrieve public URL
+      const { data: urlData } = this.supabase.storage
+        .from(this.bucket)
+        .getPublicUrl(storagePath);
+
+      const avatarUrl = urlData.publicUrl;
+
+      // Persist to DB
+      await this.prisma.userProfile.update({
+        where: { authId },
+        data: { avatarUrl },
       });
 
-    if (uploadError) {
-      throw new InternalServerErrorException(
-        `Supabase upload failed: ${uploadError.message}`,
-      );
+      return { success: true, avatarUrl };
+    } finally {
+      if (file.path) {
+        await fs.promises.unlink(file.path).catch(() => {});
+      }
     }
-
-    // Retrieve public URL
-    const { data: urlData } = this.supabase.storage
-      .from(this.bucket)
-      .getPublicUrl(storagePath);
-
-    const avatarUrl = urlData.publicUrl;
-
-    // Persist to DB
-    await this.prisma.userProfile.update({
-      where: { authId },
-      data: { avatarUrl },
-    });
-
-    return { success: true, avatarUrl };
   }
 
   // ─────────────────────────────────────────
@@ -168,72 +177,80 @@ export class UploadService {
     imageType: 'entrance' | 'dayTurf' | 'nightTurf',
     file: Express.Multer.File,
   ) {
-    // 1. Validate MIME type
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new BadRequestException(
-        'Only jpeg, jpg, png, and webp images are allowed',
-      );
-    }
+    try {
+      // 1. Validate MIME type
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new BadRequestException(
+          'Only jpeg, jpg, png, and webp images are allowed',
+        );
+      }
 
-    // 2. Validate file size (5 MB)
-    const maxSizeBytes = 5 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      throw new BadRequestException('File size must not exceed 5 MB');
-    }
+      // 2. Validate file size (5 MB)
+      const maxSizeBytes = 5 * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        throw new BadRequestException('File size must not exceed 5 MB');
+      }
 
-    // 3. Ensure the turf exists and belongs to the owner
-    const turf = await this.prisma.turf.findUnique({
-      where: { id: turfId },
-      include: { owner: true },
-    });
-
-    if (!turf) {
-      throw new NotFoundException('Turf not found');
-    }
-
-    if (turf.owner.authId !== authId) {
-      throw new BadRequestException('You are not authorized to upload images for this turf');
-    }
-
-    // 4. Storage path: turfs/{turfId}/{imageType}.jpg
-    const storagePath = `turfs/${turfId}/${imageType}.jpg`;
-
-    const { error: uploadError } = await this.supabase.storage
-      .from(this.bucket)
-      .upload(storagePath, file.buffer, {
-        contentType: file.mimetype,
-        upsert: true, // overwrite any existing file
+      // 3. Ensure the turf exists and belongs to the owner
+      const turf = await this.prisma.turf.findUnique({
+        where: { id: turfId },
+        include: { owner: true },
       });
 
-    if (uploadError) {
-      throw new InternalServerErrorException(
-        `Supabase upload failed: ${uploadError.message}`,
-      );
+      if (!turf) {
+        throw new NotFoundException('Turf not found');
+      }
+
+      if (turf.owner.authId !== authId) {
+        throw new BadRequestException('You are not authorized to upload images for this turf');
+      }
+
+      // 4. Storage path: turfs/{turfId}/{imageType}.jpg
+      const storagePath = `turfs/${turfId}/${imageType}.jpg`;
+      
+      const fileBuffer = file.buffer || await fs.promises.readFile(file.path);
+
+      const { error: uploadError } = await this.supabase.storage
+        .from(this.bucket)
+        .upload(storagePath, fileBuffer, {
+          contentType: file.mimetype,
+          upsert: true, // overwrite any existing file
+        });
+
+      if (uploadError) {
+        throw new InternalServerErrorException(
+          `Supabase upload failed: ${uploadError.message}`,
+        );
+      }
+
+      // 5. Retrieve public URL
+      const { data: urlData } = this.supabase.storage
+        .from(this.bucket)
+        .getPublicUrl(storagePath);
+
+      const imageUrl = urlData.publicUrl;
+
+      // 6. Map imageType to schema field
+      const fieldMap = {
+        entrance: 'entranceUrl',
+        dayTurf: 'groundDayUrl',
+        nightTurf: 'groundNightUrl',
+      };
+      const dbField = fieldMap[imageType];
+
+      // 7. Persist to DB
+      await this.prisma.turf.update({
+        where: { id: turfId },
+        data: { [dbField]: imageUrl },
+      });
+
+      return { success: true, imageUrl, type: imageType };
+    } finally {
+      if (file && file.path) {
+        await fs.promises.unlink(file.path).catch(() => {});
+      }
     }
-
-    // 5. Retrieve public URL
-    const { data: urlData } = this.supabase.storage
-      .from(this.bucket)
-      .getPublicUrl(storagePath);
-
-    const imageUrl = urlData.publicUrl;
-
-    // 6. Map imageType to schema field
-    const fieldMap = {
-      entrance: 'entranceUrl',
-      dayTurf: 'groundDayUrl',
-      nightTurf: 'groundNightUrl',
-    };
-    const dbField = fieldMap[imageType];
-
-    // 7. Persist to DB
-    await this.prisma.turf.update({
-      where: { id: turfId },
-      data: { [dbField]: imageUrl },
-    });
-
-    return { success: true, imageUrl, type: imageType };
   }
 
   // ─────────────────────────────────────────
