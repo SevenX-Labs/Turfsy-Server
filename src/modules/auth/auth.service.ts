@@ -86,12 +86,19 @@ export class AuthService {
   // POST /login
   // ─────────────────────────────────────────
 
-  async login(dto: LoginDto, ip: string, userAgent: string) {
+  async login(dto: LoginDto, ip: string, userAgent: string, forcedRole: Role) {
     const { phone } = dto;
 
     let auth = await this.prisma.auth.findUnique({ where: { phone } });
     if (!auth) {
-      auth = await this.prisma.auth.create({ data: { phone } });
+      auth = await this.prisma.auth.create({
+        data: { phone, role: forcedRole },
+      });
+    } else if (auth.role !== forcedRole) {
+      auth = await this.prisma.auth.update({
+        where: { id: auth.id },
+        data: { role: forcedRole },
+      });
     }
 
     if (!auth.isActive) {
@@ -125,7 +132,7 @@ export class AuthService {
   // POST /verify-otp
   // ─────────────────────────────────────────
 
-  async verifyOtp(dto: VerifyOtpDto) {
+  async verifyOtp(dto: VerifyOtpDto, forcedRole: Role) {
     const { phone, otp } = dto;
 
     const auth = await this.prisma.auth.findUnique({
@@ -177,13 +184,23 @@ export class AuthService {
       data: { isVerified: true },
     });
 
-    // Issue JWT with the verified auth's role
-    const token = this.generateSessionToken(otpEntry.auth.id, session.id, otpEntry.auth.role);
+    // Role is determined strictly by endpoint (user/* or owner/*).
+    const roleSelectionResult = await this.selectRole(otpEntry.authId, forcedRole);
+    const selectedRole = forcedRole;
+
+    const token = this.generateSessionToken(otpEntry.auth.id, session.id, selectedRole);
 
     return {
       success: true,
       message: 'OTP verified successfully',
       accessToken: token,
+      ...(roleSelectionResult
+        ? {
+            role: selectedRole,
+            isNewUser: roleSelectionResult.isNewUser,
+            profile: roleSelectionResult.profile,
+          }
+        : {}),
     };
   }
 

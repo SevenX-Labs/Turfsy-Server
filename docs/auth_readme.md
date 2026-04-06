@@ -4,11 +4,21 @@ Base URL: `https://turfsy.onrender.com`
 
 ---
 
-## 1. POST /api/v3/auth/login
+## Auth Split (Important)
+
+Role is selected by endpoint, not by request body:
+
+- User app uses `/api/v3/auth/user/*`
+- Owner app uses `/api/v3/auth/owner/*`
+- No `/select-role` step in this flow
+
+---
+
+## 1. POST /api/v3/auth/user/login
 
 ```
 Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/login
+URL     → https://turfsy.onrender.com/api/v3/auth/user/login
 Header  → Content-Type: application/json
 ```
 
@@ -24,18 +34,17 @@ Header  → Content-Type: application/json
 {
   "success": true,
   "message": "OTP sent successfully",
-  "sessionToken": "uuid",
   "expiresIn": 60
 }
 ```
 
 ---
 
-## 2. POST /api/v3/auth/verify-otp
+## 2. POST /api/v3/auth/user/verify-otp
 
 ```
 Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/verify-otp
+URL     → https://turfsy.onrender.com/api/v3/auth/user/verify-otp
 Header  → Content-Type: application/json
 ```
 
@@ -43,7 +52,7 @@ Header  → Content-Type: application/json
 ```json
 {
   "phone": "8652601566",
-  "otp": "OTP_FROM_TERMINAL"
+  "otp": "123456"
 }
 ```
 
@@ -51,43 +60,21 @@ Header  → Content-Type: application/json
 ```json
 {
   "success": true,
-  "message": "OTP verified",
-  "accessToken": "eyJhbGci..." // JWT token, use this for authenticated requests
-}
-```
-## 3. POST /api/v3/auth/select-role
-
-```
-Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/select-role
-Header  → Content-Type: application/json
-         Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
-```
-
-**Request:**
-```json
-{
-  "role": "USER"
-}
-```
-
-**Response:**
-```json
-{
+  "message": "OTP verified successfully",
+  "accessToken": "eyJhbGci...",
   "role": "USER",
   "isNewUser": true,
-  "profile": null,
-  "accessToken": "eyJhbGci..." // JWT token (if you want to re-issue or confirm)
+  "profile": null
 }
 ```
 
 ---
 
-## 3. POST /api/v3/auth/resend-otp
+## 3. POST /api/v3/auth/user/resend-otp
 
 ```
 Method  → POST
-URL     → https://turfsy.onrender.com/api/v3/auth/resend-otp
+URL     → https://turfsy.onrender.com/api/v3/auth/user/resend-otp
 Header  → Content-Type: application/json
 ```
 
@@ -109,7 +96,89 @@ Header  → Content-Type: application/json
 
 ---
 
-## 4. GET /api/v3/auth/get-me
+## 4. POST /api/v3/auth/owner/login
+
+```
+Method  → POST
+URL     → https://turfsy.onrender.com/api/v3/auth/owner/login
+Header  → Content-Type: application/json
+```
+
+**Request:**
+```json
+{
+  "phone": "8652601566"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "OTP sent successfully",
+  "expiresIn": 60
+}
+```
+
+---
+
+## 5. POST /api/v3/auth/owner/verify-otp
+
+```
+Method  → POST
+URL     → https://turfsy.onrender.com/api/v3/auth/owner/verify-otp
+Header  → Content-Type: application/json
+```
+
+**Request:**
+```json
+{
+  "phone": "8652601566",
+  "otp": "123456"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "OTP verified successfully",
+  "accessToken": "eyJhbGci...",
+  "role": "OWNER",
+  "isNewUser": true,
+  "profile": null
+}
+```
+
+---
+
+## 6. POST /api/v3/auth/owner/resend-otp
+
+```
+Method  → POST
+URL     → https://turfsy.onrender.com/api/v3/auth/owner/resend-otp
+Header  → Content-Type: application/json
+```
+
+**Request:**
+```json
+{
+  "phone": "8652601566"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "OTP resent successfully",
+  "expiresIn": 60
+}
+```
+
+---
+
+## 7. GET /api/v3/auth/get-me
 
 ```
 Method  → GET
@@ -141,7 +210,7 @@ No body.
 
 ---
 
-## 5. GET /api/v3/auth/logout
+## 8. GET /api/v3/auth/logout
 
 ```
 Method  → GET
@@ -161,7 +230,7 @@ No body.
 
 ---
 
-## 6. DELETE /api/v3/auth/delete-account
+## 9. DELETE /api/v3/auth/delete-account
 
 ```
 Method  → DELETE
@@ -170,9 +239,10 @@ Header  → Content-Type: application/json
          Authorization: Bearer ACCESS_TOKEN_FROM_VERIFY
 ```
 
+**Request:**
 ```json
 {
-  "sessionToken": "SESSION_TOKEN_FROM_LOGIN"
+  "sessionToken": "any-string"
 }
 ```
 
@@ -186,14 +256,24 @@ Header  → Content-Type: application/json
 
 ---
 
-## Test Order
+## Test Order (User App)
 
 ```
-1. POST /login         → check terminal for OTP
-2. POST /verify-otp    → copy accessToken (uses phone + otp)
-3. POST /select-role   → use accessToken, select role, get isNewUser/profile
-4. GET  /get-me        → use accessToken
-5. POST /resend-otp    → uses phone
-6. GET  /logout        → use accessToken
-7. DELETE /delete-account → use accessToken (requires sessionToken body if testing deletion)
+1. POST /user/login       → check terminal/SMS for OTP
+2. POST /user/verify-otp  → copy accessToken
+3. GET  /get-me           → use accessToken
+4. POST /user/resend-otp  → uses phone (when needed)
+5. GET  /logout           → use accessToken
+6. DELETE /delete-account → use accessToken
+```
+
+## Test Order (Owner App)
+
+```
+1. POST /owner/login       → check terminal/SMS for OTP
+2. POST /owner/verify-otp  → copy accessToken
+3. GET  /get-me            → use accessToken
+4. POST /owner/resend-otp  → uses phone (when needed)
+5. GET  /logout            → use accessToken
+6. DELETE /delete-account  → use accessToken
 ```

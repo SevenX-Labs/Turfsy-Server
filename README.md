@@ -26,26 +26,24 @@ Scalable backend for Turfsy: auth, profiles, turf discovery, booking, payments, 
 ### User Flow
 
 1. Login with phone OTP
-2. Select role as `USER`
-3. Create/update user profile (with preferred sport)
-4. Browse home/discovery and turf listings
-5. Save turfs
-6. Create booking + create Razorpay order
-7. Payment success via webhook confirms booking
-8. Use booking (PIN/check-in flow), then rate turf
-9. Use bookings/history/invoice/transactions
-10. Manage user settings (payment, security, preferences, notifications)
+2. Create/update user profile (with preferred sport)
+3. Browse home/discovery and turf listings
+4. Save turfs
+5. Create booking + create Razorpay order
+6. Payment success via webhook confirms booking
+7. Use booking (PIN/check-in flow), then rate turf
+8. Use bookings/history/invoice/transactions
+9. Manage user settings (payment, security, preferences, notifications)
 
 ### Owner Flow
 
 1. Login with phone OTP
-2. Select role as `OWNER`
-3. Create/update owner profile
-4. Create/manage turfs
-5. View owner bookings and filtered booking lists
-6. Verify check-in PIN and complete bookings
-7. Manage owner settings (profile, payment/payout, notifications, cancellation policy, support)
-8. View owner analytics and owner home dashboard
+2. Create/update owner profile
+3. Create/manage turfs
+4. View owner bookings and filtered booking lists
+5. Verify check-in PIN and complete bookings
+6. Manage owner settings (profile, payment/payout, notifications, cancellation policy, support)
+7. View owner analytics and owner home dashboard
 
 ## Endpoint Index (No Bodies)
 
@@ -58,10 +56,12 @@ Base API routes are listed exactly as implemented.
 
 ### Auth (`/api/v3/auth`)
 
-- `POST /api/v3/auth/login`
-- `POST /api/v3/auth/verify-otp`
-- `POST /api/v3/auth/select-role`
-- `POST /api/v3/auth/resend-otp`
+- `POST /api/v3/auth/user/login`
+- `POST /api/v3/auth/owner/login`
+- `POST /api/v3/auth/user/verify-otp`
+- `POST /api/v3/auth/owner/verify-otp`
+- `POST /api/v3/auth/user/resend-otp`
+- `POST /api/v3/auth/owner/resend-otp`
 - `GET /api/v3/auth/logout`
 - `DELETE /api/v3/auth/delete-account`
 - `GET /api/v3/auth/get-me`

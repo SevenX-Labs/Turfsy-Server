@@ -26,21 +26,35 @@ export class AppService {
         basePath: '/api/v3/auth',
         status: 'working',
         routes: [
-          { method: 'POST', path: '/login', message: 'Login endpoint working' },
           {
             method: 'POST',
-            path: '/verify-otp',
-            message: 'OTP verification endpoint working',
+            path: '/user/login',
+            message: 'User login endpoint working',
           },
           {
             method: 'POST',
-            path: '/select-role',
-            message: 'Role selection endpoint working',
+            path: '/owner/login',
+            message: 'Owner login endpoint working',
           },
           {
             method: 'POST',
-            path: '/resend-otp',
-            message: 'OTP resend endpoint working',
+            path: '/user/verify-otp',
+            message: 'User OTP verification endpoint working',
+          },
+          {
+            method: 'POST',
+            path: '/owner/verify-otp',
+            message: 'Owner OTP verification endpoint working',
+          },
+          {
+            method: 'POST',
+            path: '/user/resend-otp',
+            message: 'User OTP resend endpoint working',
+          },
+          {
+            method: 'POST',
+            path: '/owner/resend-otp',
+            message: 'Owner OTP resend endpoint working',
           },
           {
             method: 'GET',

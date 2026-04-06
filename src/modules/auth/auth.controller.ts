@@ -14,44 +14,61 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
-import { SelectRoleDto } from './dto/select-role.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Role } from '@prisma/client';
 
 @Controller('api/v3/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Phone only — sends OTP, no role
-  @Post('login')
+  // User app login (role auto-set to USER)
+  @Post('user/login')
   @HttpCode(HttpStatus.OK)
-  async login(
+  async userLogin(
     @Body() dto: LoginDto,
     @Headers('x-forwarded-for') ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    return this.authService.login(dto, ip, userAgent);
+    return this.authService.login(dto, ip, userAgent, Role.USER);
   }
 
-  // Verify OTP — returns accessToken immediately
-  @Post('verify-otp')
+  // Owner app login (role auto-set to OWNER)
+  @Post('owner/login')
   @HttpCode(HttpStatus.OK)
-  async verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto);
+  async ownerLogin(
+    @Body() dto: LoginDto,
+    @Headers('x-forwarded-for') ip: string,
+    @Headers('user-agent') userAgent: string,
+  ) {
+    return this.authService.login(dto, ip, userAgent, Role.OWNER);
   }
 
-  // Select role — requires accessToken, updates role + returns profile
-  @Post('select-role')
-  @UseGuards(JwtAuthGuard)
+  // User app OTP verify (role auto-set to USER)
+  @Post('user/verify-otp')
   @HttpCode(HttpStatus.OK)
-  async selectRole(@Req() req: any, @Body() dto: SelectRoleDto) {
-    return this.authService.selectRole(req.user.authId, dto.role);
+  async userVerifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto, Role.USER);
   }
 
-  // Resend OTP — rate limited 1/min
-  @Post('resend-otp')
+  // Owner app OTP verify (role auto-set to OWNER)
+  @Post('owner/verify-otp')
   @HttpCode(HttpStatus.OK)
-  async resendOtp(@Body() dto: ResendOtpDto) {
+  async ownerVerifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto, Role.OWNER);
+  }
+
+  // User app OTP resend (same body)
+  @Post('user/resend-otp')
+  @HttpCode(HttpStatus.OK)
+  async userResendOtp(@Body() dto: ResendOtpDto) {
+    return this.authService.resendOtp(dto);
+  }
+
+  // Owner app OTP resend (same body)
+  @Post('owner/resend-otp')
+  @HttpCode(HttpStatus.OK)
+  async ownerResendOtp(@Body() dto: ResendOtpDto) {
     return this.authService.resendOtp(dto);
   }
 
