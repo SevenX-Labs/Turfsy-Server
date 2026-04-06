@@ -14,7 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import axios from 'axios';
 
@@ -389,16 +389,41 @@ export class AuthService {
       throw new UnauthorizedException('Please verify OTP before deleting account');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.session.updateMany({
-        where: { authId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-      this.prisma.auth.update({
+    // Hard-delete account from DB.
+    // Most related records are removed via FK onDelete: Cascade from Auth.
+    // SlotLock has no declared relation in Prisma schema, so clean it manually.
+    const ownerProfile = await this.prisma.ownerProfile.findUnique({
+      where: { authId },
+      select: { id: true },
+    });
+
+    const ownerTurfIds = ownerProfile
+      ? (
+          await this.prisma.turf.findMany({
+            where: { ownerProfileId: ownerProfile.id },
+            select: { id: true },
+          })
+        ).map((t) => t.id)
+      : [];
+
+    await this.prisma.$transaction(async (tx) => {
+      // Remove slot locks created by this user
+      await tx.slotLock.deleteMany({
+        where: { userId: authId },
+      });
+
+      // Remove slot locks against owner's turfs (if owner account)
+      if (ownerTurfIds.length > 0) {
+        await tx.slotLock.deleteMany({
+          where: { turfId: { in: ownerTurfIds } },
+        });
+      }
+
+      // Delete root auth record; cascades remove dependent data
+      await tx.auth.delete({
         where: { id: authId },
-        data: { deletedAt: new Date(), isActive: false },
-      }),
-    ]);
+      });
+    });
 
     return {
       success: true,
@@ -459,30 +484,54 @@ export class AuthService {
     if (role === Role.USER) {
       const exists = await this.prisma.userProfile.findUnique({ where: { authId } });
       if (!exists) {
-        await this.prisma.userProfile.create({
-          data: {
-            authId,
-            name: '',
-            email: '',
-            avatarUrl: '',
-            dob: new Date(),
-            gender: 'PREFER_NOT_TO_SAY' as any,
-          },
-        });
+        const placeholderEmail = `user_${authId}@placeholder.turfsy.local`;
+        try {
+          await this.prisma.userProfile.create({
+            data: {
+              authId,
+              name: '',
+              // email is unique in schema, so avoid duplicate empty-string collisions
+              email: placeholderEmail,
+              avatarUrl: '',
+              dob: new Date(),
+              gender: 'PREFER_NOT_TO_SAY' as any,
+            },
+          });
+        } catch (error) {
+          // Handle concurrent first-login requests safely.
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return;
+          }
+          throw error;
+        }
       }
     } else if (role === Role.OWNER) {
       const exists = await this.prisma.ownerProfile.findUnique({ where: { authId } });
       if (!exists) {
-        await this.prisma.ownerProfile.create({
-          data: {
-            authId,
-            name: '',
-            email: '',
-            contactNumber: '',
-            avatarUrl: '',
-            aadharNumber: '',
-          },
-        });
+        const placeholderEmail = `owner_${authId}@placeholder.turfsy.local`;
+        const compactAuth = authId.replace(/-/g, '');
+        const placeholderContact = `9${compactAuth.slice(0, 9).padEnd(9, '0')}`;
+        const placeholderAadhar = compactAuth.slice(0, 12).padEnd(12, '0');
+        try {
+          await this.prisma.ownerProfile.create({
+            data: {
+              authId,
+              name: '',
+              // email is unique in schema, so avoid duplicate empty-string collisions
+              email: placeholderEmail,
+              // keep placeholders unique to avoid hidden unique-index collisions
+              contactNumber: placeholderContact,
+              avatarUrl: '',
+              aadharNumber: placeholderAadhar,
+            },
+          });
+        } catch (error) {
+          // Handle concurrent first-login requests safely.
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return;
+          }
+          throw error;
+        }
       }
     }
   }

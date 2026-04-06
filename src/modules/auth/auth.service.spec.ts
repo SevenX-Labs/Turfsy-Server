@@ -17,16 +17,24 @@ jest.mock('axios');
 jest.mock('bcrypt');
 
 const mockPrisma = {
-  auth: { upsert: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
-  otpEntry: { create: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+  auth: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+  otpEntry: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
   session: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
   userProfile: { findUnique: jest.fn(), create: jest.fn() },
   ownerProfile: { findUnique: jest.fn(), create: jest.fn() },
-  $transaction: jest.fn((ops) => Promise.all(ops)),
+  turf: { findMany: jest.fn() },
+  slotLock: { deleteMany: jest.fn() },
+  $executeRaw: jest.fn(),
+  $transaction: jest.fn(async (arg: any) => {
+    if (typeof arg === 'function') {
+      return arg(mockPrisma as any);
+    }
+    return Promise.all(arg);
+  }),
 };
 
 const mockJwt = { sign: jest.fn().mockReturnValue('mocked.jwt.token') };
-const mockConfig = { get: jest.fn((key, def) => def ?? '7') };
+const mockConfig = { get: jest.fn((_key, def) => def ?? '7') };
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -46,29 +54,28 @@ describe('AuthService', () => {
 
   afterEach(() => jest.clearAllMocks());
 
-  // ─── login ──────────────────────────────────────────────────────────
-
   describe('login()', () => {
-    it('should create OtpEntry and return sessionToken', async () => {
-      mockPrisma.auth.upsert.mockResolvedValue({ id: 'auth-1', phone: '9876543210', isActive: true, role: Role.USER });
+    it('should create OTP entry and return success payload', async () => {
+      mockPrisma.auth.findUnique.mockResolvedValue(null);
+      mockPrisma.auth.create.mockResolvedValue({ id: 'auth-1', phone: '9876543210', isActive: true, role: Role.USER });
+      mockPrisma.otpEntry.deleteMany.mockResolvedValue({ count: 0 });
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');
-      mockPrisma.otpEntry.create.mockResolvedValue({ sessionToken: 'session-token-abc' });
+      mockPrisma.otpEntry.create.mockResolvedValue({ id: 'otp-1' });
 
-      const result = await service.login({ phone: '9876543210', role: Role.USER }, '127.0.0.1', 'jest');
+      const result = await service.login({ phone: '9876543210' }, '127.0.0.1', 'jest', Role.USER);
 
       expect(result.success).toBe(true);
-      expect(result.sessionToken).toBe('session-token-abc');
+      expect(result.expiresIn).toBe(60);
+      expect(mockPrisma.auth.create).toHaveBeenCalled();
       expect(mockPrisma.otpEntry.create).toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException if account is deactivated', async () => {
-      mockPrisma.auth.upsert.mockResolvedValue({ id: 'auth-1', isActive: false });
+      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', isActive: false, role: Role.USER });
 
-      await expect(service.login({ phone: '9876543210', role: Role.USER }, '', '')).rejects.toThrow(UnauthorizedException);
+      await expect(service.login({ phone: '9876543210' }, '', '', Role.USER)).rejects.toThrow(UnauthorizedException);
     });
   });
-
-  // ─── verifyOtp ──────────────────────────────────────────────────────
 
   describe('verifyOtp()', () => {
     const mockOtpEntry = {
@@ -80,74 +87,87 @@ describe('AuthService', () => {
       auth: { id: 'auth-1', role: Role.USER, phone: '9876543210' },
     };
 
-    it('should verify OTP, create session, return JWT', async () => {
-      mockPrisma.otpEntry.findUnique.mockResolvedValue(mockOtpEntry);
+    it('should verify OTP, select role, and return JWT', async () => {
+      mockPrisma.auth.findUnique.mockResolvedValueOnce({ id: 'auth-1', phone: '9876543210' });
+      mockPrisma.otpEntry.findFirst.mockResolvedValue(mockOtpEntry);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       mockPrisma.otpEntry.update.mockResolvedValue({});
       mockPrisma.session.create.mockResolvedValue({ id: 'session-1' });
       mockPrisma.auth.update.mockResolvedValue({});
+      mockPrisma.auth.findUnique.mockResolvedValueOnce({
+        id: 'auth-1',
+        isActive: true,
+        userProfile: null,
+        ownerProfile: null,
+      });
       mockPrisma.userProfile.findUnique.mockResolvedValue(null);
       mockPrisma.userProfile.create.mockResolvedValue({});
 
-      const result = await service.verifyOtp({ sessionToken: 'token', otp: '123456' });
+      const result = await service.verifyOtp({ phone: '9876543210', otp: '123456' }, Role.USER);
 
       expect(result.success).toBe(true);
       expect(result.accessToken).toBe('mocked.jwt.token');
+      expect(result.role).toBe(Role.USER);
     });
 
-    it('should throw NotFoundException if sessionToken not found', async () => {
-      mockPrisma.otpEntry.findUnique.mockResolvedValue(null);
+    it('should throw NotFoundException if account not found', async () => {
+      mockPrisma.auth.findUnique.mockResolvedValue(null);
 
-      await expect(service.verifyOtp({ sessionToken: 'bad', otp: '123456' })).rejects.toThrow(NotFoundException);
+      await expect(service.verifyOtp({ phone: '9876543210', otp: '123456' }, Role.USER)).rejects.toThrow(NotFoundException);
     });
 
     it('should throw ConflictException if OTP already used', async () => {
-      mockPrisma.otpEntry.findUnique.mockResolvedValue({ ...mockOtpEntry, verifiedAt: new Date() });
+      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', phone: '9876543210' });
+      mockPrisma.otpEntry.findFirst.mockResolvedValue({ ...mockOtpEntry, verifiedAt: new Date() });
 
-      await expect(service.verifyOtp({ sessionToken: 'token', otp: '123456' })).rejects.toThrow(ConflictException);
+      await expect(service.verifyOtp({ phone: '9876543210', otp: '123456' }, Role.USER)).rejects.toThrow(ConflictException);
     });
 
     it('should throw BadRequestException if OTP expired', async () => {
-      mockPrisma.otpEntry.findUnique.mockResolvedValue({ ...mockOtpEntry, expiresAt: new Date(Date.now() - 1000) });
+      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', phone: '9876543210' });
+      mockPrisma.otpEntry.findFirst.mockResolvedValue({ ...mockOtpEntry, expiresAt: new Date(Date.now() - 1000) });
 
-      await expect(service.verifyOtp({ sessionToken: 'token', otp: '123456' })).rejects.toThrow(BadRequestException);
+      await expect(service.verifyOtp({ phone: '9876543210', otp: '123456' }, Role.USER)).rejects.toThrow(BadRequestException);
     });
 
     it('should throw UnauthorizedException if OTP invalid', async () => {
-      mockPrisma.otpEntry.findUnique.mockResolvedValue(mockOtpEntry);
+      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', phone: '9876543210' });
+      mockPrisma.otpEntry.findFirst.mockResolvedValue(mockOtpEntry);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      await expect(service.verifyOtp({ sessionToken: 'token', otp: '999999' })).rejects.toThrow(UnauthorizedException);
+      await expect(service.verifyOtp({ phone: '9876543210', otp: '999999' }, Role.USER)).rejects.toThrow(UnauthorizedException);
     });
   });
 
-  // ─── resendOtp ──────────────────────────────────────────────────────
-
   describe('resendOtp()', () => {
     it('should resend OTP and reset expiry', async () => {
-      mockPrisma.otpEntry.findUnique.mockResolvedValue({
-        id: 'otp-1', authId: 'auth-1', verifiedAt: null, lastResentAt: null,
+      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', phone: '9876543210' });
+      mockPrisma.otpEntry.findFirst.mockResolvedValue({
+        id: 'otp-1',
+        authId: 'auth-1',
+        verifiedAt: null,
+        lastResentAt: null,
         auth: { phone: '9876543210' },
       });
       (bcrypt.hash as jest.Mock).mockResolvedValue('new-hashed');
       mockPrisma.otpEntry.update.mockResolvedValue({});
 
-      const result = await service.resendOtp({ sessionToken: 'token' });
+      const result = await service.resendOtp({ phone: '9876543210' });
       expect(result.success).toBe(true);
     });
 
     it('should throw 429 if called within 60s', async () => {
-      mockPrisma.otpEntry.findUnique.mockResolvedValue({
-        id: 'otp-1', verifiedAt: null,
-        lastResentAt: new Date(Date.now() - 10000), // 10s ago
+      mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1', phone: '9876543210' });
+      mockPrisma.otpEntry.findFirst.mockResolvedValue({
+        id: 'otp-1',
+        verifiedAt: null,
+        lastResentAt: new Date(Date.now() - 10000),
         auth: { phone: '9876543210' },
       });
 
-      await expect(service.resendOtp({ sessionToken: 'token' })).rejects.toThrow(HttpException);
+      await expect(service.resendOtp({ phone: '9876543210' })).rejects.toThrow(HttpException);
     });
   });
-
-  // ─── logout ─────────────────────────────────────────────────────────
 
   describe('logout()', () => {
     it('should revoke session', async () => {
@@ -165,17 +185,19 @@ describe('AuthService', () => {
     });
   });
 
-  // ─── deleteAccount ──────────────────────────────────────────────────
-
   describe('deleteAccount()', () => {
-    it('should soft delete account and revoke all sessions', async () => {
+    it('should hard delete account and related slot locks', async () => {
       mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1' });
       mockPrisma.otpEntry.findFirst.mockResolvedValue({ id: 'otp-1', verifiedAt: new Date() });
-      mockPrisma.session.updateMany.mockResolvedValue({});
-      mockPrisma.auth.update.mockResolvedValue({});
+      mockPrisma.ownerProfile.findUnique.mockResolvedValue({ id: 'owner-1' });
+      mockPrisma.turf.findMany.mockResolvedValue([{ id: 'turf-1' }]);
+      mockPrisma.slotLock.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.auth.delete.mockResolvedValue({ id: 'auth-1' });
 
       const result = await service.deleteAccount('auth-1', { sessionToken: 'token' });
+
       expect(result.success).toBe(true);
+      expect(mockPrisma.auth.delete).toHaveBeenCalledWith({ where: { id: 'auth-1' } });
     });
 
     it('should throw NotFoundException if auth not found', async () => {
@@ -185,12 +207,12 @@ describe('AuthService', () => {
     });
   });
 
-  // ─── getMe ──────────────────────────────────────────────────────────
-
   describe('getMe()', () => {
     it('should return user with profile and payment', async () => {
       mockPrisma.auth.findUnique.mockResolvedValue({
-        id: 'auth-1', role: Role.USER, isActive: true,
+        id: 'auth-1',
+        role: Role.USER,
+        isActive: true,
         userProfile: { name: 'Test User' },
         ownerProfile: null,
         payment: { upiId: 'test@upi' },

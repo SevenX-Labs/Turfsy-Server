@@ -13,7 +13,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET_KEY'),
-        signOptions: { expiresIn: '90d' as any },
+        signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN', '90d') as any },
       }),
       inject: [ConfigService],
     }),

@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { Role } from '@prisma/client';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../../prisma/prisma.service';
 
 const mockAuthService = {
   login: jest.fn(),
@@ -16,52 +19,103 @@ describe('AuthController', () => {
   let controller: AuthController;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    const moduleBuilder = Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: mockAuthService }],
-    }).compile();
+      providers: [
+        { provide: AuthService, useValue: mockAuthService },
+        { provide: JwtService, useValue: { verify: jest.fn() } },
+        { provide: PrismaService, useValue: { session: { findUnique: jest.fn() } } },
+      ],
+    });
+
+    moduleBuilder.overrideGuard(JwtAuthGuard).useValue({
+      canActivate: jest.fn().mockResolvedValue(true),
+    });
+
+    const module: TestingModule = await moduleBuilder.compile();
 
     controller = module.get<AuthController>(AuthController);
   });
 
   afterEach(() => jest.clearAllMocks());
 
-  // ─── login ──────────────────────────────────────────────────────────
+  // ─── userLogin ──────────────────────────────────────────────────────
 
-  describe('POST /login', () => {
-    it('should call authService.login and return result', async () => {
-      const dto = { phone: '9876543210', role: Role.USER };
-      const expected = { success: true, message: 'OTP sent successfully', sessionToken: 'abc', expiresIn: 60 };
+  describe('POST /user/login', () => {
+    it('should call authService.login with USER role and return result', async () => {
+      const dto = { phone: '9876543210' };
+      const expected = { success: true, message: 'OTP sent successfully', expiresIn: 60 };
       mockAuthService.login.mockResolvedValue(expected);
 
-      const result = await controller.login(dto as any, '127.0.0.1', 'jest');
-      expect(mockAuthService.login).toHaveBeenCalledWith(dto, '127.0.0.1', 'jest');
+      const result = await controller.userLogin(dto as any, '127.0.0.1', 'jest');
+      expect(mockAuthService.login).toHaveBeenCalledWith(dto, '127.0.0.1', 'jest', Role.USER);
       expect(result).toEqual(expected);
     });
   });
 
-  // ─── verifyOtp ──────────────────────────────────────────────────────
+  // ─── ownerLogin ─────────────────────────────────────────────────────
 
-  describe('POST /verify-otp', () => {
-    it('should call authService.verifyOtp and return token', async () => {
-      const dto = { sessionToken: 'token-abc', otp: '123456' };
+  describe('POST /owner/login', () => {
+    it('should call authService.login with OWNER role and return result', async () => {
+      const dto = { phone: '9876543210' };
+      const expected = { success: true, message: 'OTP sent successfully', expiresIn: 60 };
+      mockAuthService.login.mockResolvedValue(expected);
+
+      const result = await controller.ownerLogin(dto as any, '127.0.0.1', 'jest');
+      expect(mockAuthService.login).toHaveBeenCalledWith(dto, '127.0.0.1', 'jest', Role.OWNER);
+      expect(result).toEqual(expected);
+    });
+  });
+
+  // ─── userVerifyOtp ──────────────────────────────────────────────────
+
+  describe('POST /user/verify-otp', () => {
+    it('should call authService.verifyOtp with USER role', async () => {
+      const dto = { phone: '9876543210', otp: '123456' };
       const expected = { success: true, accessToken: 'jwt', role: Role.USER };
       mockAuthService.verifyOtp.mockResolvedValue(expected);
 
-      const result = await controller.verifyOtp(dto);
-      expect(mockAuthService.verifyOtp).toHaveBeenCalledWith(dto);
+      const result = await controller.userVerifyOtp(dto as any);
+      expect(mockAuthService.verifyOtp).toHaveBeenCalledWith(dto, Role.USER);
       expect(result).toEqual(expected);
     });
   });
 
-  // ─── resendOtp ──────────────────────────────────────────────────────
+  // ─── ownerVerifyOtp ─────────────────────────────────────────────────
 
-  describe('POST /resend-otp', () => {
+  describe('POST /owner/verify-otp', () => {
+    it('should call authService.verifyOtp with OWNER role', async () => {
+      const dto = { phone: '9876543210', otp: '123456' };
+      const expected = { success: true, accessToken: 'jwt', role: Role.OWNER };
+      mockAuthService.verifyOtp.mockResolvedValue(expected);
+
+      const result = await controller.ownerVerifyOtp(dto as any);
+      expect(mockAuthService.verifyOtp).toHaveBeenCalledWith(dto, Role.OWNER);
+      expect(result).toEqual(expected);
+    });
+  });
+
+  // ─── userResendOtp ──────────────────────────────────────────────────
+
+  describe('POST /user/resend-otp', () => {
     it('should call authService.resendOtp', async () => {
-      const dto = { sessionToken: 'token-abc' };
+      const dto = { phone: '9876543210' };
       mockAuthService.resendOtp.mockResolvedValue({ success: true, message: 'OTP resent successfully' });
 
-      const result = await controller.resendOtp(dto);
+      const result = await controller.userResendOtp(dto as any);
+      expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  // ─── ownerResendOtp ─────────────────────────────────────────────────
+
+  describe('POST /owner/resend-otp', () => {
+    it('should call authService.resendOtp', async () => {
+      const dto = { phone: '9876543210' };
+      mockAuthService.resendOtp.mockResolvedValue({ success: true, message: 'OTP resent successfully' });
+
+      const result = await controller.ownerResendOtp(dto as any);
       expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto);
       expect(result.success).toBe(true);
     });
