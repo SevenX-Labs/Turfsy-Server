@@ -241,6 +241,16 @@ export class AuthService {
       throw new NotFoundException('Account not found');
     }
 
+    // ── Layer 1: Phone-based OTP Rate Limiting Bypass Check ──
+    const attempts = otpRateLimitCache.get(phone) || 0;
+    if (attempts >= 5) {
+      throw new HttpException(
+        { success: false, message: 'Too many OTP requests for this phone. Please try again later.' },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    otpRateLimitCache.set(phone, attempts + 1);
+
     const otpEntry = await this.prisma.otpEntry.findFirst({
       where: { authId: auth.id, verifiedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -357,13 +367,13 @@ export class AuthService {
 
     await this.prisma.$transaction(async (tx) => {
       // Remove slot locks created by this user
-      await tx.slotLock.deleteMany({
+      await (tx as any).slotLock.deleteMany({
         where: { userId: authId },
       });
 
       // Remove slot locks against owner's turfs (if owner account)
       if (ownerTurfIds.length > 0) {
-        await tx.slotLock.deleteMany({
+        await (tx as any).slotLock.deleteMany({
           where: { turfId: { in: ownerTurfIds } },
         });
       }
@@ -445,6 +455,16 @@ export class AuthService {
     if (existing && existing.id !== authId) {
       throw new ConflictException('This phone number is already registered to another account');
     }
+
+    // ── Layer 1: Phone-based OTP Rate Limiting Bypass Check ──
+    const attempts = otpRateLimitCache.get(newPhone) || 0;
+    if (attempts >= 5) {
+      throw new HttpException(
+        { success: false, message: 'Too many OTP requests for this phone. Please try again later.' },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    otpRateLimitCache.set(newPhone, attempts + 1);
 
     // Invalidate any pending OTPs
     await this.prisma.otpEntry.deleteMany({
