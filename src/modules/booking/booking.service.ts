@@ -985,8 +985,8 @@ export class BookingService {
     }
 
     // ── PIN valid → complete booking ──
-    const updated = await this.prisma.booking.update({
-      where: { id: bookingId },
+    const atomicUpdate = await this.prisma.booking.updateMany({
+      where: { id: bookingId, bookingStatus: 'CONFIRMED' },
       data: {
         paymentStatus: 'SUCCESS',
         bookingStatus: 'COMPLETED',
@@ -994,10 +994,20 @@ export class BookingService {
         checkInPin: null,           // Layer 8: Null PIN after success
         pinAttempts: 0,
       },
+    });
+
+    if (atomicUpdate.count === 0) {
+      throw new ConflictException('Booking has already been processed.');
+    }
+
+    const updated = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
       include: { user: { include: { userProfile: true } } },
     });
 
-    await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+    if (updated) {
+      await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+    }
 
     const userName = updated.user?.userProfile?.name || 'Customer';
 
@@ -1059,8 +1069,8 @@ export class BookingService {
       }
     }
 
-    const updated = await this.prisma.booking.update({
-      where: { id: bookingId },
+    const atomicUpdate = await this.prisma.booking.updateMany({
+      where: { id: bookingId, bookingStatus: 'CONFIRMED' },
       data: {
         bookingStatus: 'COMPLETED',
         paymentStatus: 'SUCCESS', // For CASH fallback, we assume money collected
@@ -1070,7 +1080,17 @@ export class BookingService {
       },
     });
 
-    await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+    if (atomicUpdate.count === 0) {
+      throw new ConflictException('Booking has already been completed.');
+    }
+
+    const updated = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (updated) {
+      await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+    }
 
     this.paymentLogger.log({
       userId: ownerAuthId,
@@ -1577,12 +1597,15 @@ export class BookingService {
       );
 
       if (now > slotEnd) {
-        await this.prisma.booking.update({
-          where: { id: booking.id },
+        const atomicUpdate = await this.prisma.booking.updateMany({
+          where: { id: booking.id, bookingStatus: 'CONFIRMED' },
           data: { bookingStatus: 'COMPLETED', visitedAt: slotEnd },
         });
-        await this.userGamificationService.handleBookingCompletion(booking.userId, booking.id);
-        updatedCount++;
+
+        if (atomicUpdate.count > 0) {
+          await this.userGamificationService.handleBookingCompletion(booking.userId, booking.id);
+          updatedCount++;
+        }
       }
     }
 
