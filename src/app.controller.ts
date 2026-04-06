@@ -14,12 +14,24 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  @Get('health')
+  @Get(['health', 'api/v3/health'])
   async checkHealth() {
     const endpointGroups = this.appService.getEndpointHealthCatalog();
     const endpointCount = endpointGroups.reduce(
       (total, group) => total + group.routes.length,
       0,
+    );
+    const allEndpoints = endpointGroups.flatMap((group) =>
+      group.routes.map((route) => ({
+        module: group.module,
+        method: route.method,
+        path:
+          route.path === '/'
+            ? group.basePath
+            : `${group.basePath}${route.path.startsWith('/') ? route.path : `/${route.path}`}`,
+        status: group.status,
+        message: route.message,
+      })),
     );
     const numberedModules = endpointGroups.map((group, index) => ({
       index: index + 1,
@@ -45,6 +57,7 @@ export class AppController {
           groups: endpointGroups.length,
           endpoints: endpointCount,
           message: 'All registered endpoint groups reported as working',
+          allEndpoints,
           numberedModules,
           modules: endpointGroups,
         },
@@ -63,6 +76,7 @@ export class AppController {
           groups: endpointGroups.length,
           endpoints: endpointCount,
           message: 'Endpoint catalog loaded but database health check failed',
+          allEndpoints,
           numberedModules,
           modules: endpointGroups,
         },

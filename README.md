@@ -53,6 +53,7 @@ Base API routes are listed exactly as implemented.
 
 - `GET /`
 - `GET /health`
+- `GET /api/v3/health`
 
 ### Auth (`/api/v3/auth`)
 
@@ -211,6 +212,6 @@ Base API routes are listed exactly as implemented.
 
 ## Notes
 
-- `/health` returns grouped module + endpoint count status.
+- `/health` and `/api/v3/health` return grouped module + endpoint count status.
 - Detailed payload examples remain in `/docs/*.md`.
 - Owner settings payment/payout uses dedicated `owner-settings` model.
