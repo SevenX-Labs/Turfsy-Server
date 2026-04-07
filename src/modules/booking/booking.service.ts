@@ -1005,9 +1005,11 @@ export class BookingService {
       include: { user: { include: { userProfile: true } } },
     });
 
-    if (updated) {
-      await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+    if (!updated) {
+      throw new NotFoundException('Booking not found after update');
     }
+
+    await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
 
     const userName = updated.user?.userProfile?.name || 'Customer';
 
@@ -1088,9 +1090,11 @@ export class BookingService {
       where: { id: bookingId },
     });
 
-    if (updated) {
-      await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+    if (!updated) {
+      throw new NotFoundException('Booking not found after update');
     }
+
+    await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
 
     this.paymentLogger.log({
       userId: ownerAuthId,
