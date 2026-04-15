@@ -8,13 +8,10 @@ import {
   Req,
   HttpCode,
   HttpStatus,
-  Param,
-  Delete,
 } from '@nestjs/common';
 import { UserProfileService } from './user-profile.service';
 import { CreateUserProfileDto } from './dto/create-profile.dto';
 import { UpdateUserProfileDto } from './dto/update-profile.dto';
-import { CreateUserAddressDto } from './dto/create-address.dto';
 import { PaymentDetailsDto } from './dto/payment-details.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -33,31 +30,21 @@ export class UserProfileController {
     return this.userProfileService.createProfile(req.user.authId, dto);
   }
 
-  // Route 1: Update Home Address (Detailed Profile Address)
-  @Patch('home-address')
+  // Unified Address Update (Called for both GPS sync and Manual House No. entry)
+  @Patch('address')
   @HttpCode(HttpStatus.OK)
-  async updateHomeAddress(@Req() req: any, @Body() dto: UpdateUserProfileDto) {
+  async updateAddress(@Req() req: any, @Body() dto: UpdateUserProfileDto) {
     return this.userProfileService.updateHomeAddress(req.user.authId, dto);
   }
 
-  // Route 2: Add New Location (Address List)
-  @Post('add-new-location')
-  @HttpCode(HttpStatus.CREATED)
-  async addNewLocation(@Req() req: any, @Body() dto: CreateUserAddressDto) {
-    return this.userProfileService.addNewLocation(req.user.authId, dto);
+  // General Profile Update
+  @Patch()
+  @HttpCode(HttpStatus.OK)
+  async updateProfile(@Req() req: any, @Body() dto: UpdateUserProfileDto) {
+    return this.userProfileService.updateProfile(req.user.authId, dto);
   }
 
-  // Management Routes
-  @Get('addresses')
-  async getAddresses(@Req() req: any) {
-    return this.userProfileService.getAddresses(req.user.authId);
-  }
-
-  @Delete('address/:id')
-  async deleteAddress(@Req() req: any, @Param('id') id: string) {
-    return this.userProfileService.deleteAddress(req.user.authId, id);
-  }
-
+  // Payment Details
   @Post('payment-details')
   async savePaymentDetails(@Req() req: any, @Body() dto: PaymentDetailsDto) {
     return this.userProfileService.savePaymentDetails(req.user.authId, dto);
