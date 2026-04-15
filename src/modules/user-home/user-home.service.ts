@@ -1,3 +1,4 @@
+// Updated: Using 'city' field instead of 'currentCity'
 import {
   Injectable,
   InternalServerErrorException,
@@ -451,7 +452,7 @@ export class UserHomeService {
     let profileLocation: {
       currentLat: number | null;
       currentLng: number | null;
-      currentCity: string | null;
+      city: string | null;
     } | null = null;
     let preferredSport: SportsType | null = null;
 
@@ -461,7 +462,7 @@ export class UserHomeService {
         select: {
           currentLat: true,
           currentLng: true,
-          currentCity: true,
+          city: true,
         },
       });
     }
@@ -488,7 +489,7 @@ export class UserHomeService {
     const userLng = hasValidCoordinates
       ? options.queryLng
       : (profileLocation?.currentLng ?? undefined);
-    const userCity = cleanCity ?? profileLocation?.currentCity ?? null;
+    const userCity = cleanCity ?? profileLocation?.city ?? null;
     const requestedRadius =
       typeof options.queryRadiusKm === 'number'
         ? options.queryRadiusKm

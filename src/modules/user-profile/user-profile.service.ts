@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserProfileDto } from './dto/create-profile.dto';
 import { UpdateUserProfileDto } from './dto/update-profile.dto';
+import { CreateUserAddressDto } from './dto/create-address.dto';
 import { PaymentDetailsDto } from './dto/payment-details.dto';
 import { Role } from '@prisma/client';
 
@@ -15,10 +16,7 @@ import { Role } from '@prisma/client';
 export class UserProfileService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Create profile — only USER role.
-  // Works for both flows:
-  // 1) no profile row exists yet (new behavior)
-  // 2) legacy empty profile row already exists
+  // Create profile
   async createProfile(authId: string, dto: CreateUserProfileDto) {
     const auth = await this.prisma.auth.findUnique({
       where: { id: authId },
@@ -28,16 +26,6 @@ export class UserProfileService {
     if (!auth) throw new NotFoundException('Account not found');
     if (!auth.isVerified)
       throw new ForbiddenException('Please verify your phone number first');
-    if (auth.role !== Role.USER)
-      throw new ForbiddenException('Only USER role can create user profile');
-    if (auth.userProfile?.name)
-      throw new ConflictException('Profile already created');
-
-    // Check email uniqueness
-    const emailExists = await this.prisma.userProfile.findUnique({
-      where: { email: dto.email },
-    });
-    if (emailExists) throw new ConflictException('Email already in use');
 
     const profile = await this.prisma.userProfile.upsert({
       where: { authId },
@@ -48,9 +36,6 @@ export class UserProfileService {
         dob: new Date(dto.dob),
         gender: dto.gender,
         preferredSport: dto.preferredSport ?? null,
-        currentLat: dto.currentLat ?? null,
-        currentLng: dto.currentLng ?? null,
-        currentCity: dto.currentCity ?? null,
       },
       update: {
         name: dto.name,
@@ -58,32 +43,17 @@ export class UserProfileService {
         dob: new Date(dto.dob),
         gender: dto.gender,
         preferredSport: dto.preferredSport ?? null,
-        currentLat: dto.currentLat ?? null,
-        currentLng: dto.currentLng ?? null,
-        currentCity: dto.currentCity ?? null,
       },
     });
-
-    const userSettings =
-      dto.preferredSport !== undefined
-        ? await this.prisma.userSettings.upsert({
-            where: { authId },
-            update: { favoriteSport: dto.preferredSport },
-            create: { authId, favoriteSport: dto.preferredSport },
-          })
-        : null;
 
     return {
       success: true,
       message: 'Profile created successfully',
-      data: {
-        ...profile,
-        preferredSport: userSettings?.favoriteSport ?? profile.preferredSport,
-      },
+      data: profile,
     };
   }
 
-  // Get own profile with payment details
+  // Get own profile
   async getProfile(authId: string) {
     const profile = await this.prisma.userProfile.findUnique({
       where: { authId },
@@ -98,127 +68,107 @@ export class UserProfileService {
     };
   }
 
-  // Update profile — only owner of profile can update
-  async updateProfile(authId: string, dto: UpdateUserProfileDto) {
-    const profile = await this.prisma.userProfile.findUnique({
-      where: { authId },
-    });
-
+  // Route 1: Update Home Address (Profile Main Address)
+  async updateHomeAddress(authId: string, dto: UpdateUserProfileDto) {
+    const profile = await this.prisma.userProfile.findUnique({ where: { authId } });
     if (!profile) throw new NotFoundException('Profile not found');
-
-    // Check email uniqueness if being changed
-    if (dto.email && dto.email !== profile.email) {
-      const emailExists = await this.prisma.userProfile.findUnique({
-        where: { email: dto.email },
-      });
-      if (emailExists) throw new ConflictException('Email already in use');
-    }
 
     const updated = await this.prisma.userProfile.update({
       where: { authId },
       data: {
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.email !== undefined && { email: dto.email }),
-        ...(dto.dob !== undefined && { dob: new Date(dto.dob) }),
-        ...(dto.gender !== undefined && { gender: dto.gender }),
-        ...(dto.preferredSport !== undefined && {
-          preferredSport: dto.preferredSport,
-        }),
-        ...(dto.currentLat !== undefined && { currentLat: dto.currentLat }),
-        ...(dto.currentLng !== undefined && { currentLng: dto.currentLng }),
-        ...(dto.currentCity !== undefined && { currentCity: dto.currentCity }),
+        houseNumber: dto.houseNumber ?? undefined,
+        societyName: dto.societyName ?? undefined,
+        landmark: dto.landmark ?? undefined,
+        roadName: dto.roadName ?? undefined,
+        city: dto.city ?? undefined,
+        state: dto.state ?? undefined,
+        pincode: dto.pincode ?? undefined,
+        currentLat: dto.currentLat ?? undefined,
+        currentLng: dto.currentLng ?? undefined,
       },
     });
 
-    if (dto.preferredSport !== undefined) {
-      await this.prisma.userSettings.upsert({
-        where: { authId },
-        update: { favoriteSport: dto.preferredSport },
-        create: { authId, favoriteSport: dto.preferredSport },
-      });
-    }
-
     return {
       success: true,
-      message: 'Profile updated successfully',
+      message: 'Home address updated successfully',
       data: updated,
     };
   }
 
-  // Update avatar URL
-  async updateAvatar(authId: string, avatarUrl: string) {
-    const profile = await this.prisma.userProfile.findUnique({
-      where: { authId },
-    });
-
-    if (!profile) throw new NotFoundException('Profile not found');
-
-    const updated = await this.prisma.userProfile.update({
-      where: { authId },
-      data: { avatarUrl },
+  // Route 2: Add New Location (Address List)
+  async addNewLocation(authId: string, dto: CreateUserAddressDto) {
+    // Note: If prisma.userAddress shows error, usually running 'npx prisma generate' fixes it.
+    const address = await this.prisma.userAddress.create({
+      data: {
+        authId,
+        label: dto.label || 'Other',
+        houseNumber: dto.houseNumber || null,
+        societyName: dto.societyName || null,
+        landmark: dto.landmark || null,
+        roadName: dto.roadName || null,
+        city: dto.city,
+        state: dto.state || null,
+        pincode: dto.pincode,
+        lat: dto.lat,
+        lng: dto.lng,
+        isDefault: dto.isDefault ?? false,
+      },
     });
 
     return {
       success: true,
-      message: 'Avatar updated successfully',
-      data: { avatarUrl: updated.avatarUrl },
+      message: 'New location added successfully',
+      data: address,
     };
   }
 
-  // Save or update UPI payment details
-  async savePaymentDetails(authId: string, dto: PaymentDetailsDto) {
-    const profile = await this.prisma.userProfile.findUnique({
+  // Get saved addresses
+  async getAddresses(authId: string) {
+    const addresses = await this.prisma.userAddress.findMany({
       where: { authId },
+      orderBy: { createdAt: 'desc' },
     });
+    return { success: true, data: addresses };
+  }
 
-    if (!profile) throw new NotFoundException('Profile not found');
+  // Delete saved address
+  async deleteAddress(authId: string, addressId: string) {
+    const address = await this.prisma.userAddress.findUnique({ where: { id: addressId } });
+    if (!address || address.authId !== authId) throw new NotFoundException('Address not found');
 
-    const payment = await this.prisma.payment.upsert({
+    await this.prisma.userAddress.delete({ where: { id: addressId } });
+    return { success: true, message: 'Address deleted' };
+  }
+
+  // Other methods
+  async updateAvatar(authId: string, avatarUrl: string) {
+    await this.prisma.userProfile.update({ where: { authId }, data: { avatarUrl } });
+    return { success: true, data: { avatarUrl } };
+  }
+
+  async savePaymentDetails(authId: string, dto: PaymentDetailsDto) {
+    const profileData = await this.prisma.userProfile.findUnique({ where: { authId } });
+    if (!profileData) throw new NotFoundException('Profile not found');
+
+    await this.prisma.payment.upsert({
       where: { authId },
       update: { upiId: dto.upiId },
-      create: {
-        authId,
-        role: Role.USER,
-        upiId: dto.upiId,
-        userProfileId: profile.id,
+      create: { 
+        authId, 
+        role: Role.USER, 
+        upiId: dto.upiId, 
+        userProfileId: profileData.id 
       },
     });
-
-    return {
-      success: true,
-      message: 'Payment details saved successfully',
-      data: { upiId: payment.upiId },
-    };
+    return { success: true, message: 'Payment saved' };
   }
 
-  // Update location from expo-location
-  async updateLocation(
-    authId: string,
-    lat: number,
-    lng: number,
-    city?: string,
-  ) {
-    if (!lat || !lng) throw new BadRequestException('lat and lng are required');
-
-    const profile = await this.prisma.userProfile.findUnique({
-      where: { authId },
-    });
-
-    if (!profile) throw new NotFoundException('Profile not found');
-
+  // Keep compatibility for any existing location calls but redirect to city
+  async updateLocation(authId: string, lat: number, lng: number, city?: string) {
     await this.prisma.userProfile.update({
       where: { authId },
-      data: {
-        currentLat: lat,
-        currentLng: lng,
-        ...(city && { currentCity: city }),
-      },
+      data: { currentLat: lat, currentLng: lng, city },
     });
-
-    return {
-      success: true,
-      message: 'Location updated successfully',
-      data: { lat, lng, city: city ?? null },
-    };
+    return { success: true, data: { lat, lng, city } };
   }
 }

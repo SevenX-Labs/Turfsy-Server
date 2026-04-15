@@ -41,8 +41,31 @@ export class UpdateUserProfileDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
-  currentCity?: string;
+  houseNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  societyName?: string;
+
+  @IsOptional()
+  @IsString()
+  landmark?: string;
+
+  @IsOptional()
+  @IsString()
+  roadName?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  @IsOptional()
+  @IsString()
+  pincode?: string;
 
   @IsOptional()
   @IsEnum(SportsType, { message: 'preferredSport must be FOOTBALL or CRICKET' })

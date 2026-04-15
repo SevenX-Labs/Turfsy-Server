@@ -38,7 +38,7 @@ export class CreateUserProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  currentCity?: string;
+  city?: string;
 
   @IsOptional()
   @IsEnum(SportsType, { message: 'preferredSport must be FOOTBALL or CRICKET' })

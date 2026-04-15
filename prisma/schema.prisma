@@ -26,6 +26,7 @@ model Auth {
   gamification  UserGamification?
   userSettings  UserSettings?
   ownerSettings OwnerSettings?
+  addresses     UserAddress[]
 
   @@index([phone])
   @@index([role])
@@ -42,7 +43,13 @@ model UserProfile {
   preferredSport SportsType? @map("preferred_sport")
   currentLat     Float?
   currentLng     Float?
-  currentCity    String?
+  houseNumber    String?     @map("house_number")
+  societyName    String?     @map("society_name")
+  landmark       String?
+  roadName       String?     @map("road_name")
+  city           String?
+  state          String?
+  pincode        String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   payment        Payment?
@@ -366,4 +373,25 @@ model OwnerSettings {
 
   @@index([authId])
   @@map("owner-settings")
+}
+model UserAddress {
+  id           String   @id @default(uuid())
+  authId       String   @map("auth_id")
+  label        String?  @default("Home") // Home, Office, etc.
+  houseNumber  String?  @map("house_number")
+  societyName  String?  @map("society_name")
+  landmark     String?
+  roadName     String?  @map("road_name")
+  city         String
+  state        String?
+  pincode      String
+  lat          Float
+  lng          Float
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  auth         Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@index([authId])
+  @@map("user_addresses")
 }
