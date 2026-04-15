@@ -21,7 +21,7 @@ export class UserGamificationService {
     }
 
     const durationHours = booking.durationMins / 60;
-    const pointsToAdd = Math.floor(durationHours * 10);
+    const pointsToAdd = Math.max(1, Math.floor(durationHours * 10));
 
     let gamification = await this.prisma.userGamification.findUnique({
       where: { authId: userId },
@@ -60,8 +60,8 @@ export class UserGamificationService {
           // If user plays within 5 days → streak increases by +1
           newStreak += 1;
         } else {
-          // If user does NOT play for more than 5 days → streak decreases by -1 (minimum 0)
-          newStreak = Math.max(0, newStreak - 1);
+          // If user does NOT play for more than 5 days → streak resets to 1 (starting new)
+          newStreak = 1;
         }
       } else {
         newStreak = 1;
@@ -81,17 +81,35 @@ export class UserGamificationService {
   }
 
   async getOverallStats(userId: string) {
-    const [gamification, leaderboard, nudge] = await Promise.all([
-      this.getUserStats(userId),
+    const gamification = await this.getUserStats(userId);
+    const [leaderboard, nudge] = await Promise.all([
       this.getLeaderboardFiltered('points'),
-      this.getNudgeMessage(userId),
+      this.getNudgeMessage(userId, gamification),
     ]);
 
-    const userRank = await this.getUserRank(userId, 'points');
+    const userRank = await this.getUserRank(userId, 'points', gamification);
+
+    // Calculate effective streak for display (show 0 if expired)
+    let effectiveStreak = gamification?.streak || 0;
+    if (gamification?.lastPlayedDate) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const lastPlayed = gamification.lastPlayedDate;
+      const lastDate = new Date(lastPlayed.getFullYear(), lastPlayed.getMonth(), lastPlayed.getDate());
+      
+      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays > 5) {
+        effectiveStreak = 0;
+      }
+    }
 
     return {
-      streak: gamification?.streak || 0,
+      streak: effectiveStreak,
       points: gamification?.points || 0,
+      totalMatches: gamification?.totalMatches || 0,
+      totalHours: gamification?.totalHours || 0,
       leaderboard: {
         top10: leaderboard,
         currentUser: {
@@ -132,8 +150,8 @@ export class UserGamificationService {
     }));
   }
 
-  async getUserRank(userId: string, sortBy: 'points' | 'totalMatches' | 'totalHours' = 'points') {
-    const userStats = await this.getUserStats(userId);
+  async getUserRank(userId: string, sortBy: 'points' | 'totalMatches' | 'totalHours' = 'points', prefetchedStats?: any) {
+    const userStats = prefetchedStats || await this.getUserStats(userId);
     if (!userStats) return null;
 
     const sortByField = sortBy === 'points' ? 'points' : sortBy === 'totalMatches' ? 'totalMatches' : 'totalHours';
@@ -148,8 +166,8 @@ export class UserGamificationService {
     return count + 1;
   }
 
-  async getNudgeMessage(userId: string) {
-    const stats = await this.getUserStats(userId);
+  async getNudgeMessage(userId: string, prefetchedStats?: any) {
+    const stats = prefetchedStats || await this.getUserStats(userId);
     if (!stats) return 'Book your first game to start your streak! 🔥';
 
     const lastPlayed = stats.lastPlayedDate;
@@ -163,7 +181,7 @@ export class UserGamificationService {
       return 'Play today to keep your streak 🔥';
     }
 
-    const rank = await this.getUserRank(userId, 'points');
+    const rank = await this.getUserRank(userId, 'points', stats);
     if (rank && rank > 10) {
       return 'Play more to reach Top 10!';
     } else if (rank && rank > 3) {
