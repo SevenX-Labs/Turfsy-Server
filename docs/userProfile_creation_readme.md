@@ -16,11 +16,11 @@ There is no `/api/v3/auth/select-role` in current code.
 1. `POST /api/v3/auth/user/login`
 2. `POST /api/v3/auth/user/verify-otp`
 3. `GET /api/v3/auth/get-me` (shows login phone in `data.phone`)
-4. `POST /api/v3/user-profile`
-5. `POST /api/v3/user-profile/upload-avatar`
-6. `GET /api/v3/user-profile`
-7. `PATCH /api/v3/user-profile`
-8. `POST /api/v3/user-profile/location`
+4. `POST /api/v3/user-profile` (Sync GPS data)
+5. `PATCH /api/v3/user-profile/address` (Add House/Society details)
+6. `POST /api/v3/user-profile/upload-avatar`
+7. `GET /api/v3/user-profile`
+8. `PATCH /api/v3/user-profile` (General updates)
 9. `POST /api/v3/user-profile/payment-details`
 10. `DELETE /api/v3/user-profile/upload-avatar`
 
@@ -53,7 +53,9 @@ Request:
   "preferredSport": "CRICKET",
   "currentLat": 19.076,
   "currentLng": 72.8777,
-  "currentCity": "Mumbai"
+  "city": "Mumbai",
+  "state": "Maharashtra",
+  "pincode": "400001"
 }
 ```
 
@@ -133,28 +135,31 @@ Request (any subset):
 {
   "name": "John Updated",
   "email": "john.new@example.com",
-  "currentCity": "Pune",
+  "city": "Pune",
   "preferredSport": "FOOTBALL"
 }
 ```
 
-## 7. Update Location
+## 7. Update Detailed Address
 
-`POST /api/v3/user-profile/location`
+`PATCH /api/v3/user-profile/address`
 
-Headers:
-- `Authorization: Bearer <accessToken>`
-- `Content-Type: application/json`
+Use this when the user fills in the "remaining part" of their address manually.
 
 Request:
 ```json
 {
-  "lat": 18.5204,
-  "lng": 73.8567,
-  "city": "Pune"
+  "houseNumber": "B-402",
+  "societyName": "Royal Residency",
+  "landmark": "Near Sky Mall",
+  "roadName": "Main Link Road"
 }
 ```
 
+**Note:** The backend automatically joins these fields into a single `address` string in the database.
+```
+
+`PATCH /api/v3/user-profile/address` (with lat/lng keys or just query `PATCH /user-profile`)
 ## 8. Save Payment Details
 
 `POST /api/v3/user-profile/payment-details`
