@@ -16,13 +16,14 @@ There is no `/api/v3/auth/select-role` in current code.
 1. `POST /api/v3/auth/user/login`
 2. `POST /api/v3/auth/user/verify-otp`
 3. `GET /api/v3/auth/get-me` (shows login phone in `data.phone`)
-4. `POST /api/v3/user-profile` (Sync GPS data)
-5. `PATCH /api/v3/user-profile/address` (Add House/Society details)
-6. `POST /api/v3/user-profile/upload-avatar`
-7. `GET /api/v3/user-profile`
-8. `PATCH /api/v3/user-profile` (General updates)
-9. `POST /api/v3/user-profile/payment-details`
-10. `DELETE /api/v3/user-profile/upload-avatar`
+5. `GET /api/v3/user-profile/check-availability?username=<your_username>`
+6. `POST /api/v3/user-profile` (Sync GPS data + set username)
+7. `PATCH /api/v3/user-profile/address` (Add House/Society details)
+8. `POST /api/v3/user-profile/upload-avatar`
+9. `GET /api/v3/user-profile`
+10. `PATCH /api/v3/user-profile` (General updates/change username)
+11. `POST /api/v3/user-profile/payment-details`
+12. `DELETE /api/v3/user-profile/upload-avatar`
 
 ## 1. Get Current Account (phone included)
 
@@ -35,6 +36,36 @@ Notes:
 - Returns `data.phone` (the same mobile number used at login).
 - Returns `data.profile` and `data.payment`.
 
+## 1.1 Check Username Availability
+
+`GET /api/v3/user-profile/check-availability`
+
+**Query Params:**
+- `username`: The username to check (e.g., `sahil_123`)
+
+**Rules:**
+- **Length**: 4–20 characters.
+- **Allowed**: lowercase letters, numbers, and underscores (`_`).
+- **Forbidden**: spaces, uppercase, and special characters.
+
+**Rate Limit**: 10 requests per minute per IP.
+
+**Example Response (Available):**
+```json
+{
+  "available": true,
+  "message": "Username is available"
+}
+```
+
+**Example Response (Taken):**
+```json
+{
+  "available": false,
+  "message": "Username is already taken"
+}
+```
+
 ## 2. Create Profile
 
 `POST /api/v3/user-profile`
@@ -46,6 +77,7 @@ Headers:
 Request:
 ```json
 {
+  "username": "john_doe_99",
   "name": "John Doe",
   "email": "john@example.com",
   "dob": "2000-01-15",
@@ -71,6 +103,7 @@ Success response:
   "data": {
     "id": "uuid",
     "authId": "uuid",
+    "username": "john_doe_99",
     "name": "John Doe",
     "email": "john@example.com"
   }
@@ -115,6 +148,7 @@ Success response:
   "data": {
     "id": "uuid",
     "authId": "uuid",
+    "username": "john_doe_99",
     "name": "John Doe",
     "email": "john@example.com",
     "payment": null
@@ -133,6 +167,7 @@ Headers:
 Request (any subset):
 ```json
 {
+  "username": "john_new_handle",
   "name": "John Updated",
   "email": "john.new@example.com",
   "city": "Pune",
