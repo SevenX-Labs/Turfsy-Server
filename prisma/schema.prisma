@@ -230,6 +230,7 @@ model Booking {
   turf              Turf          @relation(fields: [turfId], references: [id], onDelete: Cascade)
   user              Auth          @relation(fields: [userId], references: [id], onDelete: Cascade)
   rating            TurfRating?
+  bookingSplit      BookingSplit?
 
   @@unique([turfId, bookingDate, startTime])
   @@index([userId])
@@ -381,4 +382,39 @@ model OwnerSettings {
 
   @@index([authId])
   @@map("owner-settings")
+}
+
+model BookingSplit {
+  id          String               @id @default(uuid())
+  bookingId   String               @unique @map("booking_id")
+  leadUserId  String               @map("lead_user_id")
+  totalAmount Float                @map("total_amount")
+  isSplitDone Boolean              @default(false) @map("is_split_done")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  booking     Booking              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  players     BookingSplitPlayer[]
+
+  @@index([bookingId])
+  @@map("booking_splits")
+}
+
+model BookingSplitPlayer {
+  id        String            @id @default(uuid())
+  splitId   String            @map("split_id")
+  username  String
+  userId    String?           @map("user_id")
+  amount    Int               @default(0)
+  status    SplitPlayerStatus @default(PENDING)
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+  split     BookingSplit      @relation(fields: [splitId], references: [id], onDelete: Cascade)
+
+  @@index([splitId])
+  @@map("booking_split_players")
+}
+
+enum SplitPlayerStatus {
+  PENDING
+  PAID
 }
