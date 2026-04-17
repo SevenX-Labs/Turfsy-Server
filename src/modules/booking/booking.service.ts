@@ -148,7 +148,7 @@ export class BookingService {
       bookingDate: string;
       startTime: string;
       endTime: string;
-      durationMins: number;
+      durationMins?: number;
       paymentType: PaymentType;
       notes?: string;
       playersCount?: number;
@@ -213,7 +213,7 @@ export class BookingService {
       throw new BadRequestException('End time must be after start time');
     }
 
-    if (dto.durationMins < turf.minSlotDurationMins) {
+    if (dto.durationMins! < turf.minSlotDurationMins) {
       throw new BadRequestException(
         `Minimum slot duration is ${turf.minSlotDurationMins} minutes`,
       );
@@ -224,7 +224,7 @@ export class BookingService {
       turf,
       bookingDate,
       dto.startTime,
-      dto.durationMins,
+      dto.durationMins!,
     );
 
     // ── Layer 4: Deposit amount (server-calculated) ──
@@ -251,7 +251,7 @@ export class BookingService {
       bookingDate: dto.bookingDate,
       startTime: dto.startTime,
       endTime: dto.endTime,
-      durationMins: dto.durationMins,
+      durationMins: dto.durationMins as number,
     });
 
     let booking;
@@ -2450,7 +2450,7 @@ export class BookingService {
     bookingDate: string;
     startTime: string;
     endTime: string;
-    durationMins: number;
+    durationMins?: number;
   }): void {
     // Validate date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dto.bookingDate)) {
@@ -2487,21 +2487,23 @@ export class BookingService {
     }
 
     // ── Auto-calculation logic ──
-    if (dto.durationMins === undefined || dto.durationMins === null) {
-      (dto as any).durationMins = computedDuration;
-    } else if (computedDuration !== dto.durationMins) {
+    const duration = dto.durationMins ?? computedDuration;
+    if (dto.durationMins !== undefined && dto.durationMins !== null && computedDuration !== dto.durationMins) {
       throw new BadRequestException(
         `durationMins (${dto.durationMins}) does not match startTime/endTime difference (${computedDuration})`,
       );
     }
+    
+    // Update DTO for downstream use
+    (dto as any).durationMins = duration;
 
-    // Validate durationMins basic range
-    if (dto.durationMins < 60 || dto.durationMins > 360) {
+    // Validate duration basic range
+    if (duration < 60 || duration > 360) {
       throw new BadRequestException(
         'Duration must be between 60 and 360 minutes',
       );
     }
-    if (dto.durationMins % 30 !== 0) {
+    if (duration % 30 !== 0) {
       throw new BadRequestException(
         'Duration must be a multiple of 30 minutes',
       );
