@@ -13,7 +13,11 @@ export interface PaymentLogEntry {
     | 'verify-pin'
     | 'create-booking'
     | 'complete'
-    | 'rate';
+    | 'rate'
+    | 'split-add-players'
+    | 'split-remove-player'
+    | 'split-trigger'
+    | 'split-update-status';
   amount?: number;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
