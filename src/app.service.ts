@@ -338,6 +338,11 @@ export class AppService {
           },
           {
             method: 'POST',
+            path: '/:bookingId/rebook',
+            message: 'Rebook endpoint working',
+          },
+          {
+            method: 'POST',
             path: '/:bookingId/create-order',
             message: 'Create order endpoint working',
           },
@@ -739,6 +744,28 @@ export class AppService {
             method: 'GET',
             path: '/leaderboard/total-hours-played',
             message: 'Gamification hours leaderboard endpoint working',
+          },
+        ],
+      },
+      {
+        module: 'System',
+        basePath: '/health',
+        status: 'working',
+        routes: [
+          {
+            method: 'GET',
+            path: '/',
+            message: 'Root health check endpoint working',
+          },
+          {
+            method: 'GET',
+            path: '/api/v3/health',
+            message: 'API v3 health check endpoint working',
+          },
+          {
+            method: 'GET',
+            path: '/sahi/hode/api/health',
+            message: 'Custom sahi/hode health check endpoint working',
           },
         ],
       },
