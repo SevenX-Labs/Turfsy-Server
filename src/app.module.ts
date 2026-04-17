@@ -24,10 +24,23 @@ import { UserSettingsModule } from './modules/user-settings/user-settings.module
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // ── Per-route throttling tiers ──
+    // Named throttlers: "strict" for auth/OTP, "medium" for booking/payment, "default" for general
     ThrottlerModule.forRoot([
       {
-        ttl: 60000,
-        limit: 100,
+        name: 'strict',
+        ttl: 60000,     // 1 minute
+        limit: 5,       // 5 req/min — auth/OTP endpoints
+      },
+      {
+        name: 'medium',
+        ttl: 60000,     // 1 minute
+        limit: 20,      // 20 req/min — booking/payment endpoints
+      },
+      {
+        name: 'default',
+        ttl: 60000,     // 1 minute
+        limit: 60,      // 60 req/min — general endpoints
       },
     ]),
     PrismaModule,

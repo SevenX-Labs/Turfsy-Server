@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -24,9 +25,11 @@ export class AuthController {
 
   // ═══════════════════════════════════════════
   //  USER APP ENDPOINTS — role auto-set to USER
+  //  Strict rate limiting: 5 req/min for OTP routes
   // ═══════════════════════════════════════════
 
   @Post('user/login')
+  @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async userLogin(
     @Body() dto: LoginDto,
@@ -37,12 +40,14 @@ export class AuthController {
   }
 
   @Post('user/verify-otp')
+  @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async userVerifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto, Role.USER);
   }
 
   @Post('user/resend-otp')
+  @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async userResendOtp(@Body() dto: ResendOtpDto) {
     return this.authService.resendOtp(dto);
@@ -53,6 +58,7 @@ export class AuthController {
   // ═══════════════════════════════════════════
 
   @Post('owner/login')
+  @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async ownerLogin(
     @Body() dto: LoginDto,
@@ -63,12 +69,14 @@ export class AuthController {
   }
 
   @Post('owner/verify-otp')
+  @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async ownerVerifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto, Role.OWNER);
   }
 
   @Post('owner/resend-otp')
+  @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async ownerResendOtp(@Body() dto: ResendOtpDto) {
     return this.authService.resendOtp(dto);
@@ -89,6 +97,7 @@ export class AuthController {
   // Soft delete account
   @Delete('delete-account')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async deleteAccount(@Req() req: any, @Body() dto: DeleteAccountDto) {
     return this.authService.deleteAccount(req.user.authId, dto);
@@ -105,6 +114,7 @@ export class AuthController {
   // Request phone number change — sends OTP to new number
   @Post('request-phone-change')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async requestPhoneChange(
     @Req() req: any,
@@ -119,6 +129,7 @@ export class AuthController {
   // Verify phone change OTP — updates phone in DB
   @Post('verify-phone-change')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async verifyPhoneChange(
     @Req() req: any,

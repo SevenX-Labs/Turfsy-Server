@@ -10,6 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/services/cache.service';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
@@ -33,6 +34,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -336,6 +338,9 @@ export class AuthService {
       data: { revokedAt: new Date() },
     });
 
+    // Invalidate cached user data on logout
+    this.cacheService.invalidate(`auth:getMe:${session.authId}`);
+
     return {
       success: true,
       message: 'Logged out successfully',
@@ -409,10 +414,14 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────
-  // GET /get-me
+  // GET /get-me (cached for 2 minutes)
   // ─────────────────────────────────────────
 
   async getMe(authId: string) {
+    const cacheKey = `auth:getMe:${authId}`;
+    const cached = this.cacheService.get<any>(cacheKey);
+    if (cached) return cached;
+
     const auth = await this.prisma.auth.findUnique({
       where: { id: authId },
       include: {
@@ -448,7 +457,7 @@ export class AuthService {
     }
 
     // Include phone number in the result specifically
-    return {
+    const result = {
       success: true,
       data: {
         ...authData,
@@ -457,6 +466,10 @@ export class AuthService {
         payment,
       },
     };
+
+    // Cache for 2 minutes
+    this.cacheService.set(cacheKey, result, 1000 * 60 * 2);
+    return result;
   }
 
   // ─────────────────────────────────────────

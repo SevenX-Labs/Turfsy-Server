@@ -15,6 +15,7 @@ import {
   Res,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Response } from 'express';
 import type { Request } from 'express';
 import { BookingService } from './booking.service';
@@ -44,6 +45,7 @@ export class BookingController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('USER')
+  @Throttle({ medium: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.CREATED)
   async createBooking(@Req() req: any, @Body() dto: CreateBookingDto) {
     const ip = req.ip || req.connection?.remoteAddress;
@@ -57,6 +59,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Post(':bookingId/create-order')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ medium: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async createOrder(
     @Req() req: any,
@@ -77,6 +80,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Post(':bookingId/confirm-payment')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ medium: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async confirmPayment(
     @Req() req: any,
@@ -93,6 +97,7 @@ export class BookingController {
   }
 
   @Post('razorpay/webhook')
+  @SkipThrottle() // Webhook uses signature-based auth, not rate-limited
   @HttpCode(HttpStatus.OK)
   async razorpayWebhook(@Req() req: Request, @Body() body: any) {
     const signatureHeader = req.headers['x-razorpay-signature'];
@@ -140,6 +145,7 @@ export class BookingController {
   @Post(':bookingId/verify-pin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
+  @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async verifyPin(
     @Req() req: any,
@@ -286,6 +292,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Patch(':bookingId/cancel')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ medium: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async cancelBooking(
     @Req() req: any,
@@ -308,6 +315,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Post('cron/no-shows')
   @UseGuards(CronGuard)
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async cronMarkNoShows(@Req() req: any) {
     const ip = req.ip || req.connection?.remoteAddress;
@@ -321,6 +329,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Post('cron/auto-complete')
   @UseGuards(CronGuard)
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async cronAutoComplete(@Req() req: any) {
     const ip = req.ip || req.connection?.remoteAddress;

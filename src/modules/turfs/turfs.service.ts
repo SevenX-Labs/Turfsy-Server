@@ -4,13 +4,17 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/services/cache.service';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
 import { TurfStatus, SportsType } from '@prisma/client';
 
 @Injectable()
 export class TurfsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   // 1. Create a Turf
   async createTurf(authId: string, dto: CreateTurfDto) {
@@ -96,6 +100,10 @@ export class TurfsService {
         weekendNightPrice: dto.weekendNightPrice,
       },
     });
+
+    // Invalidate turf list caches
+    this.cache.invalidate('turfs:all');
+    this.cache.invalidate('home:activeTurfs');
 
     return {
       success: true,
@@ -235,6 +243,11 @@ export class TurfsService {
       },
     });
 
+    // Invalidate turf caches
+    this.cache.invalidate(`turf:${turfId}`);
+    this.cache.invalidate('turfs:all');
+    this.cache.invalidate('home:activeTurfs');
+
     return {
       success: true,
       message: 'Turf updated successfully',
@@ -260,6 +273,11 @@ export class TurfsService {
       data: { status },
     });
 
+    // Invalidate turf caches
+    this.cache.invalidate(`turf:${turfId}`);
+    this.cache.invalidate('turfs:all');
+    this.cache.invalidate('home:activeTurfs');
+
     return {
       success: true,
       message: `Turf status updated to ${status}`,
@@ -267,82 +285,94 @@ export class TurfsService {
     };
   }
 
-  // 5. Get Turf Details (Consumer View)
+  // 5. Get Turf Details (Consumer View) — cached for 2 minutes
   async getTurfDetails(turfId: string) {
-    const turf = await this.prisma.turf.findUnique({
-      where: { id: turfId },
-      include: {
-        owner: {
-          select: {
-            name: true,
-            contactNumber: true,
+    return this.cache.getOrSet(
+      `turf:${turfId}`,
+      async () => {
+        const turf = await this.prisma.turf.findUnique({
+          where: { id: turfId },
+          include: {
+            owner: {
+              select: {
+                name: true,
+                contactNumber: true,
+              },
+            },
           },
-        },
+        });
+
+        if (!turf) {
+          throw new NotFoundException('Turf not found');
+        }
+
+        return {
+          ...turf,
+          images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
+            Boolean,
+          ),
+          rating: 4.5, // Placeholder
+          rules: [
+            'No smoking inside the turf',
+            'Wear proper non-marking sports shoes',
+            'Please arrive 10 minutes before your slot',
+          ],
+          customerReviews: [
+            {
+              reviewerName: 'Rohit Sharma',
+              rating: 5,
+              comment: 'Excellent quality ground!',
+            },
+            {
+              reviewerName: 'Virat Kohli',
+              rating: 4,
+              comment: 'Good pitch, floodlights could be better.',
+            },
+          ],
+        };
       },
-    });
-
-    if (!turf) {
-      throw new NotFoundException('Turf not found');
-    }
-
-    return {
-      ...turf,
-      images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
-        Boolean,
-      ),
-      rating: 4.5, // Placeholder
-      rules: [
-        'No smoking inside the turf',
-        'Wear proper non-marking sports shoes',
-        'Please arrive 10 minutes before your slot',
-      ],
-      customerReviews: [
-        {
-          reviewerName: 'Rohit Sharma',
-          rating: 5,
-          comment: 'Excellent quality ground!',
-        },
-        {
-          reviewerName: 'Virat Kohli',
-          rating: 4,
-          comment: 'Good pitch, floodlights could be better.',
-        },
-      ],
-    };
+      1000 * 60 * 2, // 2-minute TTL
+    );
   }
 
   async listAllTurfs() {
-    const turfs = await this.prisma.turf.findMany({
-      where: {
-        status: 'ACTIVE',
-        deletedAt: null,
-      },
-      include: {
-        owner: {
-          select: {
-            name: true,
-            contactNumber: true,
+    return this.cache.getOrSet(
+      'turfs:all',
+      async () => {
+        const turfs = await this.prisma.turf.findMany({
+          where: {
+            status: 'ACTIVE',
+            deletedAt: null,
           },
-        },
+          include: {
+            owner: {
+              select: {
+                name: true,
+                contactNumber: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 100, // Hard limit added to prevent OOM
+        });
+
+        const formatted = turfs.map((turf) => ({
+          ...turf,
+          images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
+            Boolean,
+          ),
+          rating: 0,
+          reviewCount: 0,
+        }));
+
+        return {
+          success: true,
+          count: formatted.length,
+          data: formatted,
+        };
       },
-      orderBy: { createdAt: 'desc' },
-      take: 100, // Hard limit added to prevent OOM
-    });
-
-    const formatted = turfs.map((turf) => ({
-      ...turf,
-      images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
-        Boolean,
-      ),
-      rating: 0,
-      reviewCount: 0,
-    }));
-
-    return {
-      success: true,
-      count: formatted.length,
-      data: formatted,
-    };
+      1000 * 60 * 3, // 3-minute TTL
+    );
   }
 
   // 6. Basic Search

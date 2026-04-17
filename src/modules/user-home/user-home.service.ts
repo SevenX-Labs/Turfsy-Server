@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { SportsType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/services/cache.service';
 import { HomeSectionType } from './types/home-section.enum';
 import { TurfCardDto } from './dto/turf-card.dto';
 import { UserHomeSectionDto } from './dto/user-home-section.dto';
@@ -109,7 +110,10 @@ type RawTurf = {
 export class UserHomeService {
   private readonly logger = new Logger(UserHomeService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   // ─────────────────────────────────────────
   // Main entry point
@@ -301,52 +305,55 @@ export class UserHomeService {
   // ─────────────────────────────────────────
 
   private async fetchAllActiveTurfs(): Promise<RawTurf[]> {
-    // NOTE: If your schema has a Review model linked to Turf,
-    // add `_avg: { select: { rating: true } }` and `_count: { select: { reviews: true } }`.
-    // For now, this safely falls back to 0 if those relations don't exist yet.
-    const turfs = await (this.prisma as any).turf.findMany({
-      where: {
-        status: 'ACTIVE',
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        name: true,
-        city: true,
-        address: true,
-        sportsType: true,
-        turfSize: true,
-        status: true,
-        openTime: true,
-        closeTime: true,
-        lat: true,
-        lng: true,
-        weekdayDayPrice: true,
-        weekdayNightPrice: true,
-        weekendDayPrice: true,
-        weekendNightPrice: true,
-        floodLights: true,
-        parking: true,
-        washroom: true,
-        changingRoom: true,
-        drinkingWater: true,
-        seatingArea: true,
-        cafeteria: true,
-        groundDayUrl: true,
-        groundNightUrl: true,
-        entranceUrl: true,
-        updatedAt: true,
-        createdAt: true,
-        owner: {
-          select: {
-            name: true,
-            contactNumber: true,
+    // Cache active turfs for 3 minutes to reduce DB load on home page
+    return this.cache.getOrSet(
+      'home:activeTurfs',
+      async () => {
+        const turfs = await (this.prisma as any).turf.findMany({
+          where: {
+            status: 'ACTIVE',
+            deletedAt: null,
           },
-        },
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            address: true,
+            sportsType: true,
+            turfSize: true,
+            status: true,
+            openTime: true,
+            closeTime: true,
+            lat: true,
+            lng: true,
+            weekdayDayPrice: true,
+            weekdayNightPrice: true,
+            weekendDayPrice: true,
+            weekendNightPrice: true,
+            floodLights: true,
+            parking: true,
+            washroom: true,
+            changingRoom: true,
+            drinkingWater: true,
+            seatingArea: true,
+            cafeteria: true,
+            groundDayUrl: true,
+            groundNightUrl: true,
+            entranceUrl: true,
+            updatedAt: true,
+            createdAt: true,
+            owner: {
+              select: {
+                name: true,
+                contactNumber: true,
+              },
+            },
+          },
+        });
+        return turfs as RawTurf[];
       },
-    });
-
-    return turfs as RawTurf[];
+      1000 * 60 * 3, // 3-minute TTL
+    );
   }
 
   // ─────────────────────────────────────────

@@ -6,12 +6,33 @@ import { join } from 'path';
 import { json } from 'express';
 import { SecurityExceptionFilter } from './common/filters/security-exception.filter';
 import helmet from 'helmet';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const compression = require('compression');
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // ── Disable verbose logging in production ──
+    logger:
+      process.env.NODE_ENV === 'production'
+        ? ['error', 'warn']
+        : ['log', 'debug', 'error', 'warn', 'verbose'],
+  });
 
   // ── Layer 1: Secure HTTP Headers ──
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+        },
+      },
+      crossOriginEmbedderPolicy: false, // Allow mobile app embeds
+      hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    }),
+  );
 
   // ── Layer 2: Cross-Origin Resource Sharing ──
   app.enableCors({
@@ -23,12 +44,29 @@ async function bootstrap() {
           'http://localhost:8081',
         ],
     credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-forwarded-for',
+      'x-cron-secret',
+      'x-razorpay-signature',
+    ],
+    maxAge: 86400, // Cache preflight for 24h
   });
 
-  // ── Layer 3: Payload Size Limits & Raw Body for Webhooks ──
+  // ── Layer 3: Gzip Compression (reduces payload size ~70%) ──
+  app.use(
+    compression({
+      threshold: 1024, // Only compress responses > 1KB
+      level: 6, // Balanced speed/compression
+    }),
+  );
+
+  // ── Layer 4: Payload Size Limits & Raw Body for Webhooks ──
   app.use(
     json({
-      limit: '5mb',
+      limit: '1mb', // Tightened from 5mb — no endpoint needs > 1MB JSON
       verify: (req, _res, buf) => {
         if (buf?.length) {
           (req as any).rawBody = buf;
@@ -37,7 +75,7 @@ async function bootstrap() {
     }),
   );
 
-  // ── Layer 10: Global validation pipe (class-validator) ──
+  // ── Layer 5: Global validation pipe (class-validator) ──
   // whitelist: strip unexpected fields (strict mode)
   // forbidNonWhitelisted: reject requests with extra fields
   // transform: auto-transform payloads to DTO instances
@@ -47,16 +85,21 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
+      disableErrorMessages: process.env.NODE_ENV === 'production',
     }),
   );
 
-  // ── Layer 11: Global exception filter (generic error messages) ──
+  // ── Layer 6: Global exception filter (generic error messages) ──
   app.useGlobalFilters(new SecurityExceptionFilter());
 
   // Serve static assets from the "uploads" directory
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
+    maxAge: '1d', // Cache static assets for 1 day
   });
+
+  // ── Disable express header that leaks tech stack ──
+  app.getHttpAdapter().getInstance().disable('x-powered-by');
 
   await app.listen(process.env.PORT ?? 3000);
 }

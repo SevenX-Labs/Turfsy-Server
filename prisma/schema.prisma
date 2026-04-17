@@ -126,6 +126,8 @@ model Turf {
   @@index([status, weekdayDayPrice])
   @@index([status, city, sportsType])
   @@index([status, city, weekdayDayPrice])
+  @@index([status, deletedAt])              // Hot: fetchAllActiveTurfs, listAllTurfs, searchTurfs
+  @@index([ownerProfileId, deletedAt])      // Hot: getMyTurfs
 }
 
 model Payment {
@@ -162,6 +164,7 @@ model Session {
 
   @@index([token])
   @@index([authId])
+  @@index([authId, revokedAt])              // Hot: active session lookups
 }
 
 model OtpEntry {
@@ -237,6 +240,10 @@ model Booking {
   @@index([userId, bookingStatus])
   @@index([userId, bookingDate])
   @@index([turfId, bookingDate])
+  @@index([turfId, bookingStatus])                         // Hot: owner booking lookups
+  @@index([userId, bookingDate, bookingStatus])            // Hot: getActiveBookingToday, getBookingsByStatus
+  @@index([bookingStatus, paymentType, paymentStatus])     // Hot: cron autoCompleteOnlineBookings
+  @@index([bookingStatus, bookingDate])                    // Hot: cron markNoShows, filtered queries
   @@map("bookings")
 }
 
@@ -255,6 +262,7 @@ model SlotLock {
   @@index([turfId, bookingDate])
   @@index([userId, bookingDate])
   @@index([bookingId])
+  @@index([expiresAt])                      // Hot: expired lock cleanup
   @@map("slot_locks")
 }
 
@@ -335,6 +343,7 @@ model UserGamification {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   auth           Auth      @relation(fields: [authId], references: [id], onDelete: Cascade)
 
+  @@index([points])                         // Hot: leaderboard sorting
   @@map("user_gamification")
 }
 

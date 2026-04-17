@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/services/cache.service';
 import { CreateUserProfileDto } from './dto/create-profile.dto';
 import { UpdateUserProfileDto } from './dto/update-profile.dto';
 import { PaymentDetailsDto } from './dto/payment-details.dto';
@@ -12,7 +13,10 @@ import { Role, SportsType } from '@prisma/client';
 
 @Injectable()
 export class UserProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   // Helper to format multiple manual fields into the single 'address' string
   private formatAddress(dto: any): string {
@@ -100,17 +104,27 @@ export class UserProfileService {
       },
     });
 
+    // Invalidate profile cache after create/update
+    this.cache.invalidate(`profile:${authId}`);
+    this.cache.invalidate(`auth:getMe:${authId}`);
+
     return { success: true, message: 'Profile created', data: profile };
   }
 
-  // Get profile
+  // Get profile (cached for 2 minutes)
   async getProfile(authId: string) {
-    const profile = await this.prisma.userProfile.findUnique({
-      where: { authId },
-      include: { payment: true },
-    });
-    if (!profile) throw new NotFoundException('Profile not found');
-    return { success: true, data: profile };
+    return this.cache.getOrSet(
+      `profile:${authId}`,
+      async () => {
+        const profile = await this.prisma.userProfile.findUnique({
+          where: { authId },
+          include: { payment: true },
+        });
+        if (!profile) throw new NotFoundException('Profile not found');
+        return { success: true, data: profile };
+      },
+      1000 * 60 * 2, // 2-minute TTL
+    );
   }
 
   // Update Address (Handles both GPS updates and Manual House/Society additions)
@@ -131,6 +145,10 @@ export class UserProfileService {
         currentLng: dto.currentLng ?? undefined,
       },
     });
+
+    // Invalidate caches on address update
+    this.cache.invalidate(`profile:${authId}`);
+    this.cache.invalidate(`auth:getMe:${authId}`);
 
     return {
       success: true,
@@ -173,6 +191,10 @@ export class UserProfileService {
         roadName: undefined,
       },
     });
+
+    // Invalidate caches on profile update
+    this.cache.invalidate(`profile:${authId}`);
+    this.cache.invalidate(`auth:getMe:${authId}`);
 
     return { success: true, message: 'Profile updated', data: updated };
   }
