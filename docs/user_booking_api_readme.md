@@ -22,7 +22,7 @@ User selects an Available Time Slot
 Create Booking (POST /api/v3/booking)
 (No amount passed! Backend automatically calculates price based on Turf's day/night + weekday/weekend rules)
    ↓
-API returns 'amountToPay' based on paymentType selection
+API returns 'amountToPay' AND acquires a 5-minute Slot Lock
    ↓
 Create Order (POST :bookingId/create-order) -> Gets Razorpay order ID
    ↓
@@ -41,7 +41,7 @@ Confirm Payment (POST :bookingId/confirm-payment with signature)
 
 ### 2. PIN Verification (For Visit)
 ```text
-CASH-inclusive Booking:
+HALF_ONLINE or FULL_CASH Booking:
 Booking Confirmed -> 4-digit checkInPin Generated (e.g. 4821)
 User arrives at Turf -> Shows PIN -> Pays any remaining amount
 Owner verifies PIN (POST :bookingId/verify-pin) -> Booking marked as COMPLETED
@@ -62,16 +62,16 @@ Owner verifies PIN (POST :bookingId/verify-pin) -> Booking marked as COMPLETED
 ### Booking Status (`bookingStatus`)
 | Status | Meaning |
 |--------------|---------|
-| `PENDING` | Created, waiting for online deposit/payment |
+| `PENDING` | Created, waiting for online deposit. Slot locked for 5 mins. |
 | `CONFIRMED` | Payment done (if online) OR auto-confirmed (if FULL_CASH) |
 | `COMPLETED` | User visited the turf and PIN verified |
 | `CANCELLED` | Cancelled by user or system |
-| `NO_SHOW` | Time passed and user never checked in |
+| `NO_SHOW` | Time passed (15 mins past start) and user never checked in |
 
 ### Payment Status (`paymentStatus`)
 | Status | Meaning |
 |--------------|---------|
-| `PENDING` | Awaiting payment |
+| `PENDING` | Awaiting payment (or cash payment at turf) |
 | `SUCCESS` | Online payment received |
 | `FAILED` | Online payment attempt failed |
 | `REFUNDED` | Online payment refunded after cancellation |
@@ -84,7 +84,7 @@ Owner verifies PIN (POST :bookingId/verify-pin) -> Booking marked as COMPLETED
 ```
 GET /api/v3/booking/availability/:turfId?date=2026-04-05
 ```
-**Description:** Show available/unavailable slots to the user.
+**Description:** Show available/unavailable slots. Returns pricing rules for that specific date.
 **Response:**
 ```json
 {
@@ -122,12 +122,17 @@ POST /api/v3/booking
   "playersCount": 12
 }
 ```
-**Options for `paymentType`:** `FULL_ONLINE`, `HALF_ONLINE_HALF_CASH`, `FULL_CASH`.
+**Validation:** 
+- `paymentType` must be `FULL_ONLINE`, `HALF_ONLINE_HALF_CASH`, or `FULL_CASH`.
+- `bookingDate` must be YYYY-MM-DD.
+- Time must be HH:MM (24hr).
+- **Strict Mode**: Extra fields (like `sportsType`) will cause 400 Bad Request.
 
-**Response (FULL_ONLINE Example):**
+**Response:**
 ```json
 {
   "success": true,
+  "message": "Booking created. Pay full amount...",
   "data": {
     "id": "booking-uuid",
     "displayId": "TRF-xxxx",
@@ -135,7 +140,9 @@ POST /api/v3/booking
     "amount": 1200,
     "depositAmount": 1200,
     "amountToPay": 1200,
-    "remainingAmount": 0
+    "remainingAmount": 0,
+    "checkInPin": "4821",
+    "pinExpiresAt": "2026-04-05T15:00:00Z"
   }
 }
 ```
@@ -146,7 +153,7 @@ POST /api/v3/booking
 ```
 POST /api/v3/booking/pay-at-turf
 ```
-**Description:** Shortcut to create a booking with `paymentType` forced to `FULL_CASH`. Ideal for "Quick Book".
+**Description:** Convenience endpoint. Same body as Create Booking, but `paymentType` is forced to `FULL_CASH`.
 
 ---
 
@@ -162,7 +169,7 @@ POST /api/v3/booking/:bookingId/rebook
   "paymentType": "HALF_ONLINE_HALF_CASH"
 }
 ```
-*Fields are optional; missing ones are cloned from the original booking.*
+*Missing fields are cloned from the original booking. Returns the same response as Create Booking.*
 
 ---
 
@@ -176,13 +183,13 @@ POST /api/v3/booking/:bookingId/create-order
   "success": true,
   "data": {
     "orderId": "order_PqR...",
-    "amount": 60000, 
+    "amount": 120000, 
     "currency": "INR",
     "keyId": "rzp_test_..."
   }
 }
 ```
-*(Note: `amount` is in Paise! 60000 = ₹600)*
+*(Note: `amount` is in Paise for Razorpay!)*
 
 ---
 
@@ -206,80 +213,57 @@ POST /api/v3/booking/:bookingId/confirm-payment
 PATCH /api/v3/booking/:bookingId/cancel
 ```
 **Request Body:** `{ "reason": "Weather issues" }`
+**Refund Logic:** Automated partial refund (e.g., 75%) if payment was `SUCCESS`.
 
 ---
 
-### 8. My Bookings (List & Filter)
+### 8. My Bookings
 ```
 GET /api/v3/booking/my-bookings
 GET /api/v3/booking/my-bookings/active
 GET /api/v3/booking/my-bookings/bookings?status=upcoming
-GET /api/v3/booking/my-bookings/bookings?filter=week&date=2026-04-05
+GET /api/v3/booking/my-bookings/bookings?filter=week
 ```
 
 ---
 
-### 9. Single Booking Details
-```
-GET /api/v3/booking/my-bookings/:bookingId
-```
-
----
-
-### 10. Rate Completed Booking
-```
-POST /api/v3/booking/my-bookings/:bookingId/rateTurf
-```
-**RequestBody:** `{ "rating": 5, "review": "Great lighting!" }`
-
----
-
-### 11. Transaction History
+### 9. Transaction History
 ```
 GET /api/v3/booking/transaction-history
 ```
-**Description:** List of all payments and associated booking details.
+
+---
+
+### 10. Invoice & Receipt
+```
+GET /api/v3/booking/my-bookings/:bookingId/invoice
+GET /api/v3/booking/my-bookings/:bookingId/invoice/pdf
+```
 
 ---
 
 ## 🏢 OWNER API ENDPOINTS
-**Base Path:** `/api/v3/booking` | **Role:** `OWNER`
 
 ### 1. Verify Check-in PIN
 ```
 POST /api/v3/booking/:bookingId/verify-pin
 ```
-**Description:** Mark a booking (CASH/HALF_CASH) as COMPLETED.
-**RequestBody:** `{ "pin": "1234" }`
+**Body:** `{ "pin": "1234" }`
+**Result:** Marks booking as `COMPLETED`. Required for CASH and HALF_CASH.
 
 ---
 
-### 2. Manual Complete (Online only)
+### 2. Mark Completed (Online Only)
 ```
 PATCH /api/v3/booking/:bookingId/complete
 ```
-**Description:** Mark a fully online booking as COMPLETED without PIN.
+**Description:** For Fully Online bookings where owner confirms user arrived without PIN.
 
 ---
 
-### 3. Owner Booking Lists
+### 3. Owner Dashboard & Analytics
 ```
-GET /api/v3/booking/owner/bookings
-GET /api/v3/booking/owner/bookings/active
 GET /api/v3/booking/owner/bookings-filtered?time=today&status=upcoming
-```
-
----
-
-### 4. Single Booking Details (Owner)
-```
-GET /api/v3/booking/owner/bookings/:bookingId
-```
-
----
-
-### 5. Owner Analytics & Reports
-```
 GET /api/v3/booking/owner/analytics
 GET /api/v3/booking/owner/analytics/csv
 GET /api/v3/booking/owner/analytics/pdf
@@ -287,22 +271,19 @@ GET /api/v3/booking/owner/analytics/pdf
 
 ---
 
-## ⚙️ SYSTEM & WEBHOOKS
+## ⚙️ BACKGROUND LOGIC
 
 ### 1. Razorpay Webhook
-```
-POST /api/v3/booking/razorpay/webhook
-```
-**Headers:** `x-razorpay-signature` | Verifies and confirms booking.
+`POST /api/v3/booking/razorpay/webhook`
+Validates signature and confirms booking if the client-side confirmation fails or is skipped.
 
 ### 2. No-Show Cron
-```
-POST /api/v3/booking/cron/no-shows
-```
-**Guard:** `X-Cron-Secret` | Mark CONFIRMED bookings as NO_SHOW if slot/buffer time passed.
+`POST /api/v3/booking/cron/no-shows`
+Auto-marks `CONFIRMED` bookings as `NO_SHOW` if 15 minutes have passed since the slot started without a PIN verification.
 
 ### 3. Auto-Complete Cron
-```
-POST /api/v3/booking/cron/auto-complete
-```
-**Guard:** `X-Cron-Secret` | Auto-completes fully paid online bookings after slot end time.
+`POST /api/v3/booking/cron/auto-complete`
+Auto-marks `CONFIRMED` fully-online bookings as `COMPLETED` 2 hours after the slot ends.
+
+### 4. Slot Lock
+When a booking is created (PENDING), the slot is locked for **5 minutes**. If payment is not confirmed within this window, the lock expires and the slot becomes available again for others.
