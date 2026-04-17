@@ -299,6 +299,64 @@ export class BookingService {
   }
 
   // ═══════════════════════════════════════════════════════
+  // 1.2 REBOOK (User)
+  //     Clones a previous booking with new date/time
+  // ═══════════════════════════════════════════════════════
+  async rebook(
+    authId: string,
+    bookingId: string,
+    dto: {
+      bookingDate: string;
+      startTime?: string;
+      endTime?: string;
+      durationMins?: number;
+      paymentType?: 'ONLINE' | 'CASH';
+    },
+    ip?: string,
+  ) {
+    const oldBooking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!oldBooking) {
+      throw new NotFoundException('Original booking not found');
+    }
+
+    if (oldBooking.userId !== authId) {
+      throw new ForbiddenException(
+        'You can only rebook your own previous bookings',
+      );
+    }
+
+    const startTime = dto.startTime || oldBooking.startTime;
+    const endTime = dto.endTime || oldBooking.endTime;
+
+    // Calculate duration if not provided
+    let durationMins = dto.durationMins;
+    if (durationMins === undefined) {
+      const [startH, startM] = startTime.split(':').map(Number);
+      const [endH, endM] = endTime.split(':').map(Number);
+      durationMins = endH * 60 + endM - (startH * 60 + startM);
+    }
+
+    // Prepare new booking data
+    const newBookingDto = {
+      turfId: oldBooking.turfId,
+      bookingDate: dto.bookingDate,
+      startTime,
+      endTime,
+      durationMins,
+      paymentType: dto.paymentType || oldBooking.paymentType,
+      notes: oldBooking.notes || undefined,
+      playersCount: oldBooking.playersCount || undefined,
+    };
+
+    return this.createBooking(authId, newBookingDto, ip);
+  }
+
+
+
+  // ═══════════════════════════════════════════════════════
   // 1.5 GET BOOKED SLOTS (Availability)
   //     Layer 6: Rate Limiting (30/user/1min)
   // ═══════════════════════════════════════════════════════

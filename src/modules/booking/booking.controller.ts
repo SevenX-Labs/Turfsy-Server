@@ -30,6 +30,7 @@ import {
   VerifyPinDto,
   RateTurfDto,
   CancelBookingDto,
+  RebookBookingDto,
 } from './dto/booking.dto';
 
 @Controller('api/v3/booking')
@@ -50,6 +51,24 @@ export class BookingController {
   async createBooking(@Req() req: any, @Body() dto: CreateBookingDto) {
     const ip = req.ip || req.connection?.remoteAddress;
     return this.bookingService.createBooking(req.user.authId, dto, ip);
+  }
+
+  // ──────────────────────────────────────────────
+  // 1.5 REBOOK (User)
+  // POST /api/v3/booking/:bookingId/rebook
+  // ──────────────────────────────────────────────
+  @Post(':bookingId/rebook')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('USER')
+  @Throttle({ medium: { limit: 10, ttl: 60000 } })
+  @HttpCode(HttpStatus.CREATED)
+  async rebook(
+    @Req() req: any,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+    @Body() dto: RebookBookingDto,
+  ) {
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.bookingService.rebook(req.user.authId, bookingId, dto, ip);
   }
 
   // ──────────────────────────────────────────────
