@@ -213,21 +213,6 @@ export class BookingService {
       throw new BadRequestException('End time must be after start time');
     }
 
-    // ── Duration validation (Handles midnight crossing) ──
-    const [startH, startM] = dto.startTime.split(':').map(Number);
-    const [endH, endM] = dto.endTime.split(':').map(Number);
-    let calculatedDuration = (endH * 60 + endM) - (startH * 60 + startM);
-    
-    // If it crosses midnight, add 24 hours in minutes
-    if (calculatedDuration < 0) {
-      calculatedDuration += 24 * 60;
-    }
-
-    if (calculatedDuration !== dto.durationMins) {
-      throw new BadRequestException(
-        `durationMins (${dto.durationMins}) does not match startTime/endTime difference (${calculatedDuration})`,
-      );
-    }
     if (dto.durationMins < turf.minSlotDurationMins) {
       throw new BadRequestException(
         `Minimum slot duration is ${turf.minSlotDurationMins} minutes`,
@@ -2481,6 +2466,29 @@ export class BookingService {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(dto.endTime)) {
       throw new BadRequestException(
         'Invalid endTime format. Use HH:MM (24hr).',
+      );
+    }
+
+    // ── Duration Integrity Validation (Supports Midnight Crossing) ──
+    const [startH, startM] = dto.startTime.split(':').map(Number);
+    const [endH, endM] = dto.endTime.split(':').map(Number);
+
+    const totalStartMins = startH * 60 + startM;
+    const totalEndMins = endH * 60 + endM;
+
+    let computedDuration: number;
+
+    if (totalEndMins >= totalStartMins) {
+      // Same-day booking
+      computedDuration = totalEndMins - totalStartMins;
+    } else {
+      // Cross-midnight booking (1440 mins/day)
+      computedDuration = 1440 - totalStartMins + totalEndMins;
+    }
+
+    if (computedDuration !== dto.durationMins) {
+      throw new BadRequestException(
+        `durationMins (${dto.durationMins}) does not match startTime/endTime difference (${computedDuration})`,
       );
     }
 
