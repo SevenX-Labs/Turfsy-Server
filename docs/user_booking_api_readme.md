@@ -1,6 +1,7 @@
 # Turfsy Booking API Documentation
 
 Base URL: `/api/v3/booking`  
+Health URL: `/api/v3/health` OR `/sahi/hode/api/health`
 **All endpoints require JWT** → `Authorization: Bearer <token>`
 
 ---
@@ -203,6 +204,32 @@ Race-safety rules:
 * The backend enforces every rule; the frontend is never trusted.
 
 > **One-line summary:** Lock before payment, confirm after webhook, auto-release if abandoned.
+
+---
+
+### 2.2 Rebook Previous Booking
+```
+POST /api/v3/booking/:bookingId/rebook
+```
+
+**Description:** Allows a user to repeat a past booking for a new date. It clones the turf, duration, notes, and player count from the original booking but allows overriding time and payment type.
+
+**Request Body:**
+```json
+{
+  "bookingDate": "2026-05-10",
+  "startTime": "18:00", 
+  "endTime": "20:00",
+  "durationMins": 120,
+  "paymentType": "ONLINE"
+}
+```
+*(All fields except `bookingDate` are optional. If not provided, they are cloned from the old booking. If you provide a new time but no duration, the backend recalculates duration for you.)*
+
+**Response:**
+*Same structure as "Create Booking" (Standard Booking Response).*
+
+---
 
 ### 2.5 Create Razorpay Order
 ```

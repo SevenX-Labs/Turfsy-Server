@@ -747,25 +747,14 @@ export class AppService {
           },
         ],
       },
-      {
         module: 'System',
-        basePath: '/health',
+        basePath: '/sahi/hode',
         status: 'working',
         routes: [
           {
             method: 'GET',
-            path: '/',
-            message: 'Root health check endpoint working',
-          },
-          {
-            method: 'GET',
-            path: '/api/v3/health',
-            message: 'API v3 health check endpoint working',
-          },
-          {
-            method: 'GET',
-            path: '/sahi/hode/api/health',
-            message: 'Custom sahi/hode health check endpoint working',
+            path: '/api/health',
+            message: 'Custom health check endpoint working',
           },
         ],
       },

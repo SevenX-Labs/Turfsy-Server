@@ -53,11 +53,95 @@ Here is the exact step-by-step workflow for integrating the Split system into th
 
 ---
 
-## 📡 Single Reference API Endpoint List
+## 📡 Detailed API Reference
+All endpoints require `Bearer Token`.
 
-1. **Add Players**: `POST /:bookingId/split/players`
-2. **Remove Player**: `DELETE /split/players/:playerId`
-3. **Fetch Split Status (Preview & State)**: `GET /:bookingId/split`
-4. **Setting Custom Amounts (Overrides)**: `PATCH /:bookingId/split/custom-amounts`
-5. **Trigger/Confirm Final Split**: `POST /:bookingId/split/trigger`
-6. **Settle Debt Status**: `PATCH /split/players/:playerId/status` (Changes `PENDING` to `PAID`)
+### 1. Add Players
+`POST /api/v3/booking/:bookingId/split/players`
+**Description**: Starts the split by adding players by their usernames.
+**Request Body**:
+```json
+{
+  "usernames": ["johndoe", "janedoe"]
+}
+```
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Players added to split",
+  "data": null
+}
+```
+
+### 2. Remove Player
+`DELETE /api/v3/booking/split/players/:playerId`
+**Description**: Removes a player from the split (only if they haven't paid yet).
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Player removed from split",
+  "data": null
+}
+```
+
+### 3. Fetch Split Details
+`GET /api/v3/booking/:bookingId/split`
+**Description**: Fetches current split configuration, players, and amounts.
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Split details fetched",
+  "data": {
+    "id": "split-uuid",
+    "totalAmount": 1200,
+    "isSplitDone": false,
+    "players": [
+      {
+        "id": "player-uuid",
+        "username": "johndoe",
+        "amount": 600,
+        "status": "PENDING",
+        "isNotifiable": true
+      }
+    ]
+  }
+}
+```
+
+### 4. Custom Split Amounts
+`PATCH /api/v3/booking/:bookingId/split/custom-amounts`
+**Description**: Manually override how much each player pays. Total must equal booking amount.
+**Request Body**:
+```json
+{
+  "amounts": [
+    { "playerId": "uuid-1", "amount": 800 },
+    { "playerId": "uuid-2", "amount": 400 }
+  ]
+}
+```
+
+### 5. Trigger/Confirm Split
+`POST /api/v3/booking/:bookingId/split/trigger`
+**Description**: Finalizes the split. Prevents further player additions.
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Split triggered and finalized"
+}
+```
+
+### 6. Mark as Paid (Settlement)
+`PATCH /api/v3/booking/split/players/:playerId/status`
+**Description**: Updates a player's settlement status.
+**Request Body**:
+```json
+{
+  "status": "PAID"
+}
+```
+

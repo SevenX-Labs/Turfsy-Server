@@ -14,7 +14,7 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  @Get(['health', 'api/v3/health', 'sahi/hode/api/health'])
+  @Get(['sahi/hode/api/health'])
   async checkHealth(@Req() req: any) {
     const endpointGroups = this.appService.getEndpointHealthCatalog();
     const catalogEndpointCount = endpointGroups.reduce(
