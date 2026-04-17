@@ -1,7 +1,7 @@
 # Turfsy Booking API Documentation
 
 Base URL: `/api/v3/booking`  
-Health URL: `/api/v3/health` OR `/sahi/hode/api/health`
+Health URL: `/sahi/hode/api/health`
 **All endpoints require JWT** → `Authorization: Bearer <token>`
 
 ---
