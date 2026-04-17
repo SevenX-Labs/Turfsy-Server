@@ -43,10 +43,11 @@ export class CreateBookingDto {
   @Max(360, { message: 'Maximum duration is 360 minutes' })
   durationMins: number;
 
-  @IsIn(['ONLINE', 'CASH', 'PAY_ON_TURF'], {
-    message: 'paymentType must be ONLINE, CASH, or PAY_ON_TURF',
+  @IsIn(['FULL_ONLINE', 'HALF_ONLINE_HALF_CASH', 'FULL_CASH'], {
+    message:
+      'paymentType must be FULL_ONLINE, HALF_ONLINE_HALF_CASH, or FULL_CASH',
   })
-  paymentType: 'ONLINE' | 'CASH' | 'PAY_ON_TURF';
+  paymentType: 'FULL_ONLINE' | 'HALF_ONLINE_HALF_CASH' | 'FULL_CASH';
 
   @IsOptional()
   @IsString()
@@ -129,10 +130,11 @@ export class RebookBookingDto {
   durationMins?: number;
 
   @IsOptional()
-  @IsIn(['ONLINE', 'CASH', 'PAY_ON_TURF'], {
-    message: 'paymentType must be ONLINE, CASH, or PAY_ON_TURF',
+  @IsIn(['FULL_ONLINE', 'HALF_ONLINE_HALF_CASH', 'FULL_CASH'], {
+    message:
+      'paymentType must be FULL_ONLINE, HALF_ONLINE_HALF_CASH, or FULL_CASH',
   })
-  paymentType?: 'ONLINE' | 'CASH' | 'PAY_ON_TURF';
+  paymentType?: 'FULL_ONLINE' | 'HALF_ONLINE_HALF_CASH' | 'FULL_CASH';
 }
 
 

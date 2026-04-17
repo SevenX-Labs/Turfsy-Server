@@ -60,8 +60,8 @@ export class BookingController {
   @HttpCode(HttpStatus.CREATED)
   async createPayAtTurfBooking(@Req() req: any, @Body() dto: CreateBookingDto) {
     const ip = req.ip || req.connection?.remoteAddress;
-    // Enforce PAY_ON_TURF type for this route
-    dto.paymentType = 'PAY_ON_TURF';
+    // Enforce FULL_CASH type for this route
+    dto.paymentType = 'FULL_CASH';
     return this.bookingService.createBooking(req.user.authId, dto, ip);
   }
 

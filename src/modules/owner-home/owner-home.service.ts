@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BookingStatus, PaymentStatus } from '@prisma/client';
+import { BookingStatus, PaymentStatus, PaymentType } from '@prisma/client';
 
 @Injectable()
 export class OwnerHomeService {
@@ -121,8 +121,14 @@ export class OwnerHomeService {
   // 5. Payment Distribution
   async getPaymentDistribution(ownerAuthId: string) {
     const { bookings } = await this.getOwnerData(ownerAuthId);
-    const online = bookings.filter((b) => b.paymentType === 'ONLINE').length;
-    const cash = bookings.filter((b) => b.paymentType === 'CASH').length;
+    const online = bookings.filter(
+      (b) => b.paymentType === PaymentType.FULL_ONLINE,
+    ).length;
+    const cash = bookings.filter(
+      (b) =>
+        b.paymentType === PaymentType.HALF_ONLINE_HALF_CASH ||
+        b.paymentType === PaymentType.FULL_CASH,
+    ).length;
 
     return {
       success: true,

@@ -14,7 +14,7 @@ import {
   RateLimiterService,
   RATE_LIMITS,
 } from '../../common/services/rate-limiter.service';
-import { Booking, PaymentStatus } from '@prisma/client';
+import { Booking, PaymentStatus, PaymentType, BookingStatus } from '@prisma/client';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 import { Parser } from 'json2csv';
@@ -147,7 +147,7 @@ export class BookingService {
       startTime: string;
       endTime: string;
       durationMins: number;
-      paymentType: 'ONLINE' | 'CASH' | 'PAY_ON_TURF';
+      paymentType: PaymentType;
       notes?: string;
       playersCount?: number;
     },
@@ -205,9 +205,9 @@ export class BookingService {
 
     // ── Layer 4: Deposit amount (server-calculated) ──
     const depositAmount =
-      dto.paymentType === 'CASH'
+      dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH
         ? Math.floor(amount * CASH_DEPOSIT_PERCENT)
-        : dto.paymentType === 'PAY_ON_TURF'
+        : dto.paymentType === PaymentType.FULL_CASH
           ? 0
           : amount;
 
@@ -260,7 +260,7 @@ export class BookingService {
             notes: sanitizedNotes,
             playersCount: dto.playersCount,
             bookingStatus:
-              dto.paymentType === 'PAY_ON_TURF' ? 'CONFIRMED' : 'PENDING',
+              dto.paymentType === PaymentType.FULL_CASH ? 'CONFIRMED' : 'PENDING',
             paymentStatus: 'PENDING',
           } as any,
         });
@@ -275,8 +275,8 @@ export class BookingService {
       data: { bookingId: booking.id },
     });
 
-    // For PAY_ON_TURF, we confirm immediately, so release the lock
-    if (dto.paymentType === 'PAY_ON_TURF') {
+    // For FULL_CASH, we confirm immediately, so release the lock
+    if (dto.paymentType === PaymentType.FULL_CASH) {
       await this.releaseSlotLockForBooking(booking);
     }
 
@@ -294,9 +294,9 @@ export class BookingService {
     return {
       success: true,
       message:
-        dto.paymentType === 'CASH'
+        dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH
           ? `Booking created. Pay 50% deposit (₹${depositAmount}) online. Remaining ₹${amount - depositAmount} at turf.`
-          : dto.paymentType === 'PAY_ON_TURF'
+          : dto.paymentType === PaymentType.FULL_CASH
             ? `Booking confirmed! Please pay the full amount (₹${amount}) at the turf upon arrival.`
             : `Booking created. Pay full amount (₹${amount}) to confirm.`,
       data: {
@@ -320,7 +320,7 @@ export class BookingService {
       startTime?: string;
       endTime?: string;
       durationMins?: number;
-      paymentType?: 'ONLINE' | 'CASH' | 'PAY_ON_TURF';
+      paymentType?: PaymentType;
     },
     ip?: string,
   ) {
@@ -721,7 +721,7 @@ export class BookingService {
 
     // ── Update booking atomically ──
     const newPaymentStatus =
-      booking.paymentType === 'ONLINE' ? 'SUCCESS' : 'PENDING';
+      booking.paymentType === PaymentType.FULL_ONLINE ? 'SUCCESS' : 'PENDING';
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
@@ -751,7 +751,7 @@ export class BookingService {
     return {
       success: true,
       message:
-        booking.paymentType === 'CASH'
+        booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH
           ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - booking.depositAmount} at turf. Your Check-In PIN is ${booking.checkInPin}.`
           : `Payment successful. Booking confirmed! Your Check-In PIN is ${booking.checkInPin}.`,
       data: { ...updated, displayId: this.formatBookingId(updated.id) },
@@ -930,7 +930,7 @@ export class BookingService {
     }
 
     const newPaymentStatus =
-      booking.paymentType === 'ONLINE' ? 'SUCCESS' : 'PENDING';
+      booking.paymentType === PaymentType.FULL_ONLINE ? 'SUCCESS' : 'PENDING';
 
     const updated = await this.prisma.booking.update({
       where: { id: booking.id },
@@ -1216,7 +1216,10 @@ export class BookingService {
     }
 
     // ── Layer 5 & Layer 8: Payment type check & Fallback Override ──
-    if (booking.paymentType === 'CASH') {
+    if (
+      booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH ||
+      booking.paymentType === PaymentType.FULL_CASH
+    ) {
       // For CASH, allow manual completion ONLY if the PIN window has expired
       const now = new Date();
       const datePart = booking.bookingDate.toISOString().split('T')[0];
@@ -1848,7 +1851,7 @@ export class BookingService {
     const confirmedOnline = await this.prisma.booking.findMany({
       where: {
         bookingStatus: 'CONFIRMED',
-        paymentType: 'ONLINE',
+        paymentType: PaymentType.FULL_ONLINE,
         paymentStatus: 'SUCCESS',
       },
     });

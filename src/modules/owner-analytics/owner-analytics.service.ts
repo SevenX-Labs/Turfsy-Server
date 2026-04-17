@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PaymentType } from '@prisma/client';
 
 @Injectable()
 export class OwnerAnalyticsService {
@@ -88,14 +89,15 @@ export class OwnerAnalyticsService {
     const cashAmount = bookings
       .filter(
         (b) =>
-          b.paymentType === 'CASH' &&
+          (b.paymentType === PaymentType.HALF_ONLINE_HALF_CASH ||
+            b.paymentType === PaymentType.FULL_CASH) &&
           (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
       )
       .reduce((sum, b) => sum + b.amount, 0);
     const onlineAmount = bookings
       .filter(
         (b) =>
-          b.paymentType === 'ONLINE' &&
+          b.paymentType === PaymentType.FULL_ONLINE &&
           (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
       )
       .reduce((sum, b) => sum + b.amount, 0);

@@ -323,9 +323,9 @@ enum PaymentStatus {
 }
 
 enum PaymentType {
-  ONLINE
-  CASH
-  PAY_ON_TURF
+  FULL_ONLINE
+  HALF_ONLINE_HALF_CASH
+  FULL_CASH
 }
 
 enum PayoutMethod {

@@ -49,21 +49,19 @@ Owner verifies PIN -> Booking marked as COMPLETED
 ```
 
 ### 3. Cancellation & No-Show Rules
-1. **Cancellation (≥ 2 hours before start):**
-   - User is allowed to cancel via `PATCH .../cancel`.
-   - **75% Refund** of whatever online amount was paid (`depositAmount`).
-   - bookingStatus = `CANCELLED`, paymentStatus = `REFUNDED`.
-2. **Cancellation (< 2 hours before start):**
-   - API blocks cancellation (`400 Bad Request`). User cannot cancel.
-3. **No-Show Tracking (Cron):**
-   - If user doesn't check in within 15 minutes of slot start time, system auto-marks as `NO_SHOW`.
-   - Deposit is forfeited (no refund).
-
-3. **Pay on Turf (100% CASH):**
-   - User is allowed to book without advance via `POST .../pay-at-turf`.
-   - **0% Deposit** online.
-   - bookingStatus = `CONFIRMED`, paymentStatus = `PENDING`.
-   - Full amount is paid in cash at the turf.
+1. **Full Online Payment:**
+   - User pays 100% via Razorpay.
+   - status = `CONFIRMED`, paymentStatus = `SUCCESS`.
+2. **Half Online / Half Cash:**
+   - User pays 50% deposit online.
+   - Status shows `CONFIRMED` once deposit is paid.
+   - Remaining 50% is paid as cash at the turf.
+   - After PIN verification, status moves to `COMPLETED`.
+3. **Full Cash (Pay at Turf):**
+   - User pays 0% online.
+   - Status is `CONFIRMED` immediately.
+   - Full 100% is paid at the turf.
+   - After PIN verification, status moves to `COMPLETED`.
 
 ### State Summary
 
