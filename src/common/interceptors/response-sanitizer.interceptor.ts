@@ -57,9 +57,24 @@ export class ResponseSanitizerInterceptor implements NestInterceptor {
     return this.recursiveStripFields(data, ['pinAttempts', 'pinLocked']);
   }
 
+  private isDateObject(value: any): boolean {
+    return (
+      value instanceof Date ||
+      Object.prototype.toString.call(value) === '[object Date]' ||
+      (value !== null &&
+        typeof value === 'object' &&
+        typeof value.getTime === 'function' &&
+        typeof value.toISOString === 'function')
+    );
+  }
+
   private recursiveStripFields(obj: any, fields: string[]): any {
     if (obj === null || obj === undefined) return obj;
     if (typeof obj !== 'object') return obj;
+
+    // Preserve Date objects — they have no enumerable own properties
+    // so Object.entries(date) returns [], producing {} without this guard
+    if (this.isDateObject(obj)) return obj;
 
     if (Array.isArray(obj)) {
       return obj.map((item) => this.recursiveStripFields(item, fields));
@@ -68,7 +83,10 @@ export class ResponseSanitizerInterceptor implements NestInterceptor {
     const result: Record<string, any> = {};
     for (const [key, value] of Object.entries(obj)) {
       if (fields.includes(key)) continue; // Strip the field
-      if (typeof value === 'object' && value !== null) {
+
+      if (this.isDateObject(value)) {
+        result[key] = value;
+      } else if (typeof value === 'object' && value !== null) {
         result[key] = this.recursiveStripFields(value, fields);
       } else {
         result[key] = value;
