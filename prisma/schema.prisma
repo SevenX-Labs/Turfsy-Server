@@ -255,6 +255,7 @@ model SlotLock {
   bookingDate DateTime @map("booking_date") @db.Date
   startTime   String   @map("start_time")
   endTime     String   @map("end_time")
+  durationMins Int     @map("duration_mins")
   expiresAt   DateTime @map("expires_at")
   bookingId   String?  @unique @map("booking_id")
   createdAt   DateTime @default(now()) @map("created_at")

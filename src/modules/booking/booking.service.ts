@@ -60,6 +60,7 @@ export class BookingService {
       bookingDate: string;
       startTime: string;
       endTime: string;
+      durationMins: number;
     },
   ) {
     const bookingDate = this.normalizeBookingDate(dto.bookingDate);
@@ -108,6 +109,7 @@ export class BookingService {
         bookingDate,
         startTime: dto.startTime,
         endTime: dto.endTime,
+        durationMins: dto.durationMins as any,
         expiresAt,
       },
     });
@@ -160,7 +162,8 @@ export class BookingService {
     );
 
     // ── Layer 10: Additional server-side validation ──
-    this.validateBookingInputs(dto);
+    // (Consolidated all time-range checks after turf fetch)
+    this.validateBasicInputs(dto);
 
     // ── Strip HTML tags from notes ──
     const sanitizedNotes = dto.notes ? this.stripHtml(dto.notes) : undefined;
@@ -210,7 +213,21 @@ export class BookingService {
       throw new BadRequestException('End time must be after start time');
     }
 
-    // ── Duration validation ──
+    // ── Duration validation (Handles midnight crossing) ──
+    const [startH, startM] = dto.startTime.split(':').map(Number);
+    const [endH, endM] = dto.endTime.split(':').map(Number);
+    let calculatedDuration = (endH * 60 + endM) - (startH * 60 + startM);
+    
+    // If it crosses midnight, add 24 hours in minutes
+    if (calculatedDuration < 0) {
+      calculatedDuration += 24 * 60;
+    }
+
+    if (calculatedDuration !== dto.durationMins) {
+      throw new BadRequestException(
+        `durationMins (${dto.durationMins}) does not match startTime/endTime difference (${calculatedDuration})`,
+      );
+    }
     if (dto.durationMins < turf.minSlotDurationMins) {
       throw new BadRequestException(
         `Minimum slot duration is ${turf.minSlotDurationMins} minutes`,
@@ -242,6 +259,7 @@ export class BookingService {
       bookingDate: dto.bookingDate,
       startTime: dto.startTime,
       endTime: dto.endTime,
+      durationMins: dto.durationMins,
     });
 
     let booking;
@@ -2434,7 +2452,7 @@ export class BookingService {
   /**
    * Layer 10: Validate booking inputs server-side
    */
-  private validateBookingInputs(dto: {
+  private validateBasicInputs(dto: {
     bookingDate: string;
     startTime: string;
     endTime: string;
@@ -2457,12 +2475,7 @@ export class BookingService {
       );
     }
 
-    // endTime > startTime
-    if (dto.endTime <= dto.startTime) {
-      throw new BadRequestException('endTime must be after startTime');
-    }
-
-    // Validate durationMins
+    // Validate durationMins basic range
     if (dto.durationMins < 60 || dto.durationMins > 360) {
       throw new BadRequestException(
         'Duration must be between 60 and 360 minutes',
@@ -2471,16 +2484,6 @@ export class BookingService {
     if (dto.durationMins % 30 !== 0) {
       throw new BadRequestException(
         'Duration must be a multiple of 30 minutes',
-      );
-    }
-
-    // Verify durationMins matches actual time difference
-    const [startH, startM] = dto.startTime.split(':').map(Number);
-    const [endH, endM] = dto.endTime.split(':').map(Number);
-    const calculatedDuration = endH * 60 + endM - (startH * 60 + startM);
-    if (calculatedDuration !== dto.durationMins) {
-      throw new BadRequestException(
-        'durationMins does not match startTime/endTime difference',
       );
     }
   }
