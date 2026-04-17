@@ -19,13 +19,19 @@ const tmpDiskStorage = diskStorage({
   destination: os.tmpdir(),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + extname(file.originalname || ''));
+    cb(
+      null,
+      file.fieldname + '-' + uniqueSuffix + extname(file.originalname || ''),
+    );
   },
 });
 import { UploadService } from './upload.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-import { RateLimiterService, RATE_LIMITS } from '../../common/services/rate-limiter.service';
+import {
+  RateLimiterService,
+  RATE_LIMITS,
+} from '../../common/services/rate-limiter.service';
 
 @Controller('api/v3/user-profile')
 @UseGuards(JwtAuthGuard)
@@ -49,7 +55,9 @@ export class UploadController {
         const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
         if (!allowed.includes(file.mimetype)) {
           return cb(
-            new BadRequestException('Only jpeg, png, and webp images are allowed'),
+            new BadRequestException(
+              'Only jpeg, png, and webp images are allowed',
+            ),
             false,
           );
         }
@@ -61,7 +69,10 @@ export class UploadController {
     @Req() req: any,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    this.rateLimiter.check(`user:${req.user.authId}:upload-avatar`, RATE_LIMITS.UPLOAD_AVATAR);
+    this.rateLimiter.check(
+      `user:${req.user.authId}:upload-avatar`,
+      RATE_LIMITS.UPLOAD_AVATAR,
+    );
 
     if (!file) {
       throw new BadRequestException('Image file is required (field: "file")');

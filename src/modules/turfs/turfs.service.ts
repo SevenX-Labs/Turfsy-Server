@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
@@ -102,7 +106,9 @@ export class TurfsService {
 
   // 2. Get Nearby Turfs (Haversine distance calculation)
   async getNearbyTurfs(userLat: number, userLng: number, radiusKm: number) {
-    const rawIds = await this.prisma.$queryRaw<{ id: string; distanceKm: number }[]>`
+    const rawIds = await this.prisma.$queryRaw<
+      { id: string; distanceKm: number }[]
+    >`
       SELECT * FROM (
         SELECT id,
           (6371 * acos(
@@ -135,8 +141,14 @@ export class TurfsService {
         const distanceInfo = rawIds.find((r) => r.id === turf.id);
         return {
           ...turf,
-          distanceKm: distanceInfo ? parseFloat(Number(distanceInfo.distanceKm).toFixed(2)) : 0,
-          images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
+          distanceKm: distanceInfo
+            ? parseFloat(Number(distanceInfo.distanceKm).toFixed(2))
+            : 0,
+          images: [
+            turf.entranceUrl,
+            turf.groundDayUrl,
+            turf.groundNightUrl,
+          ].filter(Boolean),
         };
       })
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
@@ -194,18 +206,32 @@ export class TurfsService {
         // lat and lng are omitted here as per requirements
         ...(dto.openTime !== undefined && { openTime: dto.openTime }),
         ...(dto.closeTime !== undefined && { closeTime: dto.closeTime }),
-        ...(dto.minSlotDurationMins !== undefined && { minSlotDurationMins: dto.minSlotDurationMins }),
+        ...(dto.minSlotDurationMins !== undefined && {
+          minSlotDurationMins: dto.minSlotDurationMins,
+        }),
         ...(dto.floodLights !== undefined && { floodLights: dto.floodLights }),
         ...(dto.parking !== undefined && { parking: dto.parking }),
         ...(dto.washroom !== undefined && { washroom: dto.washroom }),
-        ...(dto.changingRoom !== undefined && { changingRoom: dto.changingRoom }),
-        ...(dto.drinkingWater !== undefined && { drinkingWater: dto.drinkingWater }),
+        ...(dto.changingRoom !== undefined && {
+          changingRoom: dto.changingRoom,
+        }),
+        ...(dto.drinkingWater !== undefined && {
+          drinkingWater: dto.drinkingWater,
+        }),
         ...(dto.seatingArea !== undefined && { seatingArea: dto.seatingArea }),
         ...(dto.cafeteria !== undefined && { cafeteria: dto.cafeteria }),
-        ...(dto.weekdayDayPrice !== undefined && { weekdayDayPrice: dto.weekdayDayPrice }),
-        ...(dto.weekdayNightPrice !== undefined && { weekdayNightPrice: dto.weekdayNightPrice }),
-        ...(dto.weekendDayPrice !== undefined && { weekendDayPrice: dto.weekendDayPrice }),
-        ...(dto.weekendNightPrice !== undefined && { weekendNightPrice: dto.weekendNightPrice }),
+        ...(dto.weekdayDayPrice !== undefined && {
+          weekdayDayPrice: dto.weekdayDayPrice,
+        }),
+        ...(dto.weekdayNightPrice !== undefined && {
+          weekdayNightPrice: dto.weekdayNightPrice,
+        }),
+        ...(dto.weekendDayPrice !== undefined && {
+          weekendDayPrice: dto.weekendDayPrice,
+        }),
+        ...(dto.weekendNightPrice !== undefined && {
+          weekendNightPrice: dto.weekendNightPrice,
+        }),
       },
     });
 
@@ -261,20 +287,26 @@ export class TurfsService {
 
     return {
       ...turf,
-      images: [
-        turf.entranceUrl,
-        turf.groundDayUrl,
-        turf.groundNightUrl,
-      ].filter(Boolean),
+      images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
+        Boolean,
+      ),
       rating: 4.5, // Placeholder
       rules: [
         'No smoking inside the turf',
         'Wear proper non-marking sports shoes',
         'Please arrive 10 minutes before your slot',
-      ], 
+      ],
       customerReviews: [
-        { reviewerName: 'Rohit Sharma', rating: 5, comment: 'Excellent quality ground!' },
-        { reviewerName: 'Virat Kohli', rating: 4, comment: 'Good pitch, floodlights could be better.' },
+        {
+          reviewerName: 'Rohit Sharma',
+          rating: 5,
+          comment: 'Excellent quality ground!',
+        },
+        {
+          reviewerName: 'Virat Kohli',
+          rating: 4,
+          comment: 'Good pitch, floodlights could be better.',
+        },
       ],
     };
   }
@@ -299,11 +331,9 @@ export class TurfsService {
 
     const formatted = turfs.map((turf) => ({
       ...turf,
-      images: [
-        turf.entranceUrl,
-        turf.groundDayUrl,
-        turf.groundNightUrl,
-      ].filter(Boolean),
+      images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
+        Boolean,
+      ),
       rating: 0,
       reviewCount: 0,
     }));
@@ -332,7 +362,9 @@ export class TurfsService {
 
     const formatted = turfs.map((turf) => ({
       ...turf,
-      images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
+      images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
+        Boolean,
+      ),
       rating: 0,
       reviewCount: 0,
     }));
@@ -354,7 +386,8 @@ export class TurfsService {
     userLat?: number;
     userLng?: number;
   }) {
-    const { city, sportsType, minPrice, maxPrice, sortBy, userLat, userLng } = params;
+    const { city, sportsType, minPrice, maxPrice, sortBy, userLat, userLng } =
+      params;
 
     const where: any = {
       status: 'ACTIVE',
@@ -377,8 +410,10 @@ export class TurfsService {
 
     let prismaOrderBy: any = { createdAt: 'desc' };
     if (sortBy === 'price_low') prismaOrderBy = { weekdayDayPrice: 'asc' };
-    else if (sortBy === 'price_high') prismaOrderBy = { weekdayDayPrice: 'desc' };
-    else if (sortBy === 'popular') prismaOrderBy = { savedByUsers: { _count: 'desc' } };
+    else if (sortBy === 'price_high')
+      prismaOrderBy = { weekdayDayPrice: 'desc' };
+    else if (sortBy === 'popular')
+      prismaOrderBy = { savedByUsers: { _count: 'desc' } };
     else if (sortBy === 'newest') prismaOrderBy = { createdAt: 'desc' };
 
     const turfs = await this.prisma.turf.findMany({
@@ -390,7 +425,12 @@ export class TurfsService {
       take: sortBy === 'distance' ? 200 : 50,
     });
 
-    const haversine = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const haversine = (
+      lat1: number,
+      lng1: number,
+      lat2: number,
+      lng2: number,
+    ): number => {
       const R = 6371;
       const dLat = ((lat2 - lat1) * Math.PI) / 180;
       const dLng = ((lng2 - lng1) * Math.PI) / 180;
@@ -406,20 +446,35 @@ export class TurfsService {
 
     let formatted = turfs.map((turf) => {
       let distanceKm: number | undefined;
-      if (userLat !== undefined && userLng !== undefined && turf.lat && turf.lng) {
-        distanceKm = parseFloat(haversine(userLat, userLng, turf.lat, turf.lng).toFixed(2));
+      if (
+        userLat !== undefined &&
+        userLng !== undefined &&
+        turf.lat &&
+        turf.lng
+      ) {
+        distanceKm = parseFloat(
+          haversine(userLat, userLng, turf.lat, turf.lng).toFixed(2),
+        );
       }
 
       return {
         ...turf,
         distanceKm,
-        images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(Boolean),
+        images: [
+          turf.entranceUrl,
+          turf.groundDayUrl,
+          turf.groundNightUrl,
+        ].filter(Boolean),
         rating: 0,
         reviewCount: 0,
       };
     });
 
-    if (sortBy === 'distance' && userLat !== undefined && userLng !== undefined) {
+    if (
+      sortBy === 'distance' &&
+      userLat !== undefined &&
+      userLng !== undefined
+    ) {
       formatted = formatted
         .filter((t) => t.distanceKm !== undefined)
         .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0))

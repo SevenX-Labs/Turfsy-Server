@@ -28,14 +28,25 @@ export class OwnerHomeService {
     const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const revenueToday = bookings
-      .filter(b => b.bookingDate.toISOString().split('T')[0] === today && (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'))
+      .filter(
+        (b) =>
+          b.bookingDate.toISOString().split('T')[0] === today &&
+          (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+      )
       .reduce((sum, b) => sum + b.amount, 0);
 
     const revenueMonth = bookings
-      .filter(b => b.bookingDate >= firstOfMonth && (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'))
+      .filter(
+        (b) =>
+          b.bookingDate >= firstOfMonth &&
+          (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+      )
       .reduce((sum, b) => sum + b.amount, 0);
 
-    return { success: true, data: { today: revenueToday, month: revenueMonth, currency: 'INR' } };
+    return {
+      success: true,
+      data: { today: revenueToday, month: revenueMonth, currency: 'INR' },
+    };
   }
 
   // 2. Booking Statistics
@@ -46,11 +57,15 @@ export class OwnerHomeService {
 
     const counts = {
       total: bookings.length,
-      today: bookings.filter(b => b.bookingDate.toISOString().split('T')[0] === today).length,
-      upcoming: bookings.filter(b => b.bookingDate >= new Date() && b.bookingStatus === 'CONFIRMED').length,
-      completed: bookings.filter(b => b.bookingStatus === 'COMPLETED').length,
-      cancelled: bookings.filter(b => b.bookingStatus === 'CANCELLED').length,
-      noShow: bookings.filter(b => b.bookingStatus === 'NO_SHOW').length,
+      today: bookings.filter(
+        (b) => b.bookingDate.toISOString().split('T')[0] === today,
+      ).length,
+      upcoming: bookings.filter(
+        (b) => b.bookingDate >= new Date() && b.bookingStatus === 'CONFIRMED',
+      ).length,
+      completed: bookings.filter((b) => b.bookingStatus === 'COMPLETED').length,
+      cancelled: bookings.filter((b) => b.bookingStatus === 'CANCELLED').length,
+      noShow: bookings.filter((b) => b.bookingStatus === 'NO_SHOW').length,
     };
 
     return { success: true, data: counts };
@@ -60,7 +75,7 @@ export class OwnerHomeService {
   async getRecentActivity(ownerAuthId: string, limit = 10) {
     const { owner } = await this.getOwnerData(ownerAuthId);
     const bookings = await this.prisma.booking.findMany({
-      where: { turfId: { in: owner.turfs.map(t => t.id) } },
+      where: { turfId: { in: owner.turfs.map((t) => t.id) } },
       include: { turf: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -68,7 +83,7 @@ export class OwnerHomeService {
 
     return {
       success: true,
-      data: bookings.map(b => ({
+      data: bookings.map((b) => ({
         id: b.id,
         displayId: `TRF-${b.id.slice(0, 7).toUpperCase()}`,
         turfName: b.turf.name,
@@ -88,9 +103,15 @@ export class OwnerHomeService {
       d.setDate(d.getDate() - (6 - i));
       const dateStr = d.toISOString().split('T')[0];
       const revenue = bookings
-        .filter(b => b.bookingDate.toISOString().split('T')[0] === dateStr && b.bookingStatus === 'COMPLETED')
+        .filter(
+          (b) =>
+            b.bookingDate.toISOString().split('T')[0] === dateStr &&
+            b.bookingStatus === 'COMPLETED',
+        )
         .reduce((sum, b) => sum + b.amount, 0);
-      const count = bookings.filter(b => b.bookingDate.toISOString().split('T')[0] === dateStr).length;
+      const count = bookings.filter(
+        (b) => b.bookingDate.toISOString().split('T')[0] === dateStr,
+      ).length;
       return { date: dateStr, revenue, count };
     });
 
@@ -100,24 +121,36 @@ export class OwnerHomeService {
   // 5. Payment Distribution
   async getPaymentDistribution(ownerAuthId: string) {
     const { bookings } = await this.getOwnerData(ownerAuthId);
-    const online = bookings.filter(b => b.paymentType === 'ONLINE').length;
-    const cash = bookings.filter(b => b.paymentType === 'CASH').length;
+    const online = bookings.filter((b) => b.paymentType === 'ONLINE').length;
+    const cash = bookings.filter((b) => b.paymentType === 'CASH').length;
 
     return {
       success: true,
       data: {
-        online: { count: online, percentage: bookings.length ? (online / bookings.length * 100).toFixed(1) : 0 },
-        cash: { count: cash, percentage: bookings.length ? (cash / bookings.length * 100).toFixed(1) : 0 },
-      }
+        online: {
+          count: online,
+          percentage: bookings.length
+            ? ((online / bookings.length) * 100).toFixed(1)
+            : 0,
+        },
+        cash: {
+          count: cash,
+          percentage: bookings.length
+            ? ((cash / bookings.length) * 100).toFixed(1)
+            : 0,
+        },
+      },
     };
   }
 
   // 6. Turf Performance
   async getTurfPerformance(ownerAuthId: string) {
     const { owner, bookings } = await this.getOwnerData(ownerAuthId);
-    const stats = owner.turfs.map(turf => {
-      const turfBookings = bookings.filter(b => b.turfId === turf.id);
-      const revenue = turfBookings.filter(b => b.bookingStatus === 'COMPLETED').reduce((sum, b) => sum + b.amount, 0);
+    const stats = owner.turfs.map((turf) => {
+      const turfBookings = bookings.filter((b) => b.turfId === turf.id);
+      const revenue = turfBookings
+        .filter((b) => b.bookingStatus === 'COMPLETED')
+        .reduce((sum, b) => sum + b.amount, 0);
       return {
         id: turf.id,
         name: turf.name,
@@ -133,6 +166,11 @@ export class OwnerHomeService {
     // ... logic remains but basically aggregates all ...
     const { bookings } = await this.getOwnerData(ownerAuthId);
     // (Existing logic simplified)
-    return { success: true, data: { /* ... as before ... */ } };
+    return {
+      success: true,
+      data: {
+        /* ... as before ... */
+      },
+    };
   }
 }

@@ -33,25 +33,37 @@ export class OwnerAnalyticsService {
 
   async getCompletedBookings(ownerAuthId: string) {
     const bookings = await this.getOwnerBookings(ownerAuthId);
-    const count = bookings.filter((b) => b.bookingStatus === 'COMPLETED').length;
+    const count = bookings.filter(
+      (b) => b.bookingStatus === 'COMPLETED',
+    ).length;
     return { success: true, data: { completedBookings: count } };
   }
 
   async getCancelledBookings(ownerAuthId: string) {
     const bookings = await this.getOwnerBookings(ownerAuthId);
-    const count = bookings.filter((b) => b.bookingStatus === 'CANCELLED').length;
+    const count = bookings.filter(
+      (b) => b.bookingStatus === 'CANCELLED',
+    ).length;
     return { success: true, data: { cancelledBookings: count } };
   }
 
   async getRevenueByDate(ownerAuthId: string) {
     const bookings = await this.getOwnerBookings(ownerAuthId);
     const map: { [date: string]: number } = {};
-    bookings.filter(b => b.bookingStatus === 'COMPLETED').forEach((b) => {
-      const date = b.bookingDate.toISOString().split('T')[0];
-      map[date] = (map[date] || 0) + b.amount;
-    });
-    const result = Object.entries(map).map(([date, revenue]) => ({ date, revenue }));
-    return { success: true, data: result.sort((a,b) => a.date.localeCompare(b.date)) };
+    bookings
+      .filter((b) => b.bookingStatus === 'COMPLETED')
+      .forEach((b) => {
+        const date = b.bookingDate.toISOString().split('T')[0];
+        map[date] = (map[date] || 0) + b.amount;
+      });
+    const result = Object.entries(map).map(([date, revenue]) => ({
+      date,
+      revenue,
+    }));
+    return {
+      success: true,
+      data: result.sort((a, b) => a.date.localeCompare(b.date)),
+    };
   }
 
   async getBookingsByDate(ownerAuthId: string) {
@@ -61,17 +73,31 @@ export class OwnerAnalyticsService {
       const date = b.bookingDate.toISOString().split('T')[0];
       map[date] = (map[date] || 0) + 1;
     });
-    const result = Object.entries(map).map(([date, count]) => ({ date, count }));
-    return { success: true, data: result.sort((a,b) => a.date.localeCompare(b.date)) };
+    const result = Object.entries(map).map(([date, count]) => ({
+      date,
+      count,
+    }));
+    return {
+      success: true,
+      data: result.sort((a, b) => a.date.localeCompare(b.date)),
+    };
   }
 
   async getCashVsOnline(ownerAuthId: string) {
     const bookings = await this.getOwnerBookings(ownerAuthId);
     const cashAmount = bookings
-      .filter((b) => b.paymentType === 'CASH' && (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'))
+      .filter(
+        (b) =>
+          b.paymentType === 'CASH' &&
+          (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+      )
       .reduce((sum, b) => sum + b.amount, 0);
     const onlineAmount = bookings
-      .filter((b) => b.paymentType === 'ONLINE' && (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'))
+      .filter(
+        (b) =>
+          b.paymentType === 'ONLINE' &&
+          (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+      )
       .reduce((sum, b) => sum + b.amount, 0);
     return { success: true, data: { cashAmount, onlineAmount } };
   }
@@ -83,13 +109,18 @@ export class OwnerAnalyticsService {
       const hour = b.startTime.split(':')[0] + ':00';
       map[hour] = (map[hour] || 0) + 1;
     });
-    const result = Object.entries(map).map(([hour, count]) => ({ hour, count }));
-    return { success: true, data: result.sort((a,b) => b.count - a.count) };
+    const result = Object.entries(map).map(([hour, count]) => ({
+      hour,
+      count,
+    }));
+    return { success: true, data: result.sort((a, b) => b.count - a.count) };
   }
 
   async getCancellationRate(ownerAuthId: string) {
     const bookings = await this.getOwnerBookings(ownerAuthId);
-    const cancelled = bookings.filter((b) => b.bookingStatus === 'CANCELLED').length;
+    const cancelled = bookings.filter(
+      (b) => b.bookingStatus === 'CANCELLED',
+    ).length;
     const rate = bookings.length > 0 ? (cancelled / bookings.length) * 100 : 0;
     return { success: true, data: { cancellationRate: rate.toFixed(1) + '%' } };
   }
@@ -118,13 +149,28 @@ export class OwnerAnalyticsService {
         completedBookings: completed.length,
         cancelledBookings: cancelled.length,
         noShowBookings: noShows.length,
-        totalPlayersCount: bookings.reduce((sum, b: any) => sum + (b.playersCount || 0), 0),
-        avgPlayersPerBooking: totalBookings > 0 
-          ? (bookings.reduce((sum, b: any) => sum + (b.playersCount || 0), 0) / totalBookings).toFixed(1)
-          : 0,
-        cancellationRate: totalBookings > 0 ? ((cancelled.length / totalBookings) * 100).toFixed(1) + '%' : '0%',
-        noShowRate: totalBookings > 0 ? ((noShows.length / totalBookings) * 100).toFixed(1) + '%' : '0%',
-      }
+        totalPlayersCount: bookings.reduce(
+          (sum, b: any) => sum + (b.playersCount || 0),
+          0,
+        ),
+        avgPlayersPerBooking:
+          totalBookings > 0
+            ? (
+                bookings.reduce(
+                  (sum, b: any) => sum + (b.playersCount || 0),
+                  0,
+                ) / totalBookings
+              ).toFixed(1)
+            : 0,
+        cancellationRate:
+          totalBookings > 0
+            ? ((cancelled.length / totalBookings) * 100).toFixed(1) + '%'
+            : '0%',
+        noShowRate:
+          totalBookings > 0
+            ? ((noShows.length / totalBookings) * 100).toFixed(1) + '%'
+            : '0%',
+      },
     };
   }
 }

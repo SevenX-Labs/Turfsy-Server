@@ -128,10 +128,7 @@ export class UserHomeController {
     );
   }
 
-  private buildUserOptions(
-    req: AuthenticatedRequest,
-    query: UserHomeQueryDto,
-  ) {
+  private buildUserOptions(req: AuthenticatedRequest, query: UserHomeQueryDto) {
     const lat = this.parseCoordinate(query.lat);
     const lng = this.parseCoordinate(query.lng);
     const city = query.city?.trim();

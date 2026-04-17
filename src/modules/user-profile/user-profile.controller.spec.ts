@@ -34,7 +34,13 @@ describe('UserProfileController', () => {
 
   it('POST / — createProfile', async () => {
     mockService.createProfile.mockResolvedValue({ success: true });
-    const dto = { name: 'Test', email: 'test@test.com', avatarUrl: '', dob: '1995-01-01', gender: Gender.MALE };
+    const dto = {
+      name: 'Test',
+      email: 'test@test.com',
+      avatarUrl: '',
+      dob: '1995-01-01',
+      gender: Gender.MALE,
+    };
     const result = await controller.createProfile(req, dto as any);
     expect(mockService.createProfile).toHaveBeenCalledWith('auth-1', dto);
     expect(result.success).toBe(true);
@@ -50,21 +56,36 @@ describe('UserProfileController', () => {
   it('PATCH / — updateProfile', async () => {
     mockService.updateProfile.mockResolvedValue({ success: true });
     const result = await controller.updateProfile(req, { name: 'Updated' });
-    expect(mockService.updateProfile).toHaveBeenCalledWith('auth-1', { name: 'Updated' });
+    expect(mockService.updateProfile).toHaveBeenCalledWith('auth-1', {
+      name: 'Updated',
+    });
     expect(result.success).toBe(true);
   });
 
   it('POST /payment-details — savePaymentDetails', async () => {
     mockService.savePaymentDetails.mockResolvedValue({ success: true });
-    const result = await controller.savePaymentDetails(req, { upiId: 'test@upi' });
-    expect(mockService.savePaymentDetails).toHaveBeenCalledWith('auth-1', { upiId: 'test@upi' });
+    const result = await controller.savePaymentDetails(req, {
+      upiId: 'test@upi',
+    });
+    expect(mockService.savePaymentDetails).toHaveBeenCalledWith('auth-1', {
+      upiId: 'test@upi',
+    });
     expect(result.success).toBe(true);
   });
 
   it('POST /location — updateLocation', async () => {
     mockService.updateLocation.mockResolvedValue({ success: true });
-    const result = await controller.updateLocation(req, { lat: 18.5, lng: 73.8, city: 'Pune' });
-    expect(mockService.updateLocation).toHaveBeenCalledWith('auth-1', 18.5, 73.8, 'Pune');
+    const result = await controller.updateLocation(req, {
+      lat: 18.5,
+      lng: 73.8,
+      city: 'Pune',
+    });
+    expect(mockService.updateLocation).toHaveBeenCalledWith(
+      'auth-1',
+      18.5,
+      73.8,
+      'Pune',
+    );
     expect(result.success).toBe(true);
   });
 });

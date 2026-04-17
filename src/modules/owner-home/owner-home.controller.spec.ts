@@ -20,7 +20,9 @@ describe('OwnerHomeController', () => {
   beforeEach(async () => {
     const moduleBuilder = Test.createTestingModule({
       controllers: [OwnerHomeController],
-      providers: [{ provide: OwnerHomeService, useValue: mockOwnerHomeService }],
+      providers: [
+        { provide: OwnerHomeService, useValue: mockOwnerHomeService },
+      ],
     });
 
     moduleBuilder.overrideGuard(JwtAuthGuard).useValue({

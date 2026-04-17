@@ -1,4 +1,15 @@
-import { Controller, Post, Delete, Get, Param, Body, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Delete,
+  Get,
+  Param,
+  Body,
+  UseGuards,
+  Req,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { SavedTurfsService } from './saved-turfs.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -19,10 +30,7 @@ export class SavedTurfsController {
 
   @Delete(':turfId')
   @HttpCode(HttpStatus.OK)
-  async unsaveTurf(
-    @Req() req: any,
-    @Param('turfId') turfId: string,
-  ) {
+  async unsaveTurf(@Req() req: any, @Param('turfId') turfId: string) {
     return this.savedTurfsService.unsaveTurf(req.user.authId, turfId);
   }
 

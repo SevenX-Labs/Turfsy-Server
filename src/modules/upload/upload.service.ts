@@ -48,9 +48,10 @@ export class UploadService {
 
   private async clearUserAvatarFolder(authId: string) {
     const folderPath = `users/${authId}`;
-    const { data: existingFiles, error: listError } = await this.supabase.storage
-      .from(this.bucket)
-      .list(folderPath, { limit: 100 });
+    const { data: existingFiles, error: listError } =
+      await this.supabase.storage
+        .from(this.bucket)
+        .list(folderPath, { limit: 100 });
 
     if (listError) {
       throw new InternalServerErrorException(
@@ -60,7 +61,9 @@ export class UploadService {
 
     if (!existingFiles?.length) return;
 
-    const filesToDelete = existingFiles.map((file) => `${folderPath}/${file.name}`);
+    const filesToDelete = existingFiles.map(
+      (file) => `${folderPath}/${file.name}`,
+    );
     const { error: deleteError } = await this.supabase.storage
       .from(this.bucket)
       .remove(filesToDelete);
@@ -78,7 +81,12 @@ export class UploadService {
   async uploadUserProfileImage(authId: string, file: Express.Multer.File) {
     try {
       // Validate MIME type
-      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const allowedMimeTypes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+      ];
       if (!allowedMimeTypes.includes(file.mimetype)) {
         throw new BadRequestException(
           'Only jpeg, jpg, png, and webp images are allowed',
@@ -110,8 +118,8 @@ export class UploadService {
 
       // Keep only one avatar file per user in storage.
       await this.clearUserAvatarFolder(authId);
-      
-      const fileBuffer = file.buffer || await fs.promises.readFile(file.path);
+
+      const fileBuffer = file.buffer || (await fs.promises.readFile(file.path));
 
       const { error: uploadError } = await this.supabase.storage
         .from(this.bucket)
@@ -179,7 +187,12 @@ export class UploadService {
   ) {
     try {
       // 1. Validate MIME type
-      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const allowedMimeTypes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+      ];
       if (!allowedMimeTypes.includes(file.mimetype)) {
         throw new BadRequestException(
           'Only jpeg, jpg, png, and webp images are allowed',
@@ -203,13 +216,15 @@ export class UploadService {
       }
 
       if (turf.owner.authId !== authId) {
-        throw new BadRequestException('You are not authorized to upload images for this turf');
+        throw new BadRequestException(
+          'You are not authorized to upload images for this turf',
+        );
       }
 
       // 4. Storage path: turfs/{turfId}/{imageType}.jpg
       const storagePath = `turfs/${turfId}/${imageType}.jpg`;
-      
-      const fileBuffer = file.buffer || await fs.promises.readFile(file.path);
+
+      const fileBuffer = file.buffer || (await fs.promises.readFile(file.path));
 
       const { error: uploadError } = await this.supabase.storage
         .from(this.bucket)
@@ -256,9 +271,13 @@ export class UploadService {
   // ─────────────────────────────────────────
   // Delete turf images
   // ─────────────────────────────────────────
-  async deleteTurfImage(authId: string, turfId: string, imageType: 'entrance' | 'dayTurf' | 'nightTurf') {
-     // 1. Ensure the turf exists and belongs to the owner
-     const turf = await this.prisma.turf.findUnique({
+  async deleteTurfImage(
+    authId: string,
+    turfId: string,
+    imageType: 'entrance' | 'dayTurf' | 'nightTurf',
+  ) {
+    // 1. Ensure the turf exists and belongs to the owner
+    const turf = await this.prisma.turf.findUnique({
       where: { id: turfId },
       include: { owner: true },
     });
@@ -268,7 +287,9 @@ export class UploadService {
     }
 
     if (turf.owner.authId !== authId) {
-      throw new BadRequestException('You are not authorized to delete images for this turf');
+      throw new BadRequestException(
+        'You are not authorized to delete images for this turf',
+      );
     }
 
     const storagePath = `turfs/${turfId}/${imageType}.jpg`;
@@ -297,6 +318,9 @@ export class UploadService {
       data: { [dbField]: null },
     });
 
-    return { success: true, message: `Turf ${imageType} image deleted successfully` };
+    return {
+      success: true,
+      message: `Turf ${imageType} image deleted successfully`,
+    };
   }
 }

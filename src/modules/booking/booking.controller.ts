@@ -45,10 +45,7 @@ export class BookingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('USER')
   @HttpCode(HttpStatus.CREATED)
-  async createBooking(
-    @Req() req: any,
-    @Body() dto: CreateBookingDto,
-  ) {
+  async createBooking(@Req() req: any, @Body() dto: CreateBookingDto) {
     const ip = req.ip || req.connection?.remoteAddress;
     return this.bookingService.createBooking(req.user.authId, dto, ip);
   }
@@ -66,7 +63,11 @@ export class BookingController {
     @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.createRazorpayOrder(req.user.authId, bookingId, ip);
+    return this.bookingService.createRazorpayOrder(
+      req.user.authId,
+      bookingId,
+      ip,
+    );
   }
 
   // ──────────────────────────────────────────────
@@ -83,7 +84,12 @@ export class BookingController {
     @Body() dto: ConfirmPaymentDto,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.confirmOnlinePayment(req.user.authId, bookingId, dto, ip);
+    return this.bookingService.confirmOnlinePayment(
+      req.user.authId,
+      bookingId,
+      dto,
+      ip,
+    );
   }
 
   @Post('razorpay/webhook')
@@ -94,12 +100,17 @@ export class BookingController {
       typeof signatureHeader === 'string'
         ? signatureHeader
         : Array.isArray(signatureHeader)
-        ? signatureHeader[0]
-        : undefined;
+          ? signatureHeader[0]
+          : undefined;
     const ip = req.ip || req.connection?.remoteAddress;
     const rawBody = (req as any).rawBody as Buffer | undefined;
 
-    return this.bookingService.handleRazorpayWebhook(body, signature, rawBody, ip);
+    return this.bookingService.handleRazorpayWebhook(
+      body,
+      signature,
+      rawBody,
+      ip,
+    );
   }
 
   // ──────────────────────────────────────────────
@@ -114,7 +125,11 @@ export class BookingController {
     @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.failOnlinePayment(req.user.authId, bookingId, ip);
+    return this.bookingService.failOnlinePayment(
+      req.user.authId,
+      bookingId,
+      ip,
+    );
   }
 
   // ──────────────────────────────────────────────
@@ -132,7 +147,12 @@ export class BookingController {
     @Body() dto: VerifyPinDto,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.verifyCheckInPin(req.user.authId, bookingId, dto.pin, ip);
+    return this.bookingService.verifyCheckInPin(
+      req.user.authId,
+      bookingId,
+      dto.pin,
+      ip,
+    );
   }
 
   // ──────────────────────────────────────────────
@@ -182,12 +202,18 @@ export class BookingController {
       throw new BadRequestException('status must be "upcoming" or "past"');
     }
     if (time && !['today', 'tomorrow', 'week'].includes(time)) {
-      throw new BadRequestException('time must be "today", "tomorrow", or "week"');
+      throw new BadRequestException(
+        'time must be "today", "tomorrow", or "week"',
+      );
     }
     if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
     }
-    return this.bookingService.getOwnerBookingsFiltered(req.user.authId, { status, time, date });
+    return this.bookingService.getOwnerBookingsFiltered(req.user.authId, {
+      status,
+      time,
+      date,
+    });
   }
 
   // ──────────────────────────────────────────────
@@ -202,7 +228,10 @@ export class BookingController {
     @Req() req: any,
     @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
   ) {
-    return this.bookingService.getOwnerBookingDetails(req.user.authId, bookingId);
+    return this.bookingService.getOwnerBookingDetails(
+      req.user.authId,
+      bookingId,
+    );
   }
 
   // ──────────────────────────────────────────────
@@ -242,7 +271,9 @@ export class BookingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async exportAnalyticsPdf(@Req() req: any, @Res() res: any) {
-    const buffer = await this.bookingService.getOwnerAnalyticsPdf(req.user.authId);
+    const buffer = await this.bookingService.getOwnerAnalyticsPdf(
+      req.user.authId,
+    );
     res.header('Content-Type', 'application/pdf');
     res.attachment(`turfsy_report_${new Date().getTime()}.pdf`);
     return res.send(buffer);
@@ -262,7 +293,12 @@ export class BookingController {
     @Body() dto: CancelBookingDto,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.cancelBooking(req.user.authId, bookingId, dto.reason, ip);
+    return this.bookingService.cancelBooking(
+      req.user.authId,
+      bookingId,
+      dto.reason,
+      ip,
+    );
   }
 
   // ──────────────────────────────────────────────
@@ -352,9 +388,15 @@ export class BookingController {
 
     if (filter || date) {
       if (filter && !['today', 'tomorrow', 'week'].includes(filter)) {
-        throw new BadRequestException('filter must be "today", "tomorrow", or "week"');
+        throw new BadRequestException(
+          'filter must be "today", "tomorrow", or "week"',
+        );
       }
-      return this.bookingService.getBookingsByFilter(req.user.authId, filter, date);
+      return this.bookingService.getBookingsByFilter(
+        req.user.authId,
+        filter,
+        date,
+      );
     }
 
     return this.bookingService.getMyBookings(req.user.authId);
@@ -392,7 +434,10 @@ export class BookingController {
     @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
     @Res() res: any,
   ) {
-    const buffer = await this.bookingService.getInvoicePdf(req.user.authId, bookingId);
+    const buffer = await this.bookingService.getInvoicePdf(
+      req.user.authId,
+      bookingId,
+    );
     res.header('Content-Type', 'application/pdf');
     res.attachment(`turfsy_invoice_${bookingId.slice(0, 8)}.pdf`);
     return res.send(buffer);
@@ -425,7 +470,9 @@ export class BookingController {
     @Query('date') date: string,
   ) {
     if (!date) {
-      throw new BadRequestException('date query parameter is required (YYYY-MM-DD)');
+      throw new BadRequestException(
+        'date query parameter is required (YYYY-MM-DD)',
+      );
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');

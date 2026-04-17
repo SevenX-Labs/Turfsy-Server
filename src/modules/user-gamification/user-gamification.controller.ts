@@ -1,11 +1,21 @@
-import { Controller, Get, UseGuards, Req, Query, Post, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Req,
+  Query,
+  Post,
+  Param,
+} from '@nestjs/common';
 import { UserGamificationService } from './user-gamification.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/v3/user-gamification')
 @UseGuards(JwtAuthGuard)
 export class UserGamificationController {
-  constructor(private readonly userGamificationService: UserGamificationService) {}
+  constructor(
+    private readonly userGamificationService: UserGamificationService,
+  ) {}
 
   @Get('overall')
   async getOverall(@Req() req: any) {
@@ -14,18 +24,25 @@ export class UserGamificationController {
 
   @Get('streak')
   async getStreak(@Req() req: any) {
-    const stats = await this.userGamificationService.getUserStats(req.user.authId);
+    const stats = await this.userGamificationService.getUserStats(
+      req.user.authId,
+    );
     return { streak: stats?.streak || 0 };
   }
 
   @Get('nudge')
   async getNudge(@Req() req: any) {
-    const message = await this.userGamificationService.getNudgeMessage(req.user.authId);
+    const message = await this.userGamificationService.getNudgeMessage(
+      req.user.authId,
+    );
     return { message };
   }
 
   @Get('leaderboard')
-  async getLeaderboard(@Query('sortBy') sortBy: 'points' | 'totalMatches' | 'totalHours' = 'points') {
+  async getLeaderboard(
+    @Query('sortBy')
+    sortBy: 'points' | 'totalMatches' | 'totalHours' = 'points',
+  ) {
     return this.userGamificationService.getLeaderboardFiltered(sortBy);
   }
 
@@ -43,5 +60,4 @@ export class UserGamificationController {
   async getLeaderboardHours() {
     return this.userGamificationService.getLeaderboardFiltered('totalHours');
   }
-
 }

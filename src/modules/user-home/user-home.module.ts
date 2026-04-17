@@ -7,7 +7,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     PrismaModule, // provides PrismaService
-    AuthModule,   // provides JwtStrategy + guards
+    AuthModule, // provides JwtStrategy + guards
   ],
   controllers: [UserHomeController],
   providers: [UserHomeService],

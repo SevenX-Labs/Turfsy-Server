@@ -52,7 +52,10 @@ export class OwnerProfileController {
   // ─────────────────────────────────────────
   @Post('payment-details')
   @HttpCode(HttpStatus.OK)
-  async savePaymentDetails(@Req() req: any, @Body() dto: OwnerPaymentDetailsDto) {
+  async savePaymentDetails(
+    @Req() req: any,
+    @Body() dto: OwnerPaymentDetailsDto,
+  ) {
     return this.ownerProfileService.savePaymentDetails(req.user.authId, dto);
   }
 }

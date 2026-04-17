@@ -66,7 +66,10 @@ export class AuthService {
       );
       console.log(`[Fast2SMS] Response:`, response.data);
     } catch (err) {
-      console.error(`[Fast2SMS] Error:`, JSON.stringify(err?.response?.data || err.message));
+      console.error(
+        `[Fast2SMS] Error:`,
+        JSON.stringify(err?.response?.data || err.message),
+      );
     }
   }
 
@@ -100,7 +103,11 @@ export class AuthService {
     const attempts = otpRateLimitCache.get(phone) || 0;
     if (attempts >= 5) {
       throw new HttpException(
-        { success: false, message: 'Too many OTP requests for this phone. Please try again later.' },
+        {
+          success: false,
+          message:
+            'Too many OTP requests for this phone. Please try again later.',
+        },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -172,7 +179,9 @@ export class AuthService {
     });
 
     if (!otpEntry) {
-      throw new NotFoundException('Invalid or expired OTP request. Please login again');
+      throw new NotFoundException(
+        'Invalid or expired OTP request. Please login again',
+      );
     }
 
     if (otpEntry.verifiedAt) {
@@ -207,7 +216,8 @@ export class AuthService {
     });
 
     // Determine if this is a new user (no profile yet)
-    const isNewUser = role === Role.USER ? !auth.userProfile : !auth.ownerProfile;
+    const isNewUser =
+      role === Role.USER ? !auth.userProfile : !auth.ownerProfile;
 
     // Generate JWT with the role from the endpoint
     const token = this.generateSessionToken(auth.id, session.id, role);
@@ -245,7 +255,11 @@ export class AuthService {
     const attempts = otpRateLimitCache.get(phone) || 0;
     if (attempts >= 5) {
       throw new HttpException(
-        { success: false, message: 'Too many OTP requests for this phone. Please try again later.' },
+        {
+          success: false,
+          message:
+            'Too many OTP requests for this phone. Please try again later.',
+        },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -312,7 +326,9 @@ export class AuthService {
     });
 
     if (!session || session.revokedAt) {
-      throw new UnauthorizedException('Session not found or already logged out');
+      throw new UnauthorizedException(
+        'Session not found or already logged out',
+      );
     }
 
     await this.prisma.session.update({
@@ -345,7 +361,9 @@ export class AuthService {
     });
 
     if (!otpEntry) {
-      throw new UnauthorizedException('Please verify OTP before deleting account');
+      throw new UnauthorizedException(
+        'Please verify OTP before deleting account',
+      );
     }
 
     // Hard-delete account from DB.
@@ -409,7 +427,8 @@ export class AuthService {
     }
 
     const { userProfile, ownerProfile, payment, ...authData } = auth;
-    let profile: Record<string, any> | null = auth.role === Role.OWNER ? ownerProfile : userProfile;
+    let profile: Record<string, any> | null =
+      auth.role === Role.OWNER ? ownerProfile : userProfile;
 
     if (auth.role === Role.OWNER && ownerProfile) {
       await this.normalizeOwnerTurfStatuses(authId);
@@ -448,19 +467,28 @@ export class AuthService {
   async requestPhoneChange(authId: string, newPhone: string) {
     const auth = await this.prisma.auth.findUnique({ where: { id: authId } });
     if (!auth) throw new NotFoundException('Account not found');
-    if (!auth.isActive) throw new UnauthorizedException('Account is deactivated');
+    if (!auth.isActive)
+      throw new UnauthorizedException('Account is deactivated');
 
     // New phone must not already be registered
-    const existing = await this.prisma.auth.findUnique({ where: { phone: newPhone } });
+    const existing = await this.prisma.auth.findUnique({
+      where: { phone: newPhone },
+    });
     if (existing && existing.id !== authId) {
-      throw new ConflictException('This phone number is already registered to another account');
+      throw new ConflictException(
+        'This phone number is already registered to another account',
+      );
     }
 
     // ── Layer 1: Phone-based OTP Rate Limiting Bypass Check ──
     const attempts = otpRateLimitCache.get(newPhone) || 0;
     if (attempts >= 5) {
       throw new HttpException(
-        { success: false, message: 'Too many OTP requests for this phone. Please try again later.' },
+        {
+          success: false,
+          message:
+            'Too many OTP requests for this phone. Please try again later.',
+        },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -495,7 +523,12 @@ export class AuthService {
   // Verifies OTP + updates phone in Auth
   // ─────────────────────────────────────────
 
-  async verifyPhoneChange(authId: string, sessionToken: string, newPhone: string, otp: string) {
+  async verifyPhoneChange(
+    authId: string,
+    sessionToken: string,
+    newPhone: string,
+    otp: string,
+  ) {
     const auth = await this.prisma.auth.findUnique({ where: { id: authId } });
     if (!auth) throw new NotFoundException('Account not found');
 
@@ -507,15 +540,20 @@ export class AuthService {
       throw new NotFoundException('Invalid session token');
     }
     if (otpEntry.verifiedAt) throw new ConflictException('OTP already used');
-    if (new Date() > otpEntry.expiresAt) throw new BadRequestException('OTP expired');
+    if (new Date() > otpEntry.expiresAt)
+      throw new BadRequestException('OTP expired');
 
     const isValid = await bcrypt.compare(otp, otpEntry.code);
     if (!isValid) throw new UnauthorizedException('Invalid OTP');
 
     // Double-check new phone is still available
-    const taken = await this.prisma.auth.findUnique({ where: { phone: newPhone } });
+    const taken = await this.prisma.auth.findUnique({
+      where: { phone: newPhone },
+    });
     if (taken && taken.id !== authId) {
-      throw new ConflictException('This phone number is already registered to another account');
+      throw new ConflictException(
+        'This phone number is already registered to another account',
+      );
     }
 
     // Mark OTP verified + update phone atomically

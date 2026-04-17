@@ -10,7 +10,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentLoggerService } from '../../common/services/payment-logger.service';
-import { RateLimiterService, RATE_LIMITS } from '../../common/services/rate-limiter.service';
+import {
+  RateLimiterService,
+  RATE_LIMITS,
+} from '../../common/services/rate-limiter.service';
 import { Booking, PaymentStatus } from '@prisma/client';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
@@ -20,11 +23,11 @@ import { Readable } from 'stream';
 import { UserGamificationService } from '../user-gamification/user-gamification.service';
 
 // ─── CONSTANTS ───────────────────────────────────────────
-const CASH_DEPOSIT_PERCENT = 0.50;     // 50% advance for CASH bookings
-const CANCEL_REFUND_PERCENT = 0.75;    // 75% refund on cancellation
-const NIGHT_START_HOUR = 18;           // 6 PM onwards = night pricing
-const PIN_MAX_ATTEMPTS = 5;            // Lock PIN after 5 wrong attempts
-const PIN_WINDOW_MINUTES = 10;         // ±10 min for PIN verification
+const CASH_DEPOSIT_PERCENT = 0.5; // 50% advance for CASH bookings
+const CANCEL_REFUND_PERCENT = 0.75; // 75% refund on cancellation
+const NIGHT_START_HOUR = 18; // 6 PM onwards = night pricing
+const PIN_MAX_ATTEMPTS = 5; // Lock PIN after 5 wrong attempts
+const PIN_WINDOW_MINUTES = 10; // ±10 min for PIN verification
 const SLOT_LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes reservation window
 
 @Injectable()
@@ -151,7 +154,10 @@ export class BookingService {
     ip?: string,
   ) {
     // ── Layer 6: Rate Limiting ──
-    this.rateLimiter.check(`user:${authId}:create-booking`, RATE_LIMITS.CREATE_BOOKING);
+    this.rateLimiter.check(
+      `user:${authId}:create-booking`,
+      RATE_LIMITS.CREATE_BOOKING,
+    );
 
     // ── Layer 10: Additional server-side validation ──
     this.validateBookingInputs(dto);
@@ -159,9 +165,12 @@ export class BookingService {
     // ── Strip HTML tags from notes ──
     const sanitizedNotes = dto.notes ? this.stripHtml(dto.notes) : undefined;
 
-    const turf = await this.prisma.turf.findUnique({ where: { id: dto.turfId } });
+    const turf = await this.prisma.turf.findUnique({
+      where: { id: dto.turfId },
+    });
     if (!turf) throw new NotFoundException('Turf not found');
-    if (turf.status !== 'ACTIVE') throw new BadRequestException('Turf is not currently available');
+    if (turf.status !== 'ACTIVE')
+      throw new BadRequestException('Turf is not currently available');
 
     const bookingDate = new Date(dto.bookingDate);
 
@@ -174,21 +183,31 @@ export class BookingService {
 
     // ── Turf operating hours validation ──
     if (dto.startTime < turf.openTime || dto.endTime > turf.closeTime) {
-      throw new BadRequestException(`Turf operates from ${turf.openTime} to ${turf.closeTime}`);
+      throw new BadRequestException(
+        `Turf operates from ${turf.openTime} to ${turf.closeTime}`,
+      );
     }
 
     // ── Duration validation ──
     if (dto.durationMins < turf.minSlotDurationMins) {
-      throw new BadRequestException(`Minimum slot duration is ${turf.minSlotDurationMins} minutes`);
+      throw new BadRequestException(
+        `Minimum slot duration is ${turf.minSlotDurationMins} minutes`,
+      );
     }
 
     // ── Layer 4: Server-side price calculation (NEVER from client) ──
-    const amount = this.calculatePrice(turf, bookingDate, dto.startTime, dto.durationMins);
+    const amount = this.calculatePrice(
+      turf,
+      bookingDate,
+      dto.startTime,
+      dto.durationMins,
+    );
 
     // ── Layer 4: Deposit amount (server-calculated) ──
-    const depositAmount = dto.paymentType === 'CASH'
-      ? Math.floor(amount * CASH_DEPOSIT_PERCENT) // Floor for cash
-      : amount;
+    const depositAmount =
+      dto.paymentType === 'CASH'
+        ? Math.floor(amount * CASH_DEPOSIT_PERCENT) // Floor for cash
+        : amount;
 
     // ── Layer 8: Secure PIN generation (crypto.randomInt) ──
     const checkInPin = crypto.randomInt(1000, 9999).toString();
@@ -266,9 +285,10 @@ export class BookingService {
 
     return {
       success: true,
-      message: dto.paymentType === 'CASH'
-        ? `Booking created. Pay 50% deposit (₹${depositAmount}) online. Remaining ₹${amount - depositAmount} at turf.`
-        : `Booking created. Pay full amount (₹${amount}) to confirm.`,
+      message:
+        dto.paymentType === 'CASH'
+          ? `Booking created. Pay 50% deposit (₹${depositAmount}) online. Remaining ₹${amount - depositAmount} at turf.`
+          : `Booking created. Pay full amount (₹${amount}) to confirm.`,
       data: {
         ...booking,
         displayId: this.formatBookingId(booking.id),
@@ -285,15 +305,21 @@ export class BookingService {
   async getBookedSlots(turfId: string, date: string, authId?: string) {
     // ── Layer 6: Rate Limiting ──
     if (authId) {
-      this.rateLimiter.check(`user:${authId}:availability`, RATE_LIMITS.AVAILABILITY);
+      this.rateLimiter.check(
+        `user:${authId}:availability`,
+        RATE_LIMITS.AVAILABILITY,
+      );
     }
 
     const turf = await this.prisma.turf.findUnique({
       where: { id: turfId },
       select: {
-        openTime: true, closeTime: true,
-        weekdayDayPrice: true, weekdayNightPrice: true,
-        weekendDayPrice: true, weekendNightPrice: true,
+        openTime: true,
+        closeTime: true,
+        weekdayDayPrice: true,
+        weekdayNightPrice: true,
+        weekendDayPrice: true,
+        weekendNightPrice: true,
       },
     });
     if (!turf) throw new NotFoundException('Turf not found');
@@ -319,7 +345,9 @@ export class BookingService {
         bookedSlots: bookings,
         pricing: {
           dayPrice: isWeekend ? turf.weekendDayPrice : turf.weekdayDayPrice,
-          nightPrice: isWeekend ? turf.weekendNightPrice : turf.weekdayNightPrice,
+          nightPrice: isWeekend
+            ? turf.weekendNightPrice
+            : turf.weekdayNightPrice,
           nightStartsAt: `${NIGHT_START_HOUR}:00`,
           isWeekend,
         },
@@ -336,13 +364,19 @@ export class BookingService {
   // ═══════════════════════════════════════════════════════
   async createRazorpayOrder(authId: string, bookingId: string, ip?: string) {
     // ── Layer 6: Rate Limiting ──
-    this.rateLimiter.check(`booking:${bookingId}:create-order`, RATE_LIMITS.CREATE_ORDER);
+    this.rateLimiter.check(
+      `booking:${bookingId}:create-order`,
+      RATE_LIMITS.CREATE_ORDER,
+    );
 
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
 
     // ── Layer 1: Verify booking ownership ──
-    if (booking.userId !== authId) throw new ForbiddenException('Access denied.');
+    if (booking.userId !== authId)
+      throw new ForbiddenException('Access denied.');
 
     // ── Layer 5: State Machine ──
     if (booking.bookingStatus !== 'PENDING') {
@@ -481,18 +515,27 @@ export class BookingService {
     ip?: string,
   ) {
     // ── Layer 6: Rate Limiting ──
-    this.rateLimiter.check(`booking:${bookingId}:confirm-payment`, RATE_LIMITS.CONFIRM_PAYMENT);
+    this.rateLimiter.check(
+      `booking:${bookingId}:confirm-payment`,
+      RATE_LIMITS.CONFIRM_PAYMENT,
+    );
 
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
 
     // ── Layer 1: Verify ownership ──
-    if (booking.userId !== authId) throw new ForbiddenException('Access denied.');
+    if (booking.userId !== authId)
+      throw new ForbiddenException('Access denied.');
 
     // ══════════════════════════════════════════════════
     // Layer 2: Idempotency — already confirmed/completed?
     // ══════════════════════════════════════════════════
-    if (booking.bookingStatus === 'CONFIRMED' || booking.bookingStatus === 'COMPLETED') {
+    if (
+      booking.bookingStatus === 'CONFIRMED' ||
+      booking.bookingStatus === 'COMPLETED'
+    ) {
       await this.releaseSlotLockForBooking(booking);
       return {
         success: true,
@@ -514,7 +557,8 @@ export class BookingService {
     // ══════════════════════════════════════════════════
     // Layer 3: Razorpay Signature Verification
     // ══════════════════════════════════════════════════
-    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+    const keySecret =
+      this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
 
     if (keySecret !== 'your_razorpay_key_secret' && keySecret !== '') {
       // Step 1: Reconstruct HMAC-SHA256 signature
@@ -567,7 +611,10 @@ export class BookingService {
       }
 
       // Step 3: Verify orderId matches DB-stored orderId
-      if (booking.razorpayOrderId && dto.razorpayOrderId !== booking.razorpayOrderId) {
+      if (
+        booking.razorpayOrderId &&
+        dto.razorpayOrderId !== booking.razorpayOrderId
+      ) {
         this.paymentLogger.alert('Order ID tampered', {
           userId: authId,
           bookingId,
@@ -598,12 +645,15 @@ export class BookingService {
       } catch (err) {
         if (err instanceof BadRequestException) throw err;
         // If Razorpay fetch fails, log but proceed (signature was valid)
-        console.warn(`[PAYMENT] Could not fetch Razorpay order for amount verification: ${err}`);
+        console.warn(
+          `[PAYMENT] Could not fetch Razorpay order for amount verification: ${err}`,
+        );
       }
     }
 
     // ── Update booking atomically ──
-    const newPaymentStatus = booking.paymentType === 'ONLINE' ? 'SUCCESS' : 'PENDING';
+    const newPaymentStatus =
+      booking.paymentType === 'ONLINE' ? 'SUCCESS' : 'PENDING';
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
@@ -630,13 +680,14 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
-      return {
-        success: true,
-        message: booking.paymentType === 'CASH'
+    return {
+      success: true,
+      message:
+        booking.paymentType === 'CASH'
           ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - booking.depositAmount} at turf. Your Check-In PIN is ${booking.checkInPin}.`
-        : `Payment successful. Booking confirmed! Your Check-In PIN is ${booking.checkInPin}.`,
-        data: { ...updated, displayId: this.formatBookingId(updated.id) },
-      };
+          : `Payment successful. Booking confirmed! Your Check-In PIN is ${booking.checkInPin}.`,
+      data: { ...updated, displayId: this.formatBookingId(updated.id) },
+    };
   }
 
   // ═══════════════════════════════════════════════════════
@@ -664,7 +715,9 @@ export class BookingService {
       throw new BadRequestException('Missing Razorpay webhook signature');
     }
     if (!rawBody) {
-      throw new BadRequestException('Missing webhook payload for signature verification');
+      throw new BadRequestException(
+        'Missing webhook payload for signature verification',
+      );
     }
 
     let signatureValid = false;
@@ -719,15 +772,19 @@ export class BookingService {
       typeof notes.bookingId === 'string'
         ? notes.bookingId
         : typeof notes.booking_id === 'string'
-        ? notes.booking_id
-        : undefined;
+          ? notes.booking_id
+          : undefined;
 
     let booking: Booking | null = null;
     if (bookingIdFromNotes) {
-      booking = await this.prisma.booking.findUnique({ where: { id: bookingIdFromNotes } });
+      booking = await this.prisma.booking.findUnique({
+        where: { id: bookingIdFromNotes },
+      });
     }
     if (!booking && orderId) {
-      booking = await this.prisma.booking.findFirst({ where: { razorpayOrderId: orderId } });
+      booking = await this.prisma.booking.findFirst({
+        where: { razorpayOrderId: orderId },
+      });
     }
 
     if (!booking) {
@@ -740,29 +797,38 @@ export class BookingService {
       throw new NotFoundException('Booking not found for Razorpay webhook');
     }
 
-      if (booking.bookingStatus === 'CONFIRMED' || booking.bookingStatus === 'COMPLETED') {
-        if (!booking.razorpayPaymentId) {
-          await this.prisma.booking.update({
-            where: { id: booking.id },
-            data: { razorpayPaymentId: paymentId },
-          });
-        }
-        await this.releaseSlotLockForBooking(booking);
-        return {
-          success: true,
-          message: 'Booking already confirmed.',
-        };
+    if (
+      booking.bookingStatus === 'CONFIRMED' ||
+      booking.bookingStatus === 'COMPLETED'
+    ) {
+      if (!booking.razorpayPaymentId) {
+        await this.prisma.booking.update({
+          where: { id: booking.id },
+          data: { razorpayPaymentId: paymentId },
+        });
       }
+      await this.releaseSlotLockForBooking(booking);
+      return {
+        success: true,
+        message: 'Booking already confirmed.',
+      };
+    }
 
     if (booking.razorpayPaymentId) {
       throw new ConflictException('Payment already recorded for booking');
     }
 
     if (booking.bookingStatus !== 'PENDING') {
-      throw new BadRequestException('Invalid booking state for webhook payment');
+      throw new BadRequestException(
+        'Invalid booking state for webhook payment',
+      );
     }
 
-    if (booking.razorpayOrderId && orderId && booking.razorpayOrderId !== orderId) {
+    if (
+      booking.razorpayOrderId &&
+      orderId &&
+      booking.razorpayOrderId !== orderId
+    ) {
       this.paymentLogger.alert('Webhook order ID tampered', {
         bookingId: booking.id,
         expected: booking.razorpayOrderId,
@@ -789,11 +855,14 @@ export class BookingService {
         if (err instanceof BadRequestException) {
           throw err;
         }
-        console.warn(`[PAYMENT] Could not fetch Razorpay order for webhook verification: ${err}`);
+        console.warn(
+          `[PAYMENT] Could not fetch Razorpay order for webhook verification: ${err}`,
+        );
       }
     }
 
-    const newPaymentStatus = booking.paymentType === 'ONLINE' ? 'SUCCESS' : 'PENDING';
+    const newPaymentStatus =
+      booking.paymentType === 'ONLINE' ? 'SUCCESS' : 'PENDING';
 
     const updated = await this.prisma.booking.update({
       where: { id: booking.id },
@@ -834,11 +903,17 @@ export class BookingService {
   // ═══════════════════════════════════════════════════════
   async failOnlinePayment(authId: string, bookingId: string, ip?: string) {
     // ── Layer 6: Rate Limiting ──
-    this.rateLimiter.check(`user:${authId}:payment-failed`, RATE_LIMITS.PAYMENT_FAILED);
+    this.rateLimiter.check(
+      `user:${authId}:payment-failed`,
+      RATE_LIMITS.PAYMENT_FAILED,
+    );
 
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.userId !== authId) throw new ForbiddenException('Access denied.');
+    if (booking.userId !== authId)
+      throw new ForbiddenException('Access denied.');
 
     // ── Layer 5: State Machine ──
     if (booking.bookingStatus !== 'PENDING') {
@@ -870,7 +945,8 @@ export class BookingService {
 
     return {
       success: true,
-      message: 'Payment failed. Booking is still pending—retry payment to confirm.',
+      message:
+        'Payment failed. Booking is still pending—retry payment to confirm.',
       data: { ...updated, displayId: this.formatBookingId(updated.id) },
     };
   }
@@ -883,9 +959,17 @@ export class BookingService {
   //    Layer 6: Rate Limiting (5/booking/15min)
   //    Layer 8: Constant-time PIN comparison, lockout
   // ═══════════════════════════════════════════════════════
-  async verifyCheckInPin(ownerAuthId: string, bookingId: string, pin: string, ip?: string) {
+  async verifyCheckInPin(
+    ownerAuthId: string,
+    bookingId: string,
+    pin: string,
+    ip?: string,
+  ) {
     // ── Layer 6: Rate Limiting ──
-    this.rateLimiter.check(`booking:${bookingId}:verify-pin`, RATE_LIMITS.VERIFY_PIN);
+    this.rateLimiter.check(
+      `booking:${bookingId}:verify-pin`,
+      RATE_LIMITS.VERIFY_PIN,
+    );
 
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -923,8 +1007,12 @@ export class BookingService {
     const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
     const slotEnd = this.buildSlotDateTime(datePart, booking.endTime);
 
-    const windowStart = new Date(slotStart.getTime() - PIN_WINDOW_MINUTES * 60 * 1000);
-    const windowEnd = new Date(slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000);
+    const windowStart = new Date(
+      slotStart.getTime() - PIN_WINDOW_MINUTES * 60 * 1000,
+    );
+    const windowEnd = new Date(
+      slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000,
+    );
 
     if (now < windowStart) {
       throw new BadRequestException(
@@ -991,7 +1079,7 @@ export class BookingService {
         paymentStatus: 'SUCCESS',
         bookingStatus: 'COMPLETED',
         visitedAt: new Date(),
-        checkInPin: null,           // Layer 8: Null PIN after success
+        checkInPin: null, // Layer 8: Null PIN after success
         pinAttempts: 0,
       },
     });
@@ -1009,7 +1097,10 @@ export class BookingService {
       throw new NotFoundException('Booking not found after update');
     }
 
-    await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+    await this.userGamificationService.handleBookingCompletion(
+      updated.userId,
+      bookingId,
+    );
 
     const userName = updated.user?.userProfile?.name || 'Customer';
 
@@ -1062,7 +1153,9 @@ export class BookingService {
       const now = new Date();
       const datePart = booking.bookingDate.toISOString().split('T')[0];
       const slotEnd = this.buildSlotDateTime(datePart, booking.endTime);
-      const windowEnd = new Date(slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000);
+      const windowEnd = new Date(
+        slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000,
+      );
 
       if (now <= windowEnd) {
         throw new BadRequestException(
@@ -1077,7 +1170,7 @@ export class BookingService {
         bookingStatus: 'COMPLETED',
         paymentStatus: 'SUCCESS', // For CASH fallback, we assume money collected
         visitedAt: new Date(),
-        checkInPin: null,         // Clean up unused PIN
+        checkInPin: null, // Clean up unused PIN
         pinAttempts: 0,
       },
     });
@@ -1094,7 +1187,10 @@ export class BookingService {
       throw new NotFoundException('Booking not found after update');
     }
 
-    await this.userGamificationService.handleBookingCompletion(updated.userId, bookingId);
+    await this.userGamificationService.handleBookingCompletion(
+      updated.userId,
+      bookingId,
+    );
 
     this.paymentLogger.log({
       userId: ownerAuthId,
@@ -1125,7 +1221,9 @@ export class BookingService {
         },
       },
       include: {
-        user: { select: { phone: true, userProfile: { select: { name: true } } } },
+        user: {
+          select: { phone: true, userProfile: { select: { name: true } } },
+        },
         turf: { select: { name: true, city: true } },
       },
       orderBy: { bookingDate: 'desc' },
@@ -1148,7 +1246,11 @@ export class BookingService {
   // ═══════════════════════════════════════════════════════
   async getOwnerBookingsFiltered(
     ownerAuthId: string,
-    query: { status?: 'upcoming' | 'past'; time?: 'today' | 'tomorrow' | 'week'; date?: string },
+    query: {
+      status?: 'upcoming' | 'past';
+      time?: 'today' | 'tomorrow' | 'week';
+      date?: string;
+    },
   ) {
     const { status, time, date } = query;
     const where: any = {
@@ -1187,7 +1289,9 @@ export class BookingService {
     const bookings = await this.prisma.booking.findMany({
       where,
       include: {
-        user: { select: { phone: true, userProfile: { select: { name: true } } } },
+        user: {
+          select: { phone: true, userProfile: { select: { name: true } } },
+        },
         turf: { select: { name: true, city: true } },
       },
       orderBy: { bookingDate: 'asc' },
@@ -1211,7 +1315,12 @@ export class BookingService {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        user: { select: { phone: true, userProfile: { select: { name: true, email: true } } } },
+        user: {
+          select: {
+            phone: true,
+            userProfile: { select: { name: true, email: true } },
+          },
+        },
         turf: { include: { owner: true } },
       },
     });
@@ -1247,7 +1356,9 @@ export class BookingService {
         bookingStatus: { in: ['CONFIRMED', 'PENDING'] },
       },
       include: {
-        user: { select: { phone: true, userProfile: { select: { name: true } } } },
+        user: {
+          select: { phone: true, userProfile: { select: { name: true } } },
+        },
         turf: { select: { name: true, city: true } },
       },
       orderBy: { startTime: 'asc' },
@@ -1281,8 +1392,12 @@ export class BookingService {
     });
 
     const totalBookings = bookings.length;
-    const completed = bookings.filter((b) => b.bookingStatus === 'COMPLETED').length;
-    const cancelled = bookings.filter((b) => b.bookingStatus === 'CANCELLED').length;
+    const completed = bookings.filter(
+      (b) => b.bookingStatus === 'COMPLETED',
+    ).length;
+    const cancelled = bookings.filter(
+      (b) => b.bookingStatus === 'CANCELLED',
+    ).length;
     const noShow = bookings.filter((b) => b.bookingStatus === 'NO_SHOW').length;
 
     const totalRevenue = bookings
@@ -1290,7 +1405,9 @@ export class BookingService {
       .reduce((sum, b) => sum + b.amount, 0);
 
     const pendingRevenue = bookings
-      .filter((b) => b.bookingStatus === 'CONFIRMED' || b.bookingStatus === 'PENDING')
+      .filter(
+        (b) => b.bookingStatus === 'CONFIRMED' || b.bookingStatus === 'PENDING',
+      )
       .reduce((sum, b) => sum + (b.amount - b.depositAmount), 0);
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -1303,20 +1420,21 @@ export class BookingService {
           completed,
           cancelled,
           noShow,
-          activeToday: bookings.filter(b => 
-            b.bookingDate.toISOString().split('T')[0] === todayStr && 
-            ['CONFIRMED', 'PENDING'].includes(b.bookingStatus)
-          ).length
+          activeToday: bookings.filter(
+            (b) =>
+              b.bookingDate.toISOString().split('T')[0] === todayStr &&
+              ['CONFIRMED', 'PENDING'].includes(b.bookingStatus),
+          ).length,
         },
         revenue: {
           total: totalRevenue,
           pending: pendingRevenue,
         },
-        turfs: turfs.map(t => ({
+        turfs: turfs.map((t) => ({
           ...t,
-          bookingCount: bookings.filter(b => b.turfId === t.id).length
-        }))
-      }
+          bookingCount: bookings.filter((b) => b.turfId === t.id).length,
+        })),
+      },
     };
   }
 
@@ -1328,14 +1446,19 @@ export class BookingService {
       where: { turf: { owner: { authId: ownerAuthId } } },
       include: {
         turf: { select: { name: true } },
-        user: { select: { phone: true, userProfile: { select: { name: true } } } }
+        user: {
+          select: { phone: true, userProfile: { select: { name: true } } },
+        },
       },
-      orderBy: { bookingDate: 'desc' }
+      orderBy: { bookingDate: 'desc' },
     });
 
     const fields = [
       { label: 'Booking ID', value: 'id' },
-      { label: 'Date', value: (row: any) => row.bookingDate.toISOString().split('T')[0] },
+      {
+        label: 'Date',
+        value: (row: any) => row.bookingDate.toISOString().split('T')[0],
+      },
       { label: 'Start Time', value: 'startTime' },
       { label: 'End Time', value: 'endTime' },
       { label: 'Total Amount', value: 'amount' },
@@ -1344,7 +1467,7 @@ export class BookingService {
       { label: 'Status', value: 'bookingStatus' },
       { label: 'Turf', value: 'turf.name' },
       { label: 'Customer', value: 'user.userProfile.name' },
-      { label: 'Phone', value: 'user.phone' }
+      { label: 'Phone', value: 'user.phone' },
     ];
 
     const parser = new Parser({ fields });
@@ -1360,7 +1483,7 @@ export class BookingService {
       where: { turf: { owner: { authId: ownerAuthId } } },
       include: { turf: { select: { name: true } } },
       orderBy: { bookingDate: 'desc' },
-      take: 30
+      take: 30,
     });
 
     return new Promise((resolve, reject) => {
@@ -1372,29 +1495,55 @@ export class BookingService {
       doc.on('error', reject);
 
       // Header
-      doc.fontSize(24).fillColor('#2E7D32').text('Turfsy Analytics Report', { align: 'center' });
-      doc.fontSize(10).fillColor('#666').text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
+      doc
+        .fontSize(24)
+        .fillColor('#2E7D32')
+        .text('Turfsy Analytics Report', { align: 'center' });
+      doc
+        .fontSize(10)
+        .fillColor('#666')
+        .text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
       doc.moveDown(2);
 
       // Summary Box
       doc.rect(50, doc.y, 500, 100).fill('#f5f5f5');
-      doc.fillColor('#000').fontSize(16).text('Business Overview', 70, doc.y + 10);
+      doc
+        .fillColor('#000')
+        .fontSize(16)
+        .text('Business Overview', 70, doc.y + 10);
       doc.fontSize(12);
-      doc.text(`Total Revenue: INR ${analytics.data.revenue.total}`, 70, doc.y + 25);
-      doc.text(`Total Bookings: ${analytics.data.counts.total}`, 70, doc.y + 15);
-      doc.text(`Completed: ${analytics.data.counts.completed} | Cancelled: ${analytics.data.counts.cancelled}`, 70, doc.y + 15);
-      
+      doc.text(
+        `Total Revenue: INR ${analytics.data.revenue.total}`,
+        70,
+        doc.y + 25,
+      );
+      doc.text(
+        `Total Bookings: ${analytics.data.counts.total}`,
+        70,
+        doc.y + 15,
+      );
+      doc.text(
+        `Completed: ${analytics.data.counts.completed} | Cancelled: ${analytics.data.counts.cancelled}`,
+        70,
+        doc.y + 15,
+      );
+
       doc.y = 230; // Reset Y after box
       doc.moveDown(2);
 
       // Recent Activity
-      doc.fontSize(16).fillColor('#2E7D32').text('Recent Activity', { underline: true });
+      doc
+        .fontSize(16)
+        .fillColor('#2E7D32')
+        .text('Recent Activity', { underline: true });
       doc.moveDown();
 
       doc.fontSize(9).fillColor('#333');
       bookings.forEach((b, i) => {
         const d = b.bookingDate.toISOString().split('T')[0];
-        doc.text(`${i + 1}. [${d}] ${b.startTime}-${b.endTime} | ${b.turf.name} | INR ${b.amount} | ${b.bookingStatus}`);
+        doc.text(
+          `${i + 1}. [${d}] ${b.startTime}-${b.endTime} | ${b.turf.name} | INR ${b.amount} | ${b.bookingStatus}`,
+        );
         doc.moveDown(0.5);
       });
 
@@ -1409,16 +1558,25 @@ export class BookingService {
   //    Layer 6: Rate Limiting (3/user/10min)
   //    Layer 9: Refund Safety (Razorpay API + verify before DB)
   // ═══════════════════════════════════════════════════════
-  async cancelBooking(authId: string, bookingId: string, reason?: string, ip?: string) {
+  async cancelBooking(
+    authId: string,
+    bookingId: string,
+    reason?: string,
+    ip?: string,
+  ) {
     // ── Layer 6: Rate Limiting ──
     this.rateLimiter.check(`user:${authId}:cancel`, RATE_LIMITS.CANCEL);
 
     // ── Strip HTML from reason ──
     const sanitizedReason = reason ? this.stripHtml(reason) : undefined;
 
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId }, include: { turf: true } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { turf: true },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.userId !== authId) throw new ForbiddenException('Access denied.');
+    if (booking.userId !== authId)
+      throw new ForbiddenException('Access denied.');
 
     // ══════════════════════════════════════════════════
     // Layer 2: Idempotency
@@ -1427,7 +1585,11 @@ export class BookingService {
       return {
         success: true,
         message: 'Booking already cancelled.',
-        data: { ...booking, displayId: this.formatBookingId(booking.id), refundAmount: 0 },
+        data: {
+          ...booking,
+          displayId: this.formatBookingId(booking.id),
+          refundAmount: 0,
+        },
       };
     }
 
@@ -1435,12 +1597,19 @@ export class BookingService {
       return {
         success: true,
         message: 'Already refunded.',
-        data: { ...booking, displayId: this.formatBookingId(booking.id), refundAmount: 0 },
+        data: {
+          ...booking,
+          displayId: this.formatBookingId(booking.id),
+          refundAmount: 0,
+        },
       };
     }
 
     // ── Layer 5: State Machine ──
-    if (booking.bookingStatus !== 'CONFIRMED' && booking.bookingStatus !== 'PENDING') {
+    if (
+      booking.bookingStatus !== 'CONFIRMED' &&
+      booking.bookingStatus !== 'PENDING'
+    ) {
       throw new BadRequestException('Invalid booking state');
     }
 
@@ -1449,10 +1618,13 @@ export class BookingService {
       booking.bookingDate.toISOString().split('T')[0],
       booking.startTime,
     );
-    const hoursUntilSlot = (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
+    const hoursUntilSlot =
+      (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
 
     if (hoursUntilSlot <= booking.turf.cancellationAllowedBeforeHours) {
-      throw new BadRequestException(`Cannot cancel within ${booking.turf.cancellationAllowedBeforeHours} hours of slot`);
+      throw new BadRequestException(
+        `Cannot cancel within ${booking.turf.cancellationAllowedBeforeHours} hours of slot`,
+      );
     }
 
     // ══════════════════════════════════════════════════
@@ -1460,17 +1632,20 @@ export class BookingService {
     // ══════════════════════════════════════════════════
     let refundAmount = 0;
     let newPaymentStatus: PaymentStatus =
-      booking.paymentStatus === 'PENDING'
-        ? 'FAILED'
-        : booking.paymentStatus;
+      booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
     let razorpayRefundId: string | null = null;
 
     // Only refund if payment was actually successful
     if (booking.paymentStatus === 'SUCCESS' && booking.razorpayPaymentId) {
-      refundAmount = Math.floor(booking.depositAmount * (booking.turf.cancellationRefundPercentage / 100));
+      refundAmount = Math.floor(
+        booking.depositAmount *
+          (booking.turf.cancellationRefundPercentage / 100),
+      );
 
-      const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
-      const isMockMode = keySecret === 'your_razorpay_key_secret' || keySecret === '';
+      const keySecret =
+        this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+      const isMockMode =
+        keySecret === 'your_razorpay_key_secret' || keySecret === '';
 
       if (isMockMode) {
         // Mock refund for testing
@@ -1479,10 +1654,16 @@ export class BookingService {
       } else {
         try {
           // Step 5: Call Razorpay Refund API
-          const refund = await this.razorpay.payments.refund(booking.razorpayPaymentId, {
-            amount: refundAmount * 100, // paise
-            notes: { bookingId, reason: sanitizedReason || 'User cancellation' },
-          });
+          const refund = await this.razorpay.payments.refund(
+            booking.razorpayPaymentId,
+            {
+              amount: refundAmount * 100, // paise
+              notes: {
+                bookingId,
+                reason: sanitizedReason || 'User cancellation',
+              },
+            },
+          );
 
           // Step 6: ONLY update to REFUNDED if Razorpay confirms
           razorpayRefundId = refund.id;
@@ -1531,9 +1712,10 @@ export class BookingService {
 
     return {
       success: true,
-      message: refundAmount > 0
-        ? `Booking cancelled. ${booking.turf.cancellationRefundPercentage}% refund of ₹${booking.depositAmount} → ₹${refundAmount} will be processed.`
-        : 'Booking cancelled successfully.',
+      message:
+        refundAmount > 0
+          ? `Booking cancelled. ${booking.turf.cancellationRefundPercentage}% refund of ₹${booking.depositAmount} → ₹${refundAmount} will be processed.`
+          : 'Booking cancelled successfully.',
       data: {
         ...updated,
         displayId: this.formatBookingId(updated.id),
@@ -1574,14 +1756,21 @@ export class BookingService {
       }
     }
 
-    return { success: true, count: updatedCount, message: `Marked ${updatedCount} bookings as NO_SHOW` };
+    return {
+      success: true,
+      count: updatedCount,
+      message: `Marked ${updatedCount} bookings as NO_SHOW`,
+    };
   }
 
   // ═══════════════════════════════════════════════════════
   // 6.6 CRON: AUTO-COMPLETE ONLINE BOOKINGS
   // ═══════════════════════════════════════════════════════
   async autoCompleteOnlineBookings(ip?: string) {
-    this.rateLimiter.check(`cron:auto-complete:${ip || 'system'}`, RATE_LIMITS.CRON);
+    this.rateLimiter.check(
+      `cron:auto-complete:${ip || 'system'}`,
+      RATE_LIMITS.CRON,
+    );
 
     const confirmedOnline = await this.prisma.booking.findMany({
       where: {
@@ -1607,13 +1796,20 @@ export class BookingService {
         });
 
         if (atomicUpdate.count > 0) {
-          await this.userGamificationService.handleBookingCompletion(booking.userId, booking.id);
+          await this.userGamificationService.handleBookingCompletion(
+            booking.userId,
+            booking.id,
+          );
           updatedCount++;
         }
       }
     }
 
-    return { success: true, count: updatedCount, message: `Auto-completed ${updatedCount} online bookings` };
+    return {
+      success: true,
+      count: updatedCount,
+      message: `Auto-completed ${updatedCount} online bookings`,
+    };
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1626,8 +1822,13 @@ export class BookingService {
       include: {
         turf: {
           select: {
-            id: true, name: true, city: true, address: true,
-            sportsType: true, entranceUrl: true, groundDayUrl: true,
+            id: true,
+            name: true,
+            city: true,
+            address: true,
+            sportsType: true,
+            entranceUrl: true,
+            groundDayUrl: true,
             owner: { select: { name: true, contactNumber: true } },
           },
         },
@@ -1658,12 +1859,25 @@ export class BookingService {
       include: {
         turf: {
           select: {
-            id: true, name: true, city: true, address: true, pincode: true,
-            sportsType: true, turfSize: true, lat: true, lng: true,
-            entranceUrl: true, groundDayUrl: true, groundNightUrl: true,
-            floodLights: true, parking: true, washroom: true,
-            weekdayDayPrice: true, weekdayNightPrice: true,
-            weekendDayPrice: true, weekendNightPrice: true,
+            id: true,
+            name: true,
+            city: true,
+            address: true,
+            pincode: true,
+            sportsType: true,
+            turfSize: true,
+            lat: true,
+            lng: true,
+            entranceUrl: true,
+            groundDayUrl: true,
+            groundNightUrl: true,
+            floodLights: true,
+            parking: true,
+            washroom: true,
+            weekdayDayPrice: true,
+            weekdayNightPrice: true,
+            weekendDayPrice: true,
+            weekendNightPrice: true,
             owner: { select: { name: true, contactNumber: true } },
           },
         },
@@ -1672,7 +1886,8 @@ export class BookingService {
     });
 
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.userId !== authId) throw new ForbiddenException('Access denied.');
+    if (booking.userId !== authId)
+      throw new ForbiddenException('Access denied.');
 
     return {
       success: true,
@@ -1752,8 +1967,13 @@ export class BookingService {
       include: {
         turf: {
           select: {
-            id: true, name: true, city: true, address: true,
-            sportsType: true, entranceUrl: true, groundDayUrl: true,
+            id: true,
+            name: true,
+            city: true,
+            address: true,
+            sportsType: true,
+            entranceUrl: true,
+            groundDayUrl: true,
             owner: { select: { name: true, contactNumber: true } },
           },
         },
@@ -1795,7 +2015,11 @@ export class BookingService {
       endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 1);
     } else if (filter === 'tomorrow') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+      );
       endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 1);
     } else if (filter === 'week') {
@@ -1814,8 +2038,13 @@ export class BookingService {
       include: {
         turf: {
           select: {
-            id: true, name: true, city: true, address: true,
-            sportsType: true, entranceUrl: true, groundDayUrl: true,
+            id: true,
+            name: true,
+            city: true,
+            address: true,
+            sportsType: true,
+            entranceUrl: true,
+            groundDayUrl: true,
             owner: { select: { name: true, contactNumber: true } },
           },
         },
@@ -1846,13 +2075,22 @@ export class BookingService {
         paymentStatus: { in: ['SUCCESS', 'REFUNDED', 'FAILED'] },
       },
       select: {
-        id: true, amount: true, depositAmount: true,
-        paymentType: true, paymentStatus: true,
-        bookingStatus: true, razorpayOrderId: true,
+        id: true,
+        amount: true,
+        depositAmount: true,
+        paymentType: true,
+        paymentStatus: true,
+        bookingStatus: true,
+        razorpayOrderId: true,
         playersCount: true,
-        bookingDate: true, startTime: true, endTime: true,
-        createdAt: true, cancelledAt: true,
-        turf: { select: { id: true, name: true, city: true, entranceUrl: true } },
+        bookingDate: true,
+        startTime: true,
+        endTime: true,
+        createdAt: true,
+        cancelledAt: true,
+        turf: {
+          select: { id: true, name: true, city: true, entranceUrl: true },
+        },
       } as any,
       orderBy: { createdAt: 'desc' },
     });
@@ -1880,23 +2118,34 @@ export class BookingService {
   ) {
     // ── Layer 10: Additional validation ──
     if (!Number.isInteger(dto.rating) || dto.rating < 1 || dto.rating > 5) {
-      throw new BadRequestException('Rating must be an integer between 1 and 5');
+      throw new BadRequestException(
+        'Rating must be an integer between 1 and 5',
+      );
     }
 
     // ── Strip HTML from review ──
-    const sanitizedReview = dto.review ? this.stripHtml(dto.review).slice(0, 500) : undefined;
+    const sanitizedReview = dto.review
+      ? this.stripHtml(dto.review).slice(0, 500)
+      : undefined;
 
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.userId !== authId) throw new ForbiddenException('Access denied.');
+    if (booking.userId !== authId)
+      throw new ForbiddenException('Access denied.');
 
     // ── Layer 5: State Machine ──
     if (booking.bookingStatus !== 'COMPLETED') {
-      throw new BadRequestException('You can only rate after completing a visit');
+      throw new BadRequestException(
+        'You can only rate after completing a visit',
+      );
     }
 
     // ── Layer 2: Idempotency — one rating per booking, lifetime ──
-    const existingRating = await this.prisma.turfRating.findUnique({ where: { bookingId } });
+    const existingRating = await this.prisma.turfRating.findUnique({
+      where: { bookingId },
+    });
     if (existingRating) {
       throw new ConflictException('Already rated');
     }
@@ -1920,7 +2169,11 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
-    return { success: true, message: 'Thank you for your review!', data: rating };
+    return {
+      success: true,
+      message: 'Thank you for your review!',
+      data: rating,
+    };
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1932,18 +2185,26 @@ export class BookingService {
       include: {
         turf: {
           select: {
-            name: true, city: true, address: true, pincode: true, sportsType: true,
+            name: true,
+            city: true,
+            address: true,
+            pincode: true,
+            sportsType: true,
             owner: { select: { name: true, contactNumber: true, email: true } },
           },
         },
         user: {
-          select: { phone: true, userProfile: { select: { name: true, email: true } } },
+          select: {
+            phone: true,
+            userProfile: { select: { name: true, email: true } },
+          },
         },
       },
     });
 
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.userId !== authId) throw new ForbiddenException('Access denied.');
+    if (booking.userId !== authId)
+      throw new ForbiddenException('Access denied.');
 
     const displayId = this.formatBookingId(booking.id);
 
@@ -1989,7 +2250,10 @@ export class BookingService {
 
       // --- LOGO / HEADER ---
       doc.fillColor('#2E7D32').fontSize(28).text('TURFSY', { align: 'right' });
-      doc.fillColor('#444').fontSize(10).text('Premium Turf Booking Platform', { align: 'right' });
+      doc
+        .fillColor('#444')
+        .fontSize(10)
+        .text('Premium Turf Booking Platform', { align: 'right' });
       doc.moveDown();
 
       // --- INVOICE INFO ---
@@ -2000,7 +2264,7 @@ export class BookingService {
 
       // --- BILLING SECTION ---
       doc.rect(50, 180, 500, 1).fill('#EEE'); // Horizontal Line
-      
+
       doc.fontSize(12).fillColor('#2E7D32').text('Billed By:', 50, 200);
       doc.fillColor('#000').fontSize(14).text(data.turf.name, 50, 215);
       doc.fontSize(10).text(data.turf.address, 50, 235);
@@ -2019,8 +2283,13 @@ export class BookingService {
       doc.text('Amount', 450, 308);
 
       // --- TABLE ROWS ---
-      doc.fillColor('#000').fontSize(11).text(`Turf Booking - ${data.turf.sportsType}`, 70, 340);
-      doc.fontSize(9).text(`${new Date(data.bookingDate).toDateString()}`, 250, 340);
+      doc
+        .fillColor('#000')
+        .fontSize(11)
+        .text(`Turf Booking - ${data.turf.sportsType}`, 70, 340);
+      doc
+        .fontSize(9)
+        .text(`${new Date(data.bookingDate).toDateString()}`, 250, 340);
       doc.text(data.slot, 250, 355);
       doc.fontSize(11).text(`INR ${data.amount}`, 450, 340);
 
@@ -2030,16 +2299,33 @@ export class BookingService {
       const summaryY = 400;
       doc.fontSize(10).text('Payment Type:', 350, summaryY);
       doc.text(data.paymentType, 450, summaryY);
-      
+
       doc.text('Booking Status:', 350, summaryY + 15);
-      doc.fillColor(data.bookingStatus === 'CANCELLED' ? '#D32F2F' : '#2E7D32').text(data.bookingStatus, 450, summaryY + 15);
-      
-      doc.fillColor('#000').fontSize(12).text('TOTAL PAID:', 350, summaryY + 40);
-      doc.fontSize(14).text(`INR ${data.depositAmount || data.amount}`, 450, summaryY + 38);
+      doc
+        .fillColor(data.bookingStatus === 'CANCELLED' ? '#D32F2F' : '#2E7D32')
+        .text(data.bookingStatus, 450, summaryY + 15);
+
+      doc
+        .fillColor('#000')
+        .fontSize(12)
+        .text('TOTAL PAID:', 350, summaryY + 40);
+      doc
+        .fontSize(14)
+        .text(`INR ${data.depositAmount || data.amount}`, 450, summaryY + 38);
 
       // --- FOOTER ---
-      doc.fontSize(10).fillColor('#777').text('Thank you for choosing Turfsy!', 50, 700, { align: 'center' });
-      doc.fontSize(8).text('This is a computer generated invoice and does not require a physical signature.', 50, 715, { align: 'center' });
+      doc
+        .fontSize(10)
+        .fillColor('#777')
+        .text('Thank you for choosing Turfsy!', 50, 700, { align: 'center' });
+      doc
+        .fontSize(8)
+        .text(
+          'This is a computer generated invoice and does not require a physical signature.',
+          50,
+          715,
+          { align: 'center' },
+        );
 
       doc.end();
     });
@@ -2063,10 +2349,14 @@ export class BookingService {
 
     // Validate time format
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(dto.startTime)) {
-      throw new BadRequestException('Invalid startTime format. Use HH:MM (24hr).');
+      throw new BadRequestException(
+        'Invalid startTime format. Use HH:MM (24hr).',
+      );
     }
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(dto.endTime)) {
-      throw new BadRequestException('Invalid endTime format. Use HH:MM (24hr).');
+      throw new BadRequestException(
+        'Invalid endTime format. Use HH:MM (24hr).',
+      );
     }
 
     // endTime > startTime
@@ -2076,18 +2366,24 @@ export class BookingService {
 
     // Validate durationMins
     if (dto.durationMins < 60 || dto.durationMins > 360) {
-      throw new BadRequestException('Duration must be between 60 and 360 minutes');
+      throw new BadRequestException(
+        'Duration must be between 60 and 360 minutes',
+      );
     }
     if (dto.durationMins % 30 !== 0) {
-      throw new BadRequestException('Duration must be a multiple of 30 minutes');
+      throw new BadRequestException(
+        'Duration must be a multiple of 30 minutes',
+      );
     }
 
     // Verify durationMins matches actual time difference
     const [startH, startM] = dto.startTime.split(':').map(Number);
     const [endH, endM] = dto.endTime.split(':').map(Number);
-    const calculatedDuration = (endH * 60 + endM) - (startH * 60 + startM);
+    const calculatedDuration = endH * 60 + endM - (startH * 60 + startM);
     if (calculatedDuration !== dto.durationMins) {
-      throw new BadRequestException('durationMins does not match startTime/endTime difference');
+      throw new BadRequestException(
+        'durationMins does not match startTime/endTime difference',
+      );
     }
   }
 

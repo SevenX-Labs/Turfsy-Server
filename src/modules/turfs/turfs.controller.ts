@@ -15,7 +15,10 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FileInterceptor,
+} from '@nestjs/platform-express';
 import { TurfsService } from './turfs.service';
 import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -31,7 +34,10 @@ const tmpDiskStorage = diskStorage({
   destination: os.tmpdir(),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + extname(file.originalname || ''));
+    cb(
+      null,
+      file.fieldname + '-' + uniqueSuffix + extname(file.originalname || ''),
+    );
   },
 });
 
@@ -74,13 +80,28 @@ export class TurfsController {
 
     // Handle initial image uploads if provided
     if (files?.entrance?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'entrance', files.entrance[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turf.id,
+        'entrance',
+        files.entrance[0],
+      );
     }
     if (files?.dayTurf?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'dayTurf', files.dayTurf[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turf.id,
+        'dayTurf',
+        files.dayTurf[0],
+      );
     }
     if (files?.nightTurf?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turf.id, 'nightTurf', files.nightTurf[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turf.id,
+        'nightTurf',
+        files.nightTurf[0],
+      );
     }
 
     // Return the latest turf data with URLs
@@ -111,14 +132,23 @@ export class TurfsController {
       throw new BadRequestException('lat and lng must be valid numbers');
     }
     // 2. Coordinate Validation: Prevent impossible math or DB errors
-    if (parsedLat < -90 || parsedLat > 90 || parsedLng < -180 || parsedLng > 180) {
-      throw new BadRequestException('Invalid coordinates. Lat must be between -90 and 90, Lng between -180 and 180');
+    if (
+      parsedLat < -90 ||
+      parsedLat > 90 ||
+      parsedLng < -180 ||
+      parsedLng > 180
+    ) {
+      throw new BadRequestException(
+        'Invalid coordinates. Lat must be between -90 and 90, Lng between -180 and 180',
+      );
     }
 
     const radius = radiusKm ? parseFloat(radiusKm) : 10; // default 10 km
     // 3. Rate/Load Protection: Limit radius to prevent querying thousands of locations
     if (radius <= 0 || radius > 100) {
-      throw new BadRequestException('Search radius must be between 1 and 100 km');
+      throw new BadRequestException(
+        'Search radius must be between 1 and 100 km',
+      );
     }
 
     return this.turfsService.getNearbyTurfs(parsedLat, parsedLng, radius);
@@ -148,7 +178,8 @@ export class TurfsController {
     @Query('sportsType') sportsType?: SportsType,
     @Query('minPrice') minPrice?: string,
     @Query('maxPrice') maxPrice?: string,
-    @Query('sortBy') sortBy?: 'price_low' | 'price_high' | 'distance' | 'popular' | 'newest',
+    @Query('sortBy')
+    sortBy?: 'price_low' | 'price_high' | 'distance' | 'popular' | 'newest',
     @Query('userLat') userLat?: string,
     @Query('userLng') userLng?: string,
   ) {
@@ -157,12 +188,14 @@ export class TurfsController {
 
     if (minPrice) {
       parsedMinPrice = parseFloat(minPrice);
-      if (isNaN(parsedMinPrice)) throw new BadRequestException('minPrice must be a valid number');
+      if (isNaN(parsedMinPrice))
+        throw new BadRequestException('minPrice must be a valid number');
     }
 
     if (maxPrice) {
       parsedMaxPrice = parseFloat(maxPrice);
-      if (isNaN(parsedMaxPrice)) throw new BadRequestException('maxPrice must be a valid number');
+      if (isNaN(parsedMaxPrice))
+        throw new BadRequestException('maxPrice must be a valid number');
     }
 
     let parsedLat: number | undefined;
@@ -170,12 +203,16 @@ export class TurfsController {
 
     if (sortBy === 'distance') {
       if (!userLat || !userLng) {
-        throw new BadRequestException('userLat and userLng are required when sorting by distance');
+        throw new BadRequestException(
+          'userLat and userLng are required when sorting by distance',
+        );
       }
       parsedLat = parseFloat(userLat);
       parsedLng = parseFloat(userLng);
       if (isNaN(parsedLat) || isNaN(parsedLng)) {
-        throw new BadRequestException('userLat and userLng must be valid numbers');
+        throw new BadRequestException(
+          'userLat and userLng must be valid numbers',
+        );
       }
     } else if (userLat && userLng) {
       // Optional even if not sorting by distance, just to attach distance metric
@@ -227,13 +264,28 @@ export class TurfsController {
 
     // 2. Update images if provided
     if (files?.entrance?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'entrance', files.entrance[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turfId,
+        'entrance',
+        files.entrance[0],
+      );
     }
     if (files?.dayTurf?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'dayTurf', files.dayTurf[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turfId,
+        'dayTurf',
+        files.dayTurf[0],
+      );
     }
     if (files?.nightTurf?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'nightTurf', files.nightTurf[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turfId,
+        'nightTurf',
+        files.nightTurf[0],
+      );
     }
 
     // 3. Return latest details
@@ -253,7 +305,11 @@ export class TurfsController {
     if (![TurfStatus.ACTIVE, TurfStatus.INACTIVE].includes(body.status)) {
       throw new BadRequestException('status must be ACTIVE or INACTIVE');
     }
-    return this.turfsService.updateTurfStatus(req.user.authId, turfId, body.status);
+    return this.turfsService.updateTurfStatus(
+      req.user.authId,
+      turfId,
+      body.status,
+    );
   }
 
   // 5. Get Turf Details (Consumer View)
@@ -295,13 +351,28 @@ export class TurfsController {
     }
 
     if (files?.entrance?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'entrance', files.entrance[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turfId,
+        'entrance',
+        files.entrance[0],
+      );
     }
     if (files.dayTurf?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'dayTurf', files.dayTurf[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turfId,
+        'dayTurf',
+        files.dayTurf[0],
+      );
     }
     if (files.nightTurf?.[0]) {
-      await this.uploadService.uploadTurfImage(req.user.authId, turfId, 'nightTurf', files.nightTurf[0]);
+      await this.uploadService.uploadTurfImage(
+        req.user.authId,
+        turfId,
+        'nightTurf',
+        files.nightTurf[0],
+      );
     }
 
     return this.turfsService.getTurfDetails(turfId);
@@ -328,7 +399,12 @@ export class TurfsController {
       throw new BadRequestException('Invalid image type');
     }
 
-    await this.uploadService.uploadTurfImage(req.user.authId, turfId, type, file);
+    await this.uploadService.uploadTurfImage(
+      req.user.authId,
+      turfId,
+      type,
+      file,
+    );
     return this.turfsService.getTurfDetails(turfId);
   }
 }

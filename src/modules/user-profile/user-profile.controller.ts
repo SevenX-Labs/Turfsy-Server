@@ -8,7 +8,9 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { UserProfileService } from './user-profile.service';
 import { CreateUserProfileDto } from './dto/create-profile.dto';
 import { UpdateUserProfileDto } from './dto/update-profile.dto';
@@ -23,6 +25,13 @@ export class UserProfileController {
   @Get()
   async getProfile(@Req() req: any) {
     return this.userProfileService.getProfile(req.user.authId);
+  }
+
+  @Get('check-availability')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  async checkAvailability(@Query('username') username: string) {
+    return this.userProfileService.checkUsernameAvailability(username);
   }
 
   @Post()

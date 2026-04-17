@@ -24,15 +24,17 @@ import { UserSettingsModule } from './modules/user-settings/user-settings.module
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100,
-    }]),
-    PrismaModule, 
-    AuthModule, 
-    UserProfileModule, 
-    OwnerProfileModule, 
-    TurfsModule, 
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
+    PrismaModule,
+    AuthModule,
+    UserProfileModule,
+    OwnerProfileModule,
+    TurfsModule,
     UploadModule,
     UserHomeModule,
     SavedTurfsModule,

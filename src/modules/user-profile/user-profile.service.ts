@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserProfileDto } from './dto/create-profile.dto';
@@ -19,10 +20,29 @@ export class UserProfileService {
       dto.houseNumber,
       dto.societyName,
       dto.landmark,
-      dto.roadName
-    ].filter(part => part && part.trim().length > 0);
-    
+      dto.roadName,
+    ].filter((part) => part && part.trim().length > 0);
+
     return parts.join(', ');
+  }
+
+  async checkUsernameAvailability(username: string) {
+    const regex = /^[a-z0-9_]{4,20}$/;
+    if (!regex.test(username)) {
+      throw new BadRequestException(
+        'Username must be 4-20 chars and contain only lowercase letters, numbers, and underscores',
+      );
+    }
+
+    const existing = await this.prisma.userProfile.findUnique({
+      where: { username },
+    });
+
+    if (existing) {
+      return { available: false, message: 'Username is already taken' };
+    }
+
+    return { available: true, message: 'Username is available' };
   }
 
   // Create profile - stores basic GPS info from Expo
@@ -33,12 +53,27 @@ export class UserProfileService {
     });
 
     if (!auth) throw new NotFoundException('Account not found');
-    if (!auth.isVerified) throw new ForbiddenException('Please verify phone number first');
+    if (!auth.isVerified)
+      throw new ForbiddenException('Please verify phone number first');
+
+    // Re-validate username uniqueness before saving
+    if (dto.username) {
+      const isTaken = await this.prisma.userProfile.findFirst({
+        where: {
+          username: dto.username,
+          authId: { not: authId },
+        },
+      });
+      if (isTaken) {
+        throw new BadRequestException('Username is already taken');
+      }
+    }
 
     const profile = await this.prisma.userProfile.upsert({
       where: { authId },
       create: {
         authId,
+        username: dto.username,
         name: dto.name,
         email: dto.email,
         dob: new Date(dto.dob),
@@ -51,6 +86,7 @@ export class UserProfileService {
         currentLng: dto.currentLng,
       },
       update: {
+        username: dto.username,
         name: dto.name,
         email: dto.email,
         dob: new Date(dto.dob),
@@ -79,7 +115,9 @@ export class UserProfileService {
 
   // Update Address (Handles both GPS updates and Manual House/Society additions)
   async updateHomeAddress(authId: string, dto: UpdateUserProfileDto) {
-    const profile = await this.prisma.userProfile.findUnique({ where: { authId } });
+    const profile = await this.prisma.userProfile.findUnique({
+      where: { authId },
+    });
     if (!profile) throw new NotFoundException('Profile not found');
 
     const updated = await this.prisma.userProfile.update({
@@ -106,10 +144,23 @@ export class UserProfileService {
     // Reuse the address update logic if address fields are present
     const data: any = { ...dto };
     if (dto.dob) data.dob = new Date(dto.dob);
-    
+
     // If any address part is sent, re-format the main address string
     if (dto.houseNumber || dto.societyName || dto.landmark || dto.roadName) {
       data.address = this.formatAddress(dto);
+    }
+
+    // Re-validate username uniqueness if changed
+    if (dto.username) {
+      const isTaken = await this.prisma.userProfile.findFirst({
+        where: {
+          username: dto.username,
+          authId: { not: authId },
+        },
+      });
+      if (isTaken) {
+        throw new BadRequestException('Username is already taken');
+      }
     }
 
     const updated = await this.prisma.userProfile.update({
@@ -120,25 +171,35 @@ export class UserProfileService {
         societyName: undefined,
         landmark: undefined,
         roadName: undefined,
-      }
+      },
     });
 
     return { success: true, message: 'Profile updated', data: updated };
   }
 
   async updateAvatar(authId: string, avatarUrl: string) {
-    await this.prisma.userProfile.update({ where: { authId }, data: { avatarUrl } });
+    await this.prisma.userProfile.update({
+      where: { authId },
+      data: { avatarUrl },
+    });
     return { success: true, data: { avatarUrl } };
   }
 
   async savePaymentDetails(authId: string, dto: PaymentDetailsDto) {
-    const profileData = await this.prisma.userProfile.findUnique({ where: { authId } });
+    const profileData = await this.prisma.userProfile.findUnique({
+      where: { authId },
+    });
     if (!profileData) throw new NotFoundException('Profile not found');
 
     await this.prisma.payment.upsert({
       where: { authId },
       update: { upiId: dto.upiId },
-      create: { authId, role: Role.USER, upiId: dto.upiId, userProfileId: profileData.id },
+      create: {
+        authId,
+        role: Role.USER,
+        upiId: dto.upiId,
+        userProfileId: profileData.id,
+      },
     });
     return { success: true, message: 'Payment saved' };
   }

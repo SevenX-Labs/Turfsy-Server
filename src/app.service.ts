@@ -740,7 +740,6 @@ export class AppService {
             path: '/leaderboard/total-hours-played',
             message: 'Gamification hours leaderboard endpoint working',
           },
-
         ],
       },
     ];

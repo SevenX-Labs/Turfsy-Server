@@ -10,7 +10,7 @@ import { LRUCache } from 'lru-cache';
 
 const sessionCache = new LRUCache<string, string>({
   max: 5000,
-  ttl: 1000 * 60 * 5, 
+  ttl: 1000 * 60 * 5,
 });
 
 @Injectable()
@@ -37,7 +37,9 @@ export class JwtAuthGuard implements CanActivate {
   protected extractToken(request: any) {
     const authHeader = request.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid authorization header',
+      );
     }
     return authHeader.split(' ')[1];
   }
@@ -77,12 +79,19 @@ export class JwtAuthGuard implements CanActivate {
     // This implements the "30 days inactivity = logout" rule automatically
     const msIn30Days = 30 * 24 * 60 * 60 * 1000;
     const msIn29Days = 29 * 24 * 60 * 60 * 1000;
-    
+
     if (session.expiresAt.getTime() - now.getTime() < msIn29Days) {
-      this.prisma.session.update({
-        where: { id: sessionId },
-        data: { expiresAt: new Date(now.getTime() + msIn30Days) }
-      }).catch(err => console.error('[AUTH] Failed to update session activity:', err.message));
+      this.prisma.session
+        .update({
+          where: { id: sessionId },
+          data: { expiresAt: new Date(now.getTime() + msIn30Days) },
+        })
+        .catch((err) =>
+          console.error(
+            '[AUTH] Failed to update session activity:',
+            err.message,
+          ),
+        );
     }
   }
 }

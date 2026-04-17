@@ -40,7 +40,8 @@ export class OwnerProfileService {
     });
 
     if (!auth) throw new NotFoundException('Account not found');
-    if (!auth.isVerified) throw new ForbiddenException('Please verify your phone number first');
+    if (!auth.isVerified)
+      throw new ForbiddenException('Please verify your phone number first');
     if (auth.role !== Role.OWNER)
       throw new ForbiddenException('Only OWNER role can create owner profile');
     if (auth.ownerProfile?.name)

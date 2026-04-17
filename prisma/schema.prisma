@@ -34,6 +34,7 @@ model Auth {
 model UserProfile {
   id             String      @id @default(uuid())
   authId         String      @unique
+  username       String?     @unique
   name           String?
   email          String?     @unique
   avatarUrl      String?
@@ -50,6 +51,8 @@ model UserProfile {
   updatedAt      DateTime    @updatedAt
   payment        Payment?
   auth           Auth        @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@index([username])
 }
 
 model OwnerProfile {

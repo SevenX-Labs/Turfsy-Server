@@ -18,7 +18,10 @@ describe('UserGamificationController', () => {
     const moduleBuilder = Test.createTestingModule({
       controllers: [UserGamificationController],
       providers: [
-        { provide: UserGamificationService, useValue: mockUserGamificationService },
+        {
+          provide: UserGamificationService,
+          useValue: mockUserGamificationService,
+        },
       ],
     });
 
@@ -28,7 +31,9 @@ describe('UserGamificationController', () => {
 
     const module: TestingModule = await moduleBuilder.compile();
 
-    controller = module.get<UserGamificationController>(UserGamificationController);
+    controller = module.get<UserGamificationController>(
+      UserGamificationController,
+    );
   });
 
   it('should be defined', () => {

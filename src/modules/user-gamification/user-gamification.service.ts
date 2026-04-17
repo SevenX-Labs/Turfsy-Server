@@ -17,7 +17,7 @@ export class UserGamificationService {
     });
 
     if (!booking || booking.bookingStatus !== 'COMPLETED') {
-        return;
+      return;
     }
 
     const durationHours = booking.durationMins / 60;
@@ -43,13 +43,20 @@ export class UserGamificationService {
 
     const now = new Date();
     const lastPlayed = gamification.lastPlayedDate;
-    
+
     let newStreak = gamification.streak;
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const lastDate = lastPlayed ? new Date(lastPlayed.getFullYear(), lastPlayed.getMonth(), lastPlayed.getDate()) : null;
+    const lastDate = lastPlayed
+      ? new Date(
+          lastPlayed.getFullYear(),
+          lastPlayed.getMonth(),
+          lastPlayed.getDate(),
+        )
+      : null;
 
     // Check if user already played today (limit streak increment to once per day)
-    const alreadyPlayedToday = lastDate && lastDate.getTime() === today.getTime();
+    const alreadyPlayedToday =
+      lastDate && lastDate.getTime() === today.getTime();
 
     if (!alreadyPlayedToday) {
       if (lastDate) {
@@ -95,11 +102,15 @@ export class UserGamificationService {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const lastPlayed = gamification.lastPlayedDate;
-      const lastDate = new Date(lastPlayed.getFullYear(), lastPlayed.getMonth(), lastPlayed.getDate());
-      
+      const lastDate = new Date(
+        lastPlayed.getFullYear(),
+        lastPlayed.getMonth(),
+        lastPlayed.getDate(),
+      );
+
       const diffTime = Math.abs(today.getTime() - lastDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
+
       if (diffDays > 5) {
         effectiveStreak = 0;
       }
@@ -128,9 +139,16 @@ export class UserGamificationService {
     });
   }
 
-  async getLeaderboardFiltered(sortBy: 'points' | 'totalMatches' | 'totalHours') {
-    const orderByField = sortBy === 'points' ? 'points' : sortBy === 'totalMatches' ? 'totalMatches' : 'totalHours';
-    
+  async getLeaderboardFiltered(
+    sortBy: 'points' | 'totalMatches' | 'totalHours',
+  ) {
+    const orderByField =
+      sortBy === 'points'
+        ? 'points'
+        : sortBy === 'totalMatches'
+          ? 'totalMatches'
+          : 'totalHours';
+
     const users = await this.prisma.userGamification.findMany({
       take: 10,
       orderBy: { [orderByField]: 'desc' },
@@ -150,11 +168,20 @@ export class UserGamificationService {
     }));
   }
 
-  async getUserRank(userId: string, sortBy: 'points' | 'totalMatches' | 'totalHours' = 'points', prefetchedStats?: any) {
-    const userStats = prefetchedStats || await this.getUserStats(userId);
+  async getUserRank(
+    userId: string,
+    sortBy: 'points' | 'totalMatches' | 'totalHours' = 'points',
+    prefetchedStats?: any,
+  ) {
+    const userStats = prefetchedStats || (await this.getUserStats(userId));
     if (!userStats) return null;
 
-    const sortByField = sortBy === 'points' ? 'points' : sortBy === 'totalMatches' ? 'totalMatches' : 'totalHours';
+    const sortByField =
+      sortBy === 'points'
+        ? 'points'
+        : sortBy === 'totalMatches'
+          ? 'totalMatches'
+          : 'totalHours';
     const value = userStats[sortByField];
 
     const count = await this.prisma.userGamification.count({
@@ -167,14 +194,15 @@ export class UserGamificationService {
   }
 
   async getNudgeMessage(userId: string, prefetchedStats?: any) {
-    const stats = prefetchedStats || await this.getUserStats(userId);
+    const stats = prefetchedStats || (await this.getUserStats(userId));
     if (!stats) return 'Book your first game to start your streak! 🔥';
 
     const lastPlayed = stats.lastPlayedDate;
     const now = new Date();
-    const isPlayedToday = lastPlayed && 
-      lastPlayed.getDate() === now.getDate() && 
-      lastPlayed.getMonth() === now.getMonth() && 
+    const isPlayedToday =
+      lastPlayed &&
+      lastPlayed.getDate() === now.getDate() &&
+      lastPlayed.getMonth() === now.getMonth() &&
       lastPlayed.getFullYear() === now.getFullYear();
 
     if (!isPlayedToday) {

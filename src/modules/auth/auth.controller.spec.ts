@@ -24,7 +24,10 @@ describe('AuthController', () => {
       providers: [
         { provide: AuthService, useValue: mockAuthService },
         { provide: JwtService, useValue: { verify: jest.fn() } },
-        { provide: PrismaService, useValue: { session: { findUnique: jest.fn() } } },
+        {
+          provide: PrismaService,
+          useValue: { session: { findUnique: jest.fn() } },
+        },
       ],
     });
 
@@ -44,11 +47,24 @@ describe('AuthController', () => {
   describe('POST /user/login', () => {
     it('should call authService.login with USER role and return result', async () => {
       const dto = { phone: '9876543210' };
-      const expected = { success: true, message: 'OTP sent successfully', expiresIn: 60 };
+      const expected = {
+        success: true,
+        message: 'OTP sent successfully',
+        expiresIn: 60,
+      };
       mockAuthService.login.mockResolvedValue(expected);
 
-      const result = await controller.userLogin(dto as any, '127.0.0.1', 'jest');
-      expect(mockAuthService.login).toHaveBeenCalledWith(dto, '127.0.0.1', 'jest', Role.USER);
+      const result = await controller.userLogin(
+        dto as any,
+        '127.0.0.1',
+        'jest',
+      );
+      expect(mockAuthService.login).toHaveBeenCalledWith(
+        dto,
+        '127.0.0.1',
+        'jest',
+        Role.USER,
+      );
       expect(result).toEqual(expected);
     });
   });
@@ -58,11 +74,24 @@ describe('AuthController', () => {
   describe('POST /owner/login', () => {
     it('should call authService.login with OWNER role and return result', async () => {
       const dto = { phone: '9876543210' };
-      const expected = { success: true, message: 'OTP sent successfully', expiresIn: 60 };
+      const expected = {
+        success: true,
+        message: 'OTP sent successfully',
+        expiresIn: 60,
+      };
       mockAuthService.login.mockResolvedValue(expected);
 
-      const result = await controller.ownerLogin(dto as any, '127.0.0.1', 'jest');
-      expect(mockAuthService.login).toHaveBeenCalledWith(dto, '127.0.0.1', 'jest', Role.OWNER);
+      const result = await controller.ownerLogin(
+        dto as any,
+        '127.0.0.1',
+        'jest',
+      );
+      expect(mockAuthService.login).toHaveBeenCalledWith(
+        dto,
+        '127.0.0.1',
+        'jest',
+        Role.OWNER,
+      );
       expect(result).toEqual(expected);
     });
   });
@@ -100,7 +129,10 @@ describe('AuthController', () => {
   describe('POST /user/resend-otp', () => {
     it('should call authService.resendOtp', async () => {
       const dto = { phone: '9876543210' };
-      mockAuthService.resendOtp.mockResolvedValue({ success: true, message: 'OTP resent successfully' });
+      mockAuthService.resendOtp.mockResolvedValue({
+        success: true,
+        message: 'OTP resent successfully',
+      });
 
       const result = await controller.userResendOtp(dto as any);
       expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto);
@@ -113,7 +145,10 @@ describe('AuthController', () => {
   describe('POST /owner/resend-otp', () => {
     it('should call authService.resendOtp', async () => {
       const dto = { phone: '9876543210' };
-      mockAuthService.resendOtp.mockResolvedValue({ success: true, message: 'OTP resent successfully' });
+      mockAuthService.resendOtp.mockResolvedValue({
+        success: true,
+        message: 'OTP resent successfully',
+      });
 
       const result = await controller.ownerResendOtp(dto as any);
       expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto);
@@ -125,8 +160,13 @@ describe('AuthController', () => {
 
   describe('GET /logout', () => {
     it('should call authService.logout with sessionId from req.user', async () => {
-      const req = { user: { sessionId: 'session-123', authId: 'auth-123' } } as any;
-      mockAuthService.logout.mockResolvedValue({ success: true, message: 'Logged out successfully' });
+      const req = {
+        user: { sessionId: 'session-123', authId: 'auth-123' },
+      } as any;
+      mockAuthService.logout.mockResolvedValue({
+        success: true,
+        message: 'Logged out successfully',
+      });
 
       const result = await controller.logout(req);
       expect(mockAuthService.logout).toHaveBeenCalledWith('session-123');
@@ -140,10 +180,16 @@ describe('AuthController', () => {
     it('should call authService.deleteAccount with authId and dto', async () => {
       const req = { user: { authId: 'auth-123' } } as any;
       const dto = { sessionToken: 'token-abc' };
-      mockAuthService.deleteAccount.mockResolvedValue({ success: true, message: 'Account deleted successfully' });
+      mockAuthService.deleteAccount.mockResolvedValue({
+        success: true,
+        message: 'Account deleted successfully',
+      });
 
       const result = await controller.deleteAccount(req, dto);
-      expect(mockAuthService.deleteAccount).toHaveBeenCalledWith('auth-123', dto);
+      expect(mockAuthService.deleteAccount).toHaveBeenCalledWith(
+        'auth-123',
+        dto,
+      );
       expect(result.success).toBe(true);
     });
   });
@@ -153,7 +199,10 @@ describe('AuthController', () => {
   describe('GET /get-me', () => {
     it('should call authService.getMe with authId from req.user', async () => {
       const req = { user: { authId: 'auth-123' } } as any;
-      mockAuthService.getMe.mockResolvedValue({ success: true, data: { id: 'auth-123' } });
+      mockAuthService.getMe.mockResolvedValue({
+        success: true,
+        data: { id: 'auth-123' },
+      });
 
       const result = await controller.getMe(req);
       expect(mockAuthService.getMe).toHaveBeenCalledWith('auth-123');
