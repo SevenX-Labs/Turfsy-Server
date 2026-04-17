@@ -151,7 +151,6 @@ export class BookingService {
       durationMins?: number;
       paymentType: PaymentType;
       notes?: string;
-      playersCount?: number;
     },
     ip?: string,
   ) {
@@ -290,7 +289,6 @@ export class BookingService {
             checkInPin,
             pinExpiresAt,
             notes: sanitizedNotes,
-            playersCount: dto.playersCount,
             bookingStatus:
               dto.paymentType === PaymentType.FULL_CASH ? 'CONFIRMED' : 'PENDING',
             paymentStatus: 'PENDING',
