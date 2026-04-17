@@ -147,7 +147,7 @@ export class BookingService {
       startTime: string;
       endTime: string;
       durationMins: number;
-      paymentType: 'ONLINE' | 'CASH';
+      paymentType: 'ONLINE' | 'CASH' | 'PAY_ON_TURF';
       notes?: string;
       playersCount?: number;
     },
@@ -320,7 +320,7 @@ export class BookingService {
       startTime?: string;
       endTime?: string;
       durationMins?: number;
-      paymentType?: 'ONLINE' | 'CASH';
+      paymentType?: 'ONLINE' | 'CASH' | 'PAY_ON_TURF';
     },
     ip?: string,
   ) {
