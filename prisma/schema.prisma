@@ -325,6 +325,7 @@ enum PaymentStatus {
 enum PaymentType {
   ONLINE
   CASH
+  PAY_ON_TURF
 }
 
 enum PayoutMethod {

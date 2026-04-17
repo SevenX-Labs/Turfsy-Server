@@ -59,6 +59,12 @@ Owner verifies PIN -> Booking marked as COMPLETED
    - If user doesn't check in within 15 minutes of slot start time, system auto-marks as `NO_SHOW`.
    - Deposit is forfeited (no refund).
 
+3. **Pay on Turf (100% CASH):**
+   - User is allowed to book without advance via `POST .../pay-at-turf`.
+   - **0% Deposit** online.
+   - bookingStatus = `CONFIRMED`, paymentStatus = `PENDING`.
+   - Full amount is paid in cash at the turf.
+
 ### State Summary
 
 | bookingStatus | Meaning |
@@ -183,6 +189,34 @@ POST /api/v3/booking
   }
 }
 ```
+
+**Response (PAY_ON_TURF) — same body but `paymentType: "PAY_ON_TURF"`:**
+```json
+{
+  "success": true,
+  "message": "Booking confirmed! Please pay the full amount (₹1200) at the turf upon arrival.",
+  "data": {
+    "id": "booking-uuid",
+    "displayId": "TRF-A6C1EDC",
+    "bookingStatus": "CONFIRMED",
+    "paymentStatus": "PENDING",
+    "paymentType": "PAY_ON_TURF",
+    "checkInPin": "4821",
+    "amount": 1200,
+    "depositAmount": 0,
+    "amountToPay": 0,
+    "remainingAmount": 1200
+  }
+}
+```
+
+---
+
+### 2.1 Pay at Turf (Direct Route)
+```
+POST /api/v3/booking/pay-at-turf
+```
+**Description**: Dedicated fallback for quick bookings where the user pays the full amount at the turf. It forces `paymentType` to `PAY_ON_TURF`.
 
 ---
 

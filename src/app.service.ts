@@ -466,6 +466,11 @@ export class AppService {
             path: '/availability/:turfId',
             message: 'Booking availability endpoint working',
           },
+          {
+            method: 'POST',
+            path: '/pay-at-turf',
+            message: 'Pay at turf endpoint working',
+          },
         ],
       },
       {

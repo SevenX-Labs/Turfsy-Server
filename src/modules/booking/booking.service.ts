@@ -206,8 +206,10 @@ export class BookingService {
     // ── Layer 4: Deposit amount (server-calculated) ──
     const depositAmount =
       dto.paymentType === 'CASH'
-        ? Math.floor(amount * CASH_DEPOSIT_PERCENT) // Floor for cash
-        : amount;
+        ? Math.floor(amount * CASH_DEPOSIT_PERCENT)
+        : dto.paymentType === 'PAY_ON_TURF'
+          ? 0
+          : amount;
 
     // ── Layer 8: Secure PIN generation (crypto.randomInt) ──
     const checkInPin = crypto.randomInt(1000, 9999).toString();
@@ -257,7 +259,8 @@ export class BookingService {
             pinExpiresAt,
             notes: sanitizedNotes,
             playersCount: dto.playersCount,
-            bookingStatus: 'PENDING',
+            bookingStatus:
+              dto.paymentType === 'PAY_ON_TURF' ? 'CONFIRMED' : 'PENDING',
             paymentStatus: 'PENDING',
           } as any,
         });
@@ -271,6 +274,11 @@ export class BookingService {
       where: { id: slotLock.id },
       data: { bookingId: booking.id },
     });
+
+    // For PAY_ON_TURF, we confirm immediately, so release the lock
+    if (dto.paymentType === 'PAY_ON_TURF') {
+      await this.releaseSlotLockForBooking(booking);
+    }
 
     // ── Layer 12: Secure Logging ──
     this.paymentLogger.log({
@@ -288,7 +296,9 @@ export class BookingService {
       message:
         dto.paymentType === 'CASH'
           ? `Booking created. Pay 50% deposit (₹${depositAmount}) online. Remaining ₹${amount - depositAmount} at turf.`
-          : `Booking created. Pay full amount (₹${amount}) to confirm.`,
+          : dto.paymentType === 'PAY_ON_TURF'
+            ? `Booking confirmed! Please pay the full amount (₹${amount}) at the turf upon arrival.`
+            : `Booking created. Pay full amount (₹${amount}) to confirm.`,
       data: {
         ...booking,
         displayId: this.formatBookingId(booking.id),
