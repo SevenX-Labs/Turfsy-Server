@@ -1753,6 +1753,11 @@ export class BookingService {
       },
     });
 
+    // Clean up split if exists
+    await this.prisma.bookingSplit.deleteMany({
+      where: { bookingId }
+    });
+
     await this.releaseSlotLockForBooking(updated);
 
     // ── Layer 12 ──

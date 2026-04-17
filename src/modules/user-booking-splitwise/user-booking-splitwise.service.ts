@@ -52,6 +52,8 @@ export class UserBookingSplitwiseService {
         },
         include: { players: true },
       });
+    } else if (split.leadUserId !== authId) {
+      throw new ForbiddenException('Access denied.');
     }
     return split;
   }
@@ -101,6 +103,10 @@ export class UserBookingSplitwiseService {
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
     const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
+
+    if (split.isSplitDone) {
+      throw new BadRequestException('Cannot add players after split is triggered');
+    }
 
     const usernames = Array.from(new Set(dto.usernames));
     const existingUsernames = new Set(split.players.map(p => p.username));

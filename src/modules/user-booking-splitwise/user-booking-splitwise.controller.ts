@@ -15,13 +15,16 @@ import {
 } from '@nestjs/common';
 import { UserBookingSplitwiseService } from './user-booking-splitwise.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { ResponseSanitizerInterceptor } from '../../common/interceptors/response-sanitizer.interceptor';
 import { AddPlayersDto } from './dto/add-players.dto';
 import { UpdateSplitStatusDto } from './dto/update-status.dto';
 import { SetAmountsDto } from './dto/set-amounts.dto';
 
 @Controller('api/v3/booking')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('USER')
 @UseInterceptors(ResponseSanitizerInterceptor)
 export class UserBookingSplitwiseController {
   constructor(
