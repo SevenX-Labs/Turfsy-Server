@@ -252,7 +252,14 @@ export class BookingService {
 
     // ── Layer 8: Secure PIN generation (crypto.randomInt) ──
     const checkInPin = crypto.randomInt(1000, 9999).toString();
-    const pinExpiresAt = this.buildSlotDateTime(dto.bookingDate, dto.endTime);
+    
+    // Correctly handle PIN expiry for overnight slots
+    const isOvernightBooking = dto.startTime > dto.endTime;
+    const pinExpiresAt = this.buildSlotDateTime(
+      dto.bookingDate, 
+      dto.endTime, 
+      isOvernightBooking ? 1 : 0
+    );
 
     const slotLock = await this.acquireSlotLock(authId, {
       turfId: dto.turfId,
@@ -1112,8 +1119,9 @@ export class BookingService {
     // ── Layer 8: Time window check (-10 min from start, +10 min from end) ──
     const now = new Date();
     const datePart = booking.bookingDate.toISOString().split('T')[0];
+    const isOvernight = booking.startTime > booking.endTime;
     const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
-    const slotEnd = this.buildSlotDateTime(datePart, booking.endTime);
+    const slotEnd = this.buildSlotDateTime(datePart, booking.endTime, isOvernight ? 1 : 0);
 
     const windowStart = new Date(
       slotStart.getTime() - PIN_WINDOW_MINUTES * 60 * 1000,
@@ -1263,7 +1271,8 @@ export class BookingService {
       // For CASH, allow manual completion ONLY if the PIN window has expired
       const now = new Date();
       const datePart = booking.bookingDate.toISOString().split('T')[0];
-      const slotEnd = this.buildSlotDateTime(datePart, booking.endTime);
+      const isOvernight = booking.startTime > booking.endTime;
+      const slotEnd = this.buildSlotDateTime(datePart, booking.endTime, isOvernight ? 1 : 0);
       const windowEnd = new Date(
         slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000,
       );
@@ -2528,11 +2537,18 @@ export class BookingService {
     return `TRF-${uuid.slice(0, 7).toUpperCase()}`;
   }
 
-  private buildSlotDateTime(dateSource: string | Date, timeStr: string): Date {
-    const dateStr =
+  private buildSlotDateTime(dateSource: string | Date, timeStr: string, dayOffset = 0): Date {
+    const rawDate =
       dateSource instanceof Date
-        ? dateSource.toISOString().split('T')[0]
-        : dateSource;
+        ? dateSource
+        : new Date(dateSource);
+        
+    const date = new Date(rawDate);
+    if (dayOffset !== 0) {
+      date.setDate(date.getDate() + dayOffset);
+    }
+    
+    const dateStr = date.toISOString().split('T')[0];
     return new Date(`${dateStr}T${timeStr}:00`);
   }
 
