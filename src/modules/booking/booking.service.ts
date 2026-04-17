@@ -181,11 +181,33 @@ export class BookingService {
       throw new BadRequestException('Cannot book for a past date');
     }
 
-    // ── Turf operating hours validation ──
-    if (dto.startTime < turf.openTime || dto.endTime > turf.closeTime) {
+    // ── Flexible Operating Hours logic ──
+    const is24Hour = turf.openTime === turf.closeTime;
+    const isOvernight = turf.closeTime < turf.openTime;
+    
+    const isTimeInWindow = (time: string) => {
+      if (is24Hour) return true; // Open 24/7
+      return isOvernight
+        ? time >= turf.openTime || time <= turf.closeTime
+        : time >= turf.openTime && time <= turf.closeTime;
+    };
+
+    if (!isTimeInWindow(dto.startTime) || !isTimeInWindow(dto.endTime)) {
       throw new BadRequestException(
-        `Turf operates from ${turf.openTime} to ${turf.closeTime}`,
+        `Turf is closed. Operating hours: ${turf.openTime} - ${turf.closeTime}`,
       );
+    }
+
+    // Gap check: Ensure booking doesn't cross the closed period (only for non-24h overnight)
+    if (!is24Hour && isOvernight && dto.startTime <= turf.closeTime && dto.endTime >= turf.openTime) {
+      throw new BadRequestException(
+        `Turf is closed between ${turf.closeTime} and ${turf.openTime}`,
+      );
+    }
+
+    // For same-day turfs, ensure start < end
+    if (!is24Hour && !isOvernight && dto.startTime >= dto.endTime) {
+      throw new BadRequestException('End time must be after start time');
     }
 
     // ── Duration validation ──
