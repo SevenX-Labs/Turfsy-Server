@@ -38,10 +38,11 @@ export class CreateBookingDto {
   })
   endTime: string;
 
+  @IsOptional()
   @IsInt({ message: 'durationMins must be an integer' })
   @Min(60, { message: 'Minimum duration is 60 minutes' })
   @Max(360, { message: 'Maximum duration is 360 minutes' })
-  durationMins: number;
+  durationMins?: number;
 
   @IsIn(['FULL_ONLINE', 'HALF_ONLINE_HALF_CASH', 'FULL_CASH'], {
     message:

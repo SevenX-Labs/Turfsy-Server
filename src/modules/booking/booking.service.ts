@@ -2486,7 +2486,10 @@ export class BookingService {
       computedDuration = 1440 - totalStartMins + totalEndMins;
     }
 
-    if (computedDuration !== dto.durationMins) {
+    // ── Auto-calculation logic ──
+    if (dto.durationMins === undefined || dto.durationMins === null) {
+      (dto as any).durationMins = computedDuration;
+    } else if (computedDuration !== dto.durationMins) {
       throw new BadRequestException(
         `durationMins (${dto.durationMins}) does not match startTime/endTime difference (${computedDuration})`,
       );
