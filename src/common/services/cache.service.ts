@@ -19,6 +19,8 @@ export class CacheService {
     updateAgeOnGet: true,     // Reset TTL on read (sliding window)
   });
 
+  private readonly promiseMap = new Map<string, Promise<any>>();
+
   /**
    * Get a cached value by key.
    * Returns undefined if not found or expired.
@@ -71,9 +73,21 @@ export class CacheService {
       return cached;
     }
 
-    const value = await factory();
-    this.set(key, value, ttlMs);
-    return value;
+    if (this.promiseMap.has(key)) {
+      return this.promiseMap.get(key);
+    }
+
+    const promise = factory().then((value) => {
+      this.set(key, value, ttlMs);
+      this.promiseMap.delete(key);
+      return value;
+    }).catch((err) => {
+      this.promiseMap.delete(key);
+      throw err;
+    });
+
+    this.promiseMap.set(key, promise);
+    return promise;
   }
 
   /**

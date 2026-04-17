@@ -1,4 +1,4 @@
-import { IsArray, ValidateNested, IsNumber, IsString, IsNotEmpty } from 'class-validator';
+import { IsArray, ValidateNested, IsNumber, IsString, IsNotEmpty, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PlayerAmountDto {
@@ -7,6 +7,7 @@ export class PlayerAmountDto {
   playerId: string;
 
   @IsNumber()
+  @Min(1)
   amount: number;
 }
 

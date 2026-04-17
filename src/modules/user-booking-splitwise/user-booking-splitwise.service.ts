@@ -77,15 +77,22 @@ export class UserBookingSplitwiseService {
     const baseAmount = Math.floor(remainingAmount / pendingPlayers.length);
     const remainder = Math.floor(remainingAmount % pendingPlayers.length);
 
+    const updates: any[] = [];
     for (let i = 0; i < pendingPlayers.length; i++) {
         const p = pendingPlayers[i];
         const newAmount = baseAmount + (i === pendingPlayers.length - 1 ? remainder : 0);
         if (p.amount !== newAmount) {
-            await this.prisma.bookingSplitPlayer.update({
-                where: { id: p.id },
-                data: { amount: newAmount },
-            });
+            updates.push(
+               this.prisma.bookingSplitPlayer.update({
+                  where: { id: p.id },
+                  data: { amount: newAmount },
+               })
+            );
         }
+    }
+    
+    if (updates.length > 0) {
+      await this.prisma.$transaction(updates);
     }
   }
 
@@ -95,22 +102,31 @@ export class UserBookingSplitwiseService {
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
     const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
 
-    for (const username of dto.usernames) {
-      const userProfile = await this.prisma.userProfile.findUnique({
-        where: { username },
-      });
+    const usernames = Array.from(new Set(dto.usernames));
+    const existingUsernames = new Set(split.players.map(p => p.username));
+    const newUsernames = usernames.filter(u => !existingUsernames.has(u));
 
-      await this.prisma.bookingSplitPlayer.create({
-        data: {
+    if (newUsernames.length > 0) {
+      // 1. Fetch user profiles in one single query (Fixes N+1 issue)
+      const userProfiles = await this.prisma.userProfile.findMany({
+        where: { username: { in: newUsernames } },
+        select: { username: true, authId: true }
+      });
+      const profileMap = new Map(userProfiles.map(p => [p.username, p.authId]));
+
+      // 2. Bulk insert new players
+      await this.prisma.bookingSplitPlayer.createMany({
+        data: newUsernames.map(username => ({
           splitId: split.id,
           username,
-          userId: userProfile?.authId || null,
+          userId: profileMap.get(username) || null,
           amount: 0,
-        },
+        }))
       });
-    }
 
-    await this.recalculatePendingPlayers(split.id);
+      // 3. Recalculate based on newly added array securely
+      await this.recalculatePendingPlayers(split.id);
+    }
 
     this.cache.invalidate(`split:${bookingId}`);
 
@@ -309,6 +325,7 @@ export class UserBookingSplitwiseService {
   }
 
   async getSplitDetails(authId: string, bookingId: string) {
+    this.rateLimiter.check(`user:${authId}:split:get`, { limit: 60, windowMs: 60000 });
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
 
     return this.cache.getOrSet(
@@ -317,10 +334,10 @@ export class UserBookingSplitwiseService {
         const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
         
         const players = split.players.map(p => {
-          const { ...playerData } = p;
+          const { userId, ...playerData } = p;
           return {
             ...playerData,
-            isNotifiable: !!p.userId,
+            isNotifiable: !!userId,
           };
         });
 

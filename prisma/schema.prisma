@@ -411,6 +411,7 @@ model BookingSplitPlayer {
   split     BookingSplit      @relation(fields: [splitId], references: [id], onDelete: Cascade)
 
   @@index([splitId])
+  @@index([username])
   @@map("booking_split_players")
 }
 
