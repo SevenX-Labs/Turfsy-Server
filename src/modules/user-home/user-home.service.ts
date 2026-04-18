@@ -126,6 +126,7 @@ export class UserHomeService {
       const location = await this.resolveLocation(options);
       // Fetch all active turfs once with aggregates
       const allTurfs = await this.fetchAllActiveTurfs();
+      console.log(`[UserHomeService] Found ${allTurfs.length} active turfs`);
       const scopedTurfs = this.filterByPreferredSport(
         allTurfs,
         location.preferredSport,
@@ -305,55 +306,50 @@ export class UserHomeService {
   // ─────────────────────────────────────────
 
   private async fetchAllActiveTurfs(): Promise<RawTurf[]> {
-    // Cache active turfs for 3 minutes to reduce DB load on home page
-    return this.cache.getOrSet(
-      'home:activeTurfs',
-      async () => {
-        const turfs = await (this.prisma as any).turf.findMany({
-          where: {
-            status: 'ACTIVE',
-            deletedAt: null,
-          },
+    console.log('[UserHomeService] Fetching active turfs from DB (BYPASSING CACHE)...');
+    // Temporarily removing filters to debug data presence
+    const turfs = await (this.prisma as any).turf.findMany({
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        address: true,
+        sportsType: true,
+        turfSize: true,
+        status: true,
+        openTime: true,
+        closeTime: true,
+        lat: true,
+        lng: true,
+        weekdayDayPrice: true,
+        weekdayNightPrice: true,
+        weekendDayPrice: true,
+        weekendNightPrice: true,
+        floodLights: true,
+        parking: true,
+        washroom: true,
+        changingRoom: true,
+        drinkingWater: true,
+        seatingArea: true,
+        cafeteria: true,
+        groundDayUrl: true,
+        groundNightUrl: true,
+        entranceUrl: true,
+        updatedAt: true,
+        createdAt: true,
+        owner: {
           select: {
-            id: true,
             name: true,
-            city: true,
-            address: true,
-            sportsType: true,
-            turfSize: true,
-            status: true,
-            openTime: true,
-            closeTime: true,
-            lat: true,
-            lng: true,
-            weekdayDayPrice: true,
-            weekdayNightPrice: true,
-            weekendDayPrice: true,
-            weekendNightPrice: true,
-            floodLights: true,
-            parking: true,
-            washroom: true,
-            changingRoom: true,
-            drinkingWater: true,
-            seatingArea: true,
-            cafeteria: true,
-            groundDayUrl: true,
-            groundNightUrl: true,
-            entranceUrl: true,
-            updatedAt: true,
-            createdAt: true,
-            owner: {
-              select: {
-                name: true,
-                contactNumber: true,
-              },
-            },
+            contactNumber: true,
           },
-        });
-        return turfs as RawTurf[];
+        },
       },
-      1000 * 60 * 3, // 3-minute TTL
-    );
+    });
+    console.log(`[UserHomeService] Raw DB fetch returned ${turfs.length} turfs`);
+    if (turfs.length > 0) {
+      console.log(`[UserHomeService] First turf status: ${turfs[0].status} (${typeof turfs[0].status})`);
+    }
+    return turfs as RawTurf[];
   }
 
   // ─────────────────────────────────────────
