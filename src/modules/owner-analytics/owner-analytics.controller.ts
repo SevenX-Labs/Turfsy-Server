@@ -91,4 +91,27 @@ export class OwnerAnalyticsController {
   async getNoShowRate(@Req() req: any) {
     return this.ownerAnalyticsService.getNoShowRate(req.user.authId);
   }
+
+  @Get('reviews-ratings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async getReviewsAndRatings(@Req() req: any) {
+    return this.ownerAnalyticsService.getReviewsAndRatings(req.user.authId);
+  }
+
+  @Get('total-venues')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async getTotalVenues(@Req() req: any) {
+    return this.ownerAnalyticsService.getTotalVenues(req.user.authId);
+  }
+
+  @Get('venues-ratings-summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async getVenuesAndRatingsSummary(@Req() req: any) {
+    return this.ownerAnalyticsService.getVenuesAndRatingsSummary(
+      req.user.authId,
+    );
+  }
 }

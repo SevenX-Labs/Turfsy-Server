@@ -175,4 +175,64 @@ export class OwnerAnalyticsService {
       },
     };
   }
+
+  async getReviewsAndRatings(ownerAuthId: string) {
+    const owner = await this.prisma.ownerProfile.findUnique({
+      where: { authId: ownerAuthId },
+      include: { turfs: { select: { id: true } } },
+    });
+    if (!owner) throw new NotFoundException('Owner profile not found');
+
+    const turfIds = owner.turfs.map((t) => t.id);
+    const ratings = await this.prisma.turfRating.findMany({
+      where: { turfId: { in: turfIds } },
+      select: { rating: true },
+    });
+
+    const totalReviews = ratings.length;
+    let averageRating = 0;
+    if (totalReviews > 0) {
+      const sum = ratings.reduce((acc, curr) => acc + curr.rating, 0);
+      averageRating = Number((sum / totalReviews).toFixed(1));
+    }
+
+    return { success: true, data: { totalReviews, averageRating } };
+  }
+
+  async getTotalVenues(ownerAuthId: string) {
+    const owner = await this.prisma.ownerProfile.findUnique({
+      where: { authId: ownerAuthId },
+      include: { turfs: { select: { id: true } } },
+    });
+    if (!owner) throw new NotFoundException('Owner profile not found');
+
+    return { success: true, data: { totalVenues: owner.turfs.length } };
+  }
+
+  async getVenuesAndRatingsSummary(ownerAuthId: string) {
+    const owner = await this.prisma.ownerProfile.findUnique({
+      where: { authId: ownerAuthId },
+      include: { turfs: { select: { id: true } } },
+    });
+    if (!owner) throw new NotFoundException('Owner profile not found');
+
+    const totalVenues = owner.turfs.length;
+    const turfIds = owner.turfs.map((t) => t.id);
+    const ratings = await this.prisma.turfRating.findMany({
+      where: { turfId: { in: turfIds } },
+      select: { rating: true },
+    });
+
+    const totalReviews = ratings.length;
+    let averageRating = 0;
+    if (totalReviews > 0) {
+      const sum = ratings.reduce((acc, curr) => acc + curr.rating, 0);
+      averageRating = Number((sum / totalReviews).toFixed(1));
+    }
+
+    return {
+      success: true,
+      data: { totalVenues, totalReviews, averageRating },
+    };
+  }
 }
