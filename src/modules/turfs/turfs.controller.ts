@@ -15,6 +15,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import {
   FileFieldsInterceptor,
   FileInterceptor,
@@ -313,10 +314,11 @@ export class TurfsController {
   }
 
   // 5. Get Turf Details (Consumer View)
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':turfId')
   @HttpCode(HttpStatus.OK)
-  async getTurfDetails(@Param('turfId') turfId: string) {
-    return this.turfsService.getTurfDetails(turfId);
+  async getTurfDetails(@Req() req: any, @Param('turfId') turfId: string) {
+    return this.turfsService.getTurfDetails(turfId, req.user?.authId);
   }
 
   // 6. Upload 3 images (entrance, day turf, night turf) - Idempotent

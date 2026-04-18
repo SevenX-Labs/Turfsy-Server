@@ -18,6 +18,7 @@ import { UserHomeSectionResponseDto } from './dto/user-home-section-response.dto
 // ─────────────────────────────────────────
 
 const SECTION_LIMIT = 10; // max turfs per section
+const SECTION_LIMIT_SINGLE = 1; // for "Top Recommendation" and "Newly Opened"
 const DEFAULT_RADIUS_KM = 5; // nearby radius default when GPS provided
 const MIN_RADIUS_KM = 1;
 const MAX_RADIUS_KM = 15;
@@ -185,6 +186,7 @@ export class UserHomeService {
           location.userLat,
           location.userLng,
           location.preferredSport,
+          options.authId,
         ),
       ]);
 
@@ -278,11 +280,12 @@ export class UserHomeService {
         );
         break;
       case HomeSectionType.RECENTLY_VIEWED:
-        section = this.buildRecentlyViewed(
+        section = await this.buildRecentlyViewed(
           scopedTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
+          options.authId,
         );
         break;
       default:
@@ -306,50 +309,55 @@ export class UserHomeService {
   // ─────────────────────────────────────────
 
   private async fetchAllActiveTurfs(): Promise<RawTurf[]> {
-    console.log('[UserHomeService] Fetching active turfs from DB (BYPASSING CACHE)...');
-    // Temporarily removing filters to debug data presence
-    const turfs = await (this.prisma as any).turf.findMany({
-      select: {
-        id: true,
-        name: true,
-        city: true,
-        address: true,
-        sportsType: true,
-        turfSize: true,
-        status: true,
-        openTime: true,
-        closeTime: true,
-        lat: true,
-        lng: true,
-        weekdayDayPrice: true,
-        weekdayNightPrice: true,
-        weekendDayPrice: true,
-        weekendNightPrice: true,
-        floodLights: true,
-        parking: true,
-        washroom: true,
-        changingRoom: true,
-        drinkingWater: true,
-        seatingArea: true,
-        cafeteria: true,
-        groundDayUrl: true,
-        groundNightUrl: true,
-        entranceUrl: true,
-        updatedAt: true,
-        createdAt: true,
-        owner: {
-          select: {
-            name: true,
-            contactNumber: true,
+    // Cache active turfs for 3 minutes to reduce DB load on home page
+    return this.cache.getOrSet(
+      'home:activeTurfs',
+      async () => {
+        const turfs = await this.prisma.turf.findMany({
+          where: {
+            status: 'ACTIVE',
+            deletedAt: null,
           },
-        },
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            address: true,
+            sportsType: true,
+            turfSize: true,
+            status: true,
+            openTime: true,
+            closeTime: true,
+            lat: true,
+            lng: true,
+            weekdayDayPrice: true,
+            weekdayNightPrice: true,
+            weekendDayPrice: true,
+            weekendNightPrice: true,
+            floodLights: true,
+            parking: true,
+            washroom: true,
+            changingRoom: true,
+            drinkingWater: true,
+            seatingArea: true,
+            cafeteria: true,
+            groundDayUrl: true,
+            groundNightUrl: true,
+            entranceUrl: true,
+            updatedAt: true,
+            createdAt: true,
+            owner: {
+              select: {
+                name: true,
+                contactNumber: true,
+              },
+            },
+          },
+        });
+        return turfs as RawTurf[];
       },
-    });
-    console.log(`[UserHomeService] Raw DB fetch returned ${turfs.length} turfs`);
-    if (turfs.length > 0) {
-      console.log(`[UserHomeService] First turf status: ${turfs[0].status} (${typeof turfs[0].status})`);
-    }
-    return turfs as RawTurf[];
+      1000 * 60 * 3, // 3-minute TTL
+    );
   }
 
   // ─────────────────────────────────────────
@@ -529,9 +537,6 @@ export class UserHomeService {
 
   // ─────────────────────────────────────────
   // Section 1 — Top Recommended
-  // Score = rating * 0.5 + reviewCount * 0.2 + proximity bonus * 0.3
-  // ─────────────────────────────────────────
-
   private buildTopRecommended(
     turfs: RawTurf[],
     userLat?: number,
@@ -540,44 +545,50 @@ export class UserHomeService {
   ): UserHomeSectionDto {
     const MAX_DIST = 50; // km cap for proximity bonus
 
+    // Weighted scoring for "Handpicked" match
+    // matched all criteria: low budget (0.2), near by (0.4), and best rating (0.4)
     const scored = turfs.map((t) => {
       const rating = typeof t._avg?.rating === 'number' ? t._avg.rating : 0;
       const reviews = t._count?.reviews ?? 0;
       const dist = this.getDistance(t, userLat, userLng);
 
-      // Normalised proximity score: 1 = very close, 0 = far or unknown
+      // Normalised proximity score (40%)
       const proximityScore =
         dist != null ? Math.max(0, 1 - dist / MAX_DIST) : 0.5;
 
-      // Normalised rating (out of 5) + log-scaled review boost
+      // Normalised rating (40%)
       const ratingScore = rating / 5;
-      const reviewScore = Math.min(reviews / 50, 1); // cap at 50 reviews = 1.0
+
+      // Budget score (20%) - assume 1000 is high, 0 is low
+      const budgetScore = Math.max(0, 1 - t.weekdayDayPrice / 1000);
 
       const score =
-        ratingScore * 0.5 + reviewScore * 0.2 + proximityScore * 0.3;
+        ratingScore * 0.4 + proximityScore * 0.4 + budgetScore * 0.2;
 
       return { turf: t, dist, score };
     });
 
-    const prioritized = this.prioritizeByPreferredSport(
-      scored
-        .filter(
-          (s) =>
-            (s.turf._avg?.rating ?? 0) >= MIN_RATING_THRESHOLD ||
-            (s.turf._count?.reviews ?? 0) === 0,
-        )
-        .sort((a, b) => b.score - a.score)
-        .map((s) => ({ ...s, sportsType: s.turf.sportsType })),
-      preferredSport,
-    ).map(({ sportsType: _sportsType, ...rest }) => rest);
+    const sorted = scored
+      .filter(
+        (s) =>
+          (s.turf._avg?.rating ?? 0) >= MIN_RATING_THRESHOLD ||
+          (s.turf._count?.reviews ?? 0) === 0,
+      )
+      .sort((a, b) => b.score - a.score);
 
-    const top = prioritized.slice(0, SECTION_LIMIT);
+    // Filter by preferred sport if possible
+    const prioritized = this.prioritizeByPreferredSport(
+      sorted.map((s) => ({ ...s, sportsType: s.turf.sportsType })),
+      preferredSport,
+    )
+      .map(({ sportsType: _sportsType, ...rest }) => rest)
+      .slice(0, SECTION_LIMIT_SINGLE);
 
     return {
       sectionType: HomeSectionType.TOP_RECOMMENDED,
-      title: 'Top Recommended',
-      subtitle: 'Best turfs handpicked for you',
-      turfs: top.map((s) => this.toCard(s.turf, s.dist)),
+      title: 'Top Recommendation',
+      subtitle: 'Highly matched for your preference',
+      turfs: prioritized.map((s) => this.toCard(s.turf, s.dist)),
     };
   }
 
@@ -623,12 +634,11 @@ export class UserHomeService {
     userLng?: number,
     preferredSport: SportsType | null = null,
   ): UserHomeSectionDto {
-    const sorted = this.prioritizeByPreferredSport(
-      turfs
-        .filter((t) => t.weekdayDayPrice <= BUDGET_MAX_PRICE)
-        .sort((a, b) => a.weekdayDayPrice - b.weekdayDayPrice),
-      preferredSport,
-    ).slice(0, SECTION_LIMIT);
+    // For budget friendly, we strictly sort by price low-to-high as requested
+    const sorted = turfs
+      .filter((t) => t.weekdayDayPrice <= BUDGET_MAX_PRICE)
+      .sort((a, b) => a.weekdayDayPrice - b.weekdayDayPrice)
+      .slice(0, SECTION_LIMIT);
 
     return {
       sectionType: HomeSectionType.BUDGET_FRIENDLY,
@@ -752,38 +762,62 @@ export class UserHomeService {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
         ),
       preferredSport,
-    ).slice(0, SECTION_LIMIT);
+    ).slice(0, SECTION_LIMIT_SINGLE);
 
     return {
       sectionType: HomeSectionType.NEWLY_OPENED,
       title: 'Newly Opened',
-      subtitle: `Fresh turfs added in the last ${NEW_TURF_DAYS} days`,
+      subtitle: 'The latest addition to our network',
       turfs: recent.map((t) =>
         this.toCard(t, this.getDistance(t, userLat, userLng)),
       ),
     };
   }
 
-  private buildRecentlyViewed(
+  private async buildRecentlyViewed(
     turfs: RawTurf[],
     userLat?: number,
     userLng?: number,
     preferredSport: SportsType | null = null,
-  ): UserHomeSectionDto {
-    const sorted = this.prioritizeByPreferredSport(
-      [...turfs].sort((a, b) => {
-        const updatedA = new Date(a.updatedAt).getTime();
-        const updatedB = new Date(b.updatedAt).getTime();
-        return updatedB - updatedA;
-      }),
-      preferredSport,
-    ).slice(0, SECTION_LIMIT);
+    authId?: string,
+  ): Promise<UserHomeSectionDto> {
+    if (!authId) {
+      return {
+        sectionType: HomeSectionType.RECENTLY_VIEWED,
+        title: 'Recently Viewed',
+        subtitle: 'Sign in to see your recently viewed turfs',
+        turfs: [],
+      };
+    }
+
+    // 1. Fetch recent view IDs from DB
+    const recentViews = await (this.prisma as any).recentView.findMany({
+      where: { userId: authId },
+      orderBy: { viewedAt: 'desc' },
+      take: SECTION_LIMIT,
+      select: { turfId: true },
+    });
+
+    const viewedIds = recentViews.map((v) => v.turfId);
+    if (viewedIds.length === 0) {
+      return {
+        sectionType: HomeSectionType.RECENTLY_VIEWED,
+        title: 'Recently Viewed',
+        subtitle: 'Turfs you recently opened or checked',
+        turfs: [],
+      };
+    }
+
+    // 2. Filter and map turfs in the correct order
+    const viewedTurfs = viewedIds
+      .map((id) => turfs.find((t) => t.id === id))
+      .filter((t): t is RawTurf => !!t);
 
     return {
       sectionType: HomeSectionType.RECENTLY_VIEWED,
       title: 'Recently Viewed',
       subtitle: 'Turfs you recently opened or checked',
-      turfs: sorted.map((t) =>
+      turfs: viewedTurfs.map((t) =>
         this.toCard(t, this.getDistance(t, userLat, userLng)),
       ),
     };

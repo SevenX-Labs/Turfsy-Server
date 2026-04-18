@@ -26,6 +26,7 @@ model Auth {
   gamification  UserGamification?
   userSettings  UserSettings?
   ownerSettings OwnerSettings?
+  recentViews   RecentView[]
 
   @@index([phone])
   @@index([role])
@@ -115,6 +116,7 @@ model Turf {
   bookings                       Booking[]
   savedByUsers                   SavedTurf[]
   ratings                        TurfRating[]
+  recentViews                    RecentView[]
 
   @@index([ownerProfileId])
   @@index([city])
@@ -424,4 +426,18 @@ model BookingSplitPlayer {
 enum SplitPlayerStatus {
   PENDING
   PAID
+}
+
+model RecentView {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  turfId    String   @map("turf_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+
+  user      Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, turfId])
+  @@index([userId])
+  @@map("recent_views")
 }

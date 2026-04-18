@@ -286,7 +286,20 @@ export class TurfsService {
   }
 
   // 5. Get Turf Details (Consumer View) — cached for 2 minutes
-  async getTurfDetails(turfId: string) {
+  async getTurfDetails(turfId: string, authId?: string) {
+    if (authId) {
+      // Record view asynchronously (don't block the response)
+      (this.prisma as any).recentView
+        .upsert({
+          where: { userId_turfId: { userId: authId, turfId } },
+          create: { userId: authId, turfId },
+          update: { viewedAt: new Date() },
+        })
+        .catch((err) =>
+          console.error('[TURFS] Failed to record recent view:', err.message),
+        );
+    }
+
     return this.cache.getOrSet(
       `turf:${turfId}`,
       async () => {
@@ -308,9 +321,11 @@ export class TurfsService {
 
         return {
           ...turf,
-          images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
-            Boolean,
-          ),
+          images: [
+            turf.entranceUrl,
+            turf.groundDayUrl,
+            turf.groundNightUrl,
+          ].filter(Boolean),
           rating: 4.5, // Placeholder
           rules: [
             'No smoking inside the turf',
