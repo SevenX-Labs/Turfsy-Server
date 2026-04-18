@@ -41,12 +41,12 @@ Notes:
 `GET /api/v3/user-profile/check-availability`
 
 **Query Params:**
-- `username`: The username to check (e.g., `sahil_123`)
+- `username`: The username to check (e.g., `Sahil-123`)
 
 **Rules:**
 - **Length**: 4–20 characters.
-- **Allowed**: lowercase letters, numbers, and underscores (`_`).
-- **Forbidden**: spaces, uppercase, and special characters.
+- **Allowed**: letters (uppercase + lowercase), numbers, and `_`, `@`, `$`, `-`.
+- **Forbidden**: spaces and all other special characters.
 
 **Rate Limit**: 10 requests per minute per IP.
 
@@ -77,7 +77,7 @@ Headers:
 Request:
 ```json
 {
-  "username": "john_doe_99",
+  "username": "John-99",
   "name": "John Doe",
   "email": "john@example.com",
   "dob": "2000-01-15",
@@ -103,7 +103,7 @@ Success response:
   "data": {
     "id": "uuid",
     "authId": "uuid",
-    "username": "john_doe_99",
+    "username": "John-99",
     "name": "John Doe",
     "email": "john@example.com"
   }
@@ -148,7 +148,7 @@ Success response:
   "data": {
     "id": "uuid",
     "authId": "uuid",
-    "username": "john_doe_99",
+    "username": "John-99",
     "name": "John Doe",
     "email": "john@example.com",
     "payment": null
@@ -167,7 +167,7 @@ Headers:
 Request (any subset):
 ```json
 {
-  "username": "john_new_handle",
+  "username": "John-New-Handle",
   "name": "John Updated",
   "email": "john.new@example.com",
   "city": "Pune",

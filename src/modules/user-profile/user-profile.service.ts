@@ -13,6 +13,10 @@ import { Role, SportsType } from '@prisma/client';
 
 @Injectable()
 export class UserProfileService {
+  private static readonly USERNAME_REGEX = /^[A-Za-z0-9_@$-]{4,20}$/;
+  private static readonly USERNAME_RULES_MESSAGE =
+    'Username must be 4-20 chars and contain only letters, numbers, and the special characters _, @, $, and -';
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
@@ -30,13 +34,17 @@ export class UserProfileService {
     return parts.join(', ');
   }
 
-  async checkUsernameAvailability(username: string) {
-    const regex = /^[a-z0-9_]{4,20}$/;
-    if (!regex.test(username)) {
-      throw new BadRequestException(
-        'Username must be 4-20 chars and contain only lowercase letters, numbers, and underscores',
-      );
+  private assertUsernameValid(username: string) {
+    if (!UserProfileService.USERNAME_REGEX.test(username)) {
+      throw new BadRequestException(UserProfileService.USERNAME_RULES_MESSAGE);
     }
+  }
+
+  async checkUsernameAvailability(username: string) {
+    if (typeof username !== 'string') {
+      throw new BadRequestException(UserProfileService.USERNAME_RULES_MESSAGE);
+    }
+    this.assertUsernameValid(username);
 
     const existing = await this.prisma.userProfile.findUnique({
       where: { username },
@@ -62,6 +70,7 @@ export class UserProfileService {
 
     // Re-validate username uniqueness before saving
     if (dto.username) {
+      this.assertUsernameValid(dto.username);
       const isTaken = await this.prisma.userProfile.findFirst({
         where: {
           username: dto.username,
@@ -170,6 +179,7 @@ export class UserProfileService {
 
     // Re-validate username uniqueness if changed
     if (dto.username) {
+      this.assertUsernameValid(dto.username);
       const isTaken = await this.prisma.userProfile.findFirst({
         where: {
           username: dto.username,
