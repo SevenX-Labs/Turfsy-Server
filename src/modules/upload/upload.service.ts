@@ -492,7 +492,14 @@ export class UploadService {
       if (err instanceof BadRequestException) throw err;
       if (err instanceof NotFoundException) throw err;
       if (err instanceof InternalServerErrorException) throw err;
-      throw err;
+
+      // Ensure we log a useful message in SecurityExceptionFilter (5xx responses are generic to clients).
+      if (err?.name?.includes('Prisma')) {
+        throw new InternalServerErrorException(
+          'Database update failed for turf videoUrl (ensure migrations are applied)',
+        );
+      }
+      throw new InternalServerErrorException('Video upload failed');
     } finally {
       if (inputPath && createdInputPath) {
         await fs.promises.unlink(inputPath).catch(() => {});

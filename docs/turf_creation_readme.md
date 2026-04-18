@@ -269,3 +269,5 @@ And persisted in DB in the new nullable field:
 - `Turf.videoUrl`
 
 When present, `videoUrl` is included in `GET /api/v3/turfs/:turfId` responses (since it returns the full Turf model fields).
+
+**Migration note**: After pulling these changes, make sure the DB is migrated to include `Turf.videoUrl` (run `npx prisma migrate deploy` or your usual migration workflow).
