@@ -8,11 +8,16 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { spawn } from 'child_process';
+import sharp from 'sharp';
 
 @Injectable()
 export class UploadService {
   private readonly supabase: SupabaseClient;
   private readonly bucket = 'uploads';
+  private readonly imageOutputQuality = 75;
 
   constructor(
     private readonly config: ConfigService,
@@ -30,10 +35,69 @@ export class UploadService {
     this.supabase = createClient(url, key);
   }
 
+  private parsePositiveInt(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
   private getSafeFileExtension(mimetype: string): string {
     if (mimetype === 'image/png') return 'png';
     if (mimetype === 'image/webp') return 'webp';
     return 'jpg';
+  }
+
+  private async optimizeImageToWebp(input: Buffer): Promise<Buffer> {
+    return sharp(input)
+      .rotate()
+      .resize({ width: 800, withoutEnlargement: true })
+      .webp({ quality: this.imageOutputQuality })
+      .toBuffer();
+  }
+
+  private async transcodeToMp4H264(inputPath: string, outputPath: string) {
+    await new Promise<void>((resolve, reject) => {
+      const args = [
+        '-y',
+        '-i',
+        inputPath,
+        // keep the same visual size; only ensure even dimensions for H.264
+        '-vf',
+        'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+        '-c:v',
+        'libx264',
+        '-preset',
+        'medium',
+        // visually similar with meaningful savings (constant quality + capped peak bitrate)
+        '-crf',
+        '23',
+        '-maxrate',
+        '3M',
+        '-bufsize',
+        '6M',
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '128k',
+        // better streaming / faster start on CDNs
+        '-movflags',
+        '+faststart',
+        outputPath,
+      ];
+
+      const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+      let stderr = '';
+      proc.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+      proc.on('error', (err) => reject(err));
+      proc.on('close', (code) => {
+        if (code === 0) return resolve();
+        reject(new Error(stderr || `ffmpeg exited with code ${code}`));
+      });
+    });
   }
 
   private sanitizeNameForFile(name: string): string {
@@ -112,19 +176,19 @@ export class UploadService {
         );
       }
 
-      const safeName = this.sanitizeNameForFile(profile.name || '');
-      const extension = this.getSafeFileExtension(file.mimetype);
-      const storagePath = `users/${authId}/${safeName}.${extension}`;
+      const storagePath = `users/${authId}/avatar.webp`;
 
       // Keep only one avatar file per user in storage.
       await this.clearUserAvatarFolder(authId);
 
       const fileBuffer = file.buffer || (await fs.promises.readFile(file.path));
+      const optimizedBuffer = await this.optimizeImageToWebp(fileBuffer);
 
       const { error: uploadError } = await this.supabase.storage
         .from(this.bucket)
-        .upload(storagePath, fileBuffer, {
-          contentType: file.mimetype,
+        .upload(storagePath, optimizedBuffer, {
+          contentType: 'image/webp',
+          cacheControl: '31536000',
           upsert: true, // overwrite any existing file
         });
 
@@ -221,15 +285,17 @@ export class UploadService {
         );
       }
 
-      // 4. Storage path: turfs/{turfId}/{imageType}.jpg
-      const storagePath = `turfs/${turfId}/${imageType}.jpg`;
+      // 4. Storage path: turfs/{turfId}/{imageType}.webp
+      const storagePath = `turfs/${turfId}/${imageType}.webp`;
 
       const fileBuffer = file.buffer || (await fs.promises.readFile(file.path));
+      const optimizedBuffer = await this.optimizeImageToWebp(fileBuffer);
 
       const { error: uploadError } = await this.supabase.storage
         .from(this.bucket)
-        .upload(storagePath, fileBuffer, {
-          contentType: file.mimetype,
+        .upload(storagePath, optimizedBuffer, {
+          contentType: 'image/webp',
+          cacheControl: '31536000',
           upsert: true, // overwrite any existing file
         });
 
@@ -292,11 +358,12 @@ export class UploadService {
       );
     }
 
-    const storagePath = `turfs/${turfId}/${imageType}.jpg`;
+    const legacyStoragePath = `turfs/${turfId}/${imageType}.jpg`;
+    const storagePath = `turfs/${turfId}/${imageType}.webp`;
 
     const { error: deleteError } = await this.supabase.storage
       .from(this.bucket)
-      .remove([storagePath]);
+      .remove([storagePath, legacyStoragePath]);
 
     if (deleteError) {
       throw new InternalServerErrorException(
@@ -322,5 +389,117 @@ export class UploadService {
       success: true,
       message: `Turf ${imageType} image deleted successfully`,
     };
+  }
+
+  // ─────────────────────────────────────────
+  // Upload turf video (H.264 MP4)
+  // ─────────────────────────────────────────
+  async uploadTurfVideo(authId: string, turfId: string, file: Express.Multer.File) {
+    let inputPath = file.path;
+    let createdInputPath = false;
+    const outputPath = path.join(
+      os.tmpdir(),
+      `turf-video-${turfId}-${Date.now()}-${Math.round(Math.random() * 1e9)}.mp4`,
+    );
+
+    try {
+      const allowedMimeTypes = [
+        'video/mp4',
+        'video/quicktime',
+        'video/x-matroska',
+        'video/webm',
+        'video/x-msvideo',
+        'video/avi',
+      ];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new BadRequestException(
+          'Only mp4, mov, mkv, and webm videos are allowed',
+        );
+      }
+
+      const maxVideoMb =
+        this.parsePositiveInt(this.config.get('UPLOAD_MAX_VIDEO_MB')) ?? 50;
+      const maxSizeBytes = maxVideoMb * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        throw new BadRequestException(
+          `File size must not exceed ${maxVideoMb} MB`,
+        );
+      }
+
+      if (!inputPath) {
+        inputPath = path.join(
+          os.tmpdir(),
+          `turf-video-in-${turfId}-${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+        );
+        const fileBuffer = file.buffer;
+        if (!fileBuffer) {
+          throw new BadRequestException('Video file is required');
+        }
+        await fs.promises.writeFile(inputPath, fileBuffer);
+        createdInputPath = true;
+      }
+
+      const turf = await this.prisma.turf.findUnique({
+        where: { id: turfId },
+        include: { owner: true },
+      });
+
+      if (!turf) {
+        throw new NotFoundException('Turf not found');
+      }
+
+      if (turf.owner.authId !== authId) {
+        throw new BadRequestException(
+          'You are not authorized to upload videos for this turf',
+        );
+      }
+
+      await this.transcodeToMp4H264(inputPath, outputPath);
+
+      const outputBuffer = await fs.promises.readFile(outputPath);
+      const storagePath = `turfs/${turfId}/video.mp4`;
+
+      const { error: uploadError } = await this.supabase.storage
+        .from(this.bucket)
+        .upload(storagePath, outputBuffer, {
+          contentType: 'video/mp4',
+          cacheControl: '31536000',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw new InternalServerErrorException(
+          `Supabase upload failed: ${uploadError.message}`,
+        );
+      }
+
+      const { data: urlData } = this.supabase.storage
+        .from(this.bucket)
+        .getPublicUrl(storagePath);
+
+      const videoUrl = urlData.publicUrl;
+
+      await this.prisma.turf.update({
+        where: { id: turfId },
+        data: { videoUrl },
+      });
+
+      return { success: true, videoUrl };
+    } catch (err: any) {
+      if (err?.message?.includes('ffmpeg')) {
+        throw new InternalServerErrorException('Video processing failed');
+      }
+      if (err instanceof BadRequestException) throw err;
+      if (err instanceof NotFoundException) throw err;
+      if (err instanceof InternalServerErrorException) throw err;
+      throw err;
+    } finally {
+      if (inputPath && createdInputPath) {
+        await fs.promises.unlink(inputPath).catch(() => {});
+      } else if (file.path) {
+        await fs.promises.unlink(file.path).catch(() => {});
+      }
+      await fs.promises.unlink(outputPath).catch(() => {});
+    }
   }
 }

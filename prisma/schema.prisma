@@ -93,6 +93,7 @@ model Turf {
   groundDayUrl                   String?
   groundNightUrl                 String?
   entranceUrl                    String?
+  videoUrl                       String?
   floodLights                    Boolean      @default(false)
   parking                        Boolean      @default(false)
   washroom                       Boolean      @default(false)
