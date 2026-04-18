@@ -2023,6 +2023,7 @@ export class BookingService {
 
     const mapped = bookings.map((b) => ({
       ...b,
+      bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
       // Layer 11: Strip sensitive fields
       checkInPin: undefined,
@@ -2077,6 +2078,7 @@ export class BookingService {
       success: true,
       data: {
         ...booking,
+        bookingStatus: this.mapBookingStatus(booking),
         displayId: this.formatBookingId(booking.id),
         // PIN visible for single booking detail
         pinAttempts: undefined,
@@ -2121,6 +2123,7 @@ export class BookingService {
       count: bookings.length,
       data: bookings.map((b) => ({
         ...b,
+        bookingStatus: this.mapBookingStatus(b),
         displayId: this.formatBookingId(b.id),
       })),
     };
@@ -2185,6 +2188,7 @@ export class BookingService {
 
     const mapped = filtered.map((b) => ({
       ...b,
+      bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
       checkInPin: undefined,
       pinAttempts: undefined,
@@ -2256,6 +2260,7 @@ export class BookingService {
 
     const mapped = bookings.map((b) => ({
       ...b,
+      bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
       checkInPin: undefined,
       pinAttempts: undefined,
@@ -2660,6 +2665,28 @@ export class BookingService {
   }
 
   /**
+   * Helper to map status based on time (synthetic status for UI)
+   */
+  private mapBookingStatus(booking: any): string {
+    if (booking.bookingStatus !== 'CONFIRMED') {
+      return booking.bookingStatus;
+    }
+
+    const now = new Date();
+    const slotEnd = this.buildSlotDateTime(
+      booking.bookingDate,
+      booking.endTime,
+      0,
+    );
+
+    // If current time exceeds slot end time, show as NO_SHOW
+    if (now > slotEnd) {
+      return 'NO_SHOW';
+    }
+
+    return booking.bookingStatus;
+  }
+}
    * Layer 10: Strip HTML tags from user input to prevent XSS
    */
   private stripHtml(str: string): string {
