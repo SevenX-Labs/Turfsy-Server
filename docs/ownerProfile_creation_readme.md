@@ -40,6 +40,69 @@ Important rule:
 Headers:
 - `Authorization: Bearer <accessToken>`
 
+
+Reponse :
+```json
+{
+  "success": true,
+  "data": {
+    "id": "e67417e5-...",
+    "authId": "auth-5...",
+    "name": "Jane Owner",
+    "email": "jane@turfsy.com",
+    "contactNumber": "9876543210",
+    "avatarUrl": "https://example.com/avatar.jpg",
+    "aadharNumber": "123456789012",
+    "aadharUrl": "https://example.com/aadhar-doc.jpg",
+    "isKycVerified": false,
+    "createdAt": "2026-04-18T10:00:00.000Z",
+    "updatedAt": "2026-04-18T10:00:00.000Z",
+    "payment": {
+      "id": "pay-123",
+      "authId": "auth-5...",
+      "role": "OWNER",
+      "upiId": null,
+      "userProfileId": null,
+      "ownerProfileId": "e67417e5-...",
+      "bankHolderName": "Jane Owner",
+      "bankName": "HDFC Bank",
+      "accountNumber": "50100123456789",
+      "ifscCode": "HDFC0001234",
+      "payoutMethod": "UPI",
+      "payoutFrequency": "MANUAL",
+      "isActive": true,
+      "createdAt": "2026-04-18T10:00:00.000Z",
+      "updatedAt": "2026-04-18T10:00:00.000Z"
+    },
+    "turfs": [
+      {
+        "id": "turf-123",
+        "ownerProfileId": "e67417e5-...",
+        "name": "Super Arena",
+        "description": "A wonderful football turf",
+        "sportsType": "FOOTBALL",
+        "turfSize": "5v5",
+        "status": "ACTIVE",
+        "address": "123 Main St",
+        "city": "Mumbai",
+        "pincode": "400001",
+        "lat": 19.076,
+        "lng": 72.8777,
+        "openTime": "06:00",
+        "closeTime": "23:00",
+        "minSlotDurationMins": 60,
+        "weekdayDayPrice": 1000,
+        "weekdayNightPrice": 1200,
+        "weekendDayPrice": 1500,
+        "weekendNightPrice": 1800,
+        "createdAt": "2026-04-18T09:00:00.000Z",
+        "updatedAt": "2026-04-18T09:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
 Returns owner profile + `payment` + `turfs`.
 
 ## 3. Update Owner Profile
@@ -53,9 +116,55 @@ Headers:
 Request (any subset):
 ```json
 {
-  "name": "Rahul Shah Updated",
-  "email": "rahulnew@example.com",
-  "contactNumber": "9876543210"
+  "name": "Jane Owner",
+  "email": "jane@turfsy.com",
+  "contactNumber": "9876543210",
+  "avatarUrl": "https://example.com/avatar.jpg",
+  "aadharNumber": "123456789012",
+  "aadharUrl": "https://example.com/aadhar-doc.jpg",
+  "bankHolderName": "Jane Owner",
+  "bankName": "HDFC Bank",
+  "accountNumber": "50100123456789",
+  "ifscCode": "HDFC0001234",
+  "upiId": "jane.owner@okhdfc" 
+}
+```
+
+Reponse :
+```json
+{
+  "success": true,
+  "message": "Owner profile updated successfully",
+  "data": {
+    "id": "e67417e5-...",
+    "authId": "auth-5...",
+    "name": "Jane Owner",
+    "email": "jane@turfsy.com",
+    "contactNumber": "9876543210",
+    "avatarUrl": "https://example.com/avatar.jpg",
+    "aadharNumber": "123456789012",
+    "aadharUrl": "https://example.com/aadhar-doc.jpg",
+    "isKycVerified": false,
+    "createdAt": "2026-04-18T10:00:00.000Z",
+    "updatedAt": "2026-04-18T10:00:00.000Z",
+    "payment": {
+      "id": "pay-123",
+      "authId": "auth-5...",
+      "role": "OWNER",
+      "upiId": null,
+      "userProfileId": null,
+      "ownerProfileId": "e67417e5-...",
+      "bankHolderName": "Jane Owner",
+      "bankName": "HDFC Bank",
+      "accountNumber": "50100123456789",
+      "ifscCode": "HDFC0001234",
+      "payoutMethod": "UPI",
+      "payoutFrequency": "MANUAL",
+      "isActive": true,
+      "createdAt": "2026-04-18T10:00:00.000Z",
+      "updatedAt": "2026-04-18T10:00:00.000Z"
+    }
+  }
 }
 ```
 

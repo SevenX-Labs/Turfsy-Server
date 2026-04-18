@@ -146,15 +146,65 @@ export class OwnerProfileService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.email !== undefined && { email: dto.email }),
+        ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl }),
+        ...(dto.aadharNumber !== undefined && {
+          aadharNumber: dto.aadharNumber,
+        }),
+        ...(dto.aadharUrl !== undefined && { aadharUrl: dto.aadharUrl }),
         // Always mirror the verified auth phone in owner profile.
         contactNumber: auth.phone,
       },
+      include: { payment: true },
+    });
+
+    const hasPaymentDetails =
+      dto.bankHolderName !== undefined ||
+      dto.bankName !== undefined ||
+      dto.accountNumber !== undefined ||
+      dto.ifscCode !== undefined ||
+      dto.upiId !== undefined;
+
+    if (hasPaymentDetails) {
+      if (updated.payment) {
+        await this.prisma.payment.update({
+          where: { authId },
+          data: {
+            ...(dto.bankHolderName !== undefined && {
+              bankHolderName: dto.bankHolderName,
+            }),
+            ...(dto.bankName !== undefined && { bankName: dto.bankName }),
+            ...(dto.accountNumber !== undefined && {
+              accountNumber: dto.accountNumber,
+            }),
+            ...(dto.ifscCode !== undefined && { ifscCode: dto.ifscCode }),
+            ...(dto.upiId !== undefined && { upiId: dto.upiId }),
+          },
+        });
+      } else {
+        await this.prisma.payment.create({
+          data: {
+            authId,
+            role: 'OWNER',
+            ownerProfileId: updated.id,
+            bankHolderName: dto.bankHolderName,
+            bankName: dto.bankName,
+            accountNumber: dto.accountNumber,
+            ifscCode: dto.ifscCode,
+            upiId: dto.upiId,
+          },
+        });
+      }
+    }
+
+    const finalProfile = await this.prisma.ownerProfile.findUnique({
+      where: { authId },
+      include: { payment: true },
     });
 
     return {
       success: true,
       message: 'Owner profile updated successfully',
-      data: updated,
+      data: finalProfile,
     };
   }
 

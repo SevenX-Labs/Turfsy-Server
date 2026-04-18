@@ -166,7 +166,7 @@ export class OwnerSettingsService {
       where: { authId },
       select: {
         upiId: true,
-        bankAccount: true,
+        accountNumber: true,
         payoutMethod: true,
         payoutFrequency: true,
         isActive: true,
@@ -177,7 +177,7 @@ export class OwnerSettingsService {
       success: true,
       data: {
         upiId: settings.upiId ?? legacyPayment?.upiId ?? null,
-        bankAccount: settings.bankAccount ?? legacyPayment?.bankAccount ?? null,
+        bankAccount: settings.bankAccount ?? legacyPayment?.accountNumber ?? null,
         payoutMethod: settings.payoutMethod ?? legacyPayment?.payoutMethod,
         payoutFrequency:
           settings.payoutFrequency ?? legacyPayment?.payoutFrequency,
@@ -196,7 +196,7 @@ export class OwnerSettingsService {
     });
     const legacyPayment = await this.prisma.payment.findUnique({
       where: { authId },
-      select: { upiId: true, bankAccount: true },
+      select: { upiId: true, accountNumber: true },
     });
     const resolvedPayoutMethod =
       dto.payoutMethod ?? ownerSettings.payoutMethod ?? PayoutMethod.UPI;
@@ -205,7 +205,7 @@ export class OwnerSettingsService {
     const resolvedBankAccount =
       dto.bankAccount ??
       ownerSettings.bankAccount ??
-      legacyPayment?.bankAccount;
+      legacyPayment?.accountNumber;
 
     if (resolvedPayoutMethod === PayoutMethod.UPI && !resolvedUpiId) {
       throw new BadRequestException(
@@ -238,7 +238,7 @@ export class OwnerSettingsService {
       where: { authId },
       update: {
         ...(dto.upiId !== undefined && { upiId: dto.upiId }),
-        ...(dto.bankAccount !== undefined && { bankAccount: dto.bankAccount }),
+        ...(dto.bankAccount !== undefined && { accountNumber: dto.bankAccount }),
         ...(dto.payoutMethod !== undefined && {
           payoutMethod: dto.payoutMethod,
         }),
@@ -251,7 +251,7 @@ export class OwnerSettingsService {
         authId,
         role: Role.OWNER,
         upiId: resolvedUpiId,
-        bankAccount: resolvedBankAccount,
+        accountNumber: resolvedBankAccount,
         payoutMethod: dto.payoutMethod ?? ownerSettings.payoutMethod,
         payoutFrequency: dto.payoutFrequency ?? ownerSettings.payoutFrequency,
         isActive: dto.isActive ?? ownerSettings.payoutActive,

@@ -135,7 +135,7 @@ model Payment {
   id              String        @id @default(uuid())
   authId          String        @unique
   role            Role
-  upiId           String
+  upiId           String?
   userProfileId   String?       @unique
   ownerProfileId  String?       @unique
   createdAt       DateTime      @default(now())
@@ -143,7 +143,10 @@ model Payment {
   auth            Auth          @relation(fields: [authId], references: [id], onDelete: Cascade)
   ownerProfile    OwnerProfile? @relation(fields: [ownerProfileId], references: [id])
   userProfile     UserProfile?  @relation(fields: [userProfileId], references: [id])
-  bankAccount     String?       @map("bank_account")
+  bankHolderName  String?       @map("bank_holder_name")
+  bankName        String?       @map("bank_name")
+  accountNumber   String?       @map("account_number")
+  ifscCode        String?       @map("ifsc_code")
   payoutMethod    PayoutMethod? @default(UPI) @map("payout_method")
   payoutFrequency String?       @default("MANUAL") @map("payout_frequency")
   isActive        Boolean       @default(true) @map("is_active")
