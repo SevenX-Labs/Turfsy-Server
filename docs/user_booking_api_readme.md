@@ -208,7 +208,39 @@ POST /api/v3/booking/:bookingId/confirm-payment
 
 ---
 
-### 7. Cancel Booking
+### 7. Splitwise (Split Payment)
+
+Split the booking `amount` across multiple players (like Splitwise). Only the **booking creator** (lead user) can manage the split.
+
+**Important:** The lead user (you) is auto-added as the **first player** in the split. This requires you to have a `username` set in your user profile.
+
+**Typical flow:**
+1) `GET /api/v3/booking/:bookingId/split` (creates split if missing + returns players)
+2) `POST /api/v3/booking/:bookingId/split/players` (add more players by username)
+3) *(optional)* `PATCH /api/v3/booking/:bookingId/split/custom-amounts` (set custom amounts)
+4) `POST /api/v3/booking/:bookingId/split/trigger` (finalize split)
+5) `PATCH /api/v3/booking/split/players/:playerId/status` (mark a player as `PAID` / `PENDING`)
+
+**Endpoints**
+```text
+GET    /api/v3/booking/:bookingId/split
+POST   /api/v3/booking/:bookingId/split/players
+DELETE /api/v3/booking/split/players/:playerId
+PATCH  /api/v3/booking/:bookingId/split/custom-amounts
+POST   /api/v3/booking/:bookingId/split/trigger
+PATCH  /api/v3/booking/split/players/:playerId/status
+```
+
+**Add players request:**
+```json
+{
+  "usernames": ["Rahul_07", "Neha-10"]
+}
+```
+
+---
+
+### 8. Cancel Booking
 ```
 PATCH /api/v3/booking/:bookingId/cancel
 ```
@@ -217,7 +249,7 @@ PATCH /api/v3/booking/:bookingId/cancel
 
 ---
 
-### 8. My Bookings
+### 9. My Bookings
 ```
 GET /api/v3/booking/my-bookings
 GET /api/v3/booking/my-bookings/active
@@ -227,14 +259,14 @@ GET /api/v3/booking/my-bookings/bookings?filter=week
 
 ---
 
-### 9. Transaction History
+### 10. Transaction History
 ```
 GET /api/v3/booking/transaction-history
 ```
 
 ---
 
-### 10. Invoice & Receipt
+### 11. Invoice & Receipt
 ```
 GET /api/v3/booking/my-bookings/:bookingId/invoice
 GET /api/v3/booking/my-bookings/:bookingId/invoice/pdf

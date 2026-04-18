@@ -21,6 +21,62 @@ export class UserBookingSplitwiseService {
     private readonly paymentLogger: PaymentLoggerService,
   ) {}
 
+  private async getLeadUsernameOrThrow(authId: string): Promise<string> {
+    const profile = await this.prisma.userProfile.findUnique({
+      where: { authId },
+      select: { username: true },
+    });
+
+    if (!profile?.username) {
+      throw new BadRequestException(
+        'Please set a username in your profile before using splitwise',
+      );
+    }
+
+    return profile.username;
+  }
+
+  private async ensureLeadPlayer(
+    splitId: string,
+    authId: string,
+    leadUsername: string,
+    existingPlayers: Array<{
+      id: string;
+      username: string;
+      userId: string | null;
+    }>,
+  ) {
+    const existing =
+      existingPlayers.find((p) => p.userId === authId) ??
+      existingPlayers.find((p) => p.username === leadUsername);
+
+    if (existing) {
+      const data: { username?: string; userId?: string } = {};
+      if (existing.username !== leadUsername) data.username = leadUsername;
+      if (!existing.userId) data.userId = authId;
+
+      if (Object.keys(data).length > 0) {
+        await this.prisma.bookingSplitPlayer.update({
+          where: { id: existing.id },
+          data,
+        });
+        return true;
+      }
+      return false;
+    }
+
+    await this.prisma.bookingSplitPlayer.create({
+      data: {
+        splitId,
+        username: leadUsername,
+        userId: authId,
+        amount: 0,
+      },
+    });
+
+    return true;
+  }
+
   private async verifyOwnershipAndGetBooking(
     authId: string,
     bookingId: string,
@@ -44,17 +100,47 @@ export class UserBookingSplitwiseService {
     });
 
     if (!split) {
+      const leadUsername = await this.getLeadUsernameOrThrow(authId);
       split = await this.prisma.bookingSplit.create({
         data: {
           bookingId,
           leadUserId: authId,
           totalAmount: amount,
+          players: {
+            create: {
+              username: leadUsername,
+              userId: authId,
+              amount: 0,
+            },
+          },
         },
         include: { players: true },
       });
+      await this.recalculatePendingPlayers(split.id);
     } else if (split.leadUserId !== authId) {
       throw new ForbiddenException('Access denied.');
+    } else {
+      const leadUsername = await this.getLeadUsernameOrThrow(authId);
+      const didChangeLead = await this.ensureLeadPlayer(
+        split.id,
+        authId,
+        leadUsername,
+        split.players,
+      );
+      if (didChangeLead) {
+        await this.recalculatePendingPlayers(split.id);
+      }
+
+      if (didChangeLead) {
+        const refreshed = await this.prisma.bookingSplit.findUnique({
+          where: { bookingId },
+          include: { players: true },
+        });
+        if (!refreshed) throw new NotFoundException('Split not found');
+        split = refreshed;
+      }
     }
+    if (!split) throw new NotFoundException('Split not found');
     return split;
   }
 
