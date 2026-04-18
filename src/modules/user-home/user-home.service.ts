@@ -33,6 +33,7 @@ export type UserHomeQueryOptions = {
   queryLng?: number;
   queryCity?: string;
   queryRadiusKm?: number;
+  refresh?: boolean;
 };
 
 type LocationContext = {
@@ -124,9 +125,12 @@ export class UserHomeService {
     options: UserHomeQueryOptions = {},
   ): Promise<UserHomeResponseDto> {
     try {
+      if (options.refresh) {
+        this.cache.invalidate('home:activeTurfs');
+      }
       const location = await this.resolveLocation(options);
       // Fetch all active turfs once with aggregates
-      const allTurfs = await this.fetchAllActiveTurfs();
+      const allTurfs = await this.fetchAllActiveTurfs(options.refresh);
       console.log(`[UserHomeService] Found ${allTurfs.length} active turfs`);
       const scopedTurfs = this.filterByPreferredSport(
         allTurfs,
@@ -220,8 +224,11 @@ export class UserHomeService {
     sectionType: HomeSectionType,
     options: UserHomeQueryOptions = {},
   ): Promise<UserHomeSectionResponseDto> {
+    if (options.refresh) {
+      this.cache.invalidate('home:activeTurfs');
+    }
     const location = await this.resolveLocation(options);
-    const allTurfs = await this.fetchAllActiveTurfs();
+    const allTurfs = await this.fetchAllActiveTurfs(options.refresh);
     const scopedTurfs = this.filterByPreferredSport(
       allTurfs,
       location.preferredSport,
@@ -308,10 +315,15 @@ export class UserHomeService {
   // Prisma fetch — all active turfs once
   // ─────────────────────────────────────────
 
-  private async fetchAllActiveTurfs(): Promise<RawTurf[]> {
+  private async fetchAllActiveTurfs(forceRefresh = false): Promise<RawTurf[]> {
     // Cache active turfs for 3 minutes to reduce DB load on home page
+    const cacheKey = 'home:activeTurfs';
+    if (forceRefresh) {
+      this.cache.invalidate(cacheKey);
+    }
+
     return this.cache.getOrSet(
-      'home:activeTurfs',
+      cacheKey,
       async () => {
         const turfs = await this.prisma.turf.findMany({
           where: {

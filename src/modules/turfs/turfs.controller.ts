@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -488,5 +489,13 @@ export class TurfsController {
 
     await this.uploadService.uploadTurfVideo(req.user.authId, turfId, file);
     return this.turfsService.getTurfDetails(turfId);
+  }
+
+  // 10. Delete Turf
+  @Delete(':turfId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async removeTurf(@Req() req: any, @Param('turfId') turfId: string) {
+    return this.turfsService.removeTurf(req.user.authId, turfId);
   }
 }

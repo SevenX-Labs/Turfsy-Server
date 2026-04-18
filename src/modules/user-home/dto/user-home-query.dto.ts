@@ -16,4 +16,8 @@ export class UserHomeQueryDto {
   @IsOptional()
   @IsString()
   radiusKm?: string;
+
+  @IsOptional()
+  @IsString()
+  refresh?: string;
 }

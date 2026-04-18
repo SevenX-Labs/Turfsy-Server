@@ -140,6 +140,7 @@ export class UserHomeController {
       queryLng: lng,
       queryCity: city,
       queryRadiusKm: radius,
+      refresh: query.refresh === 'true',
     };
   }
 

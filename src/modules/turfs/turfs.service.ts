@@ -533,4 +533,36 @@ export class TurfsService {
       data: formatted,
     };
   }
+
+  // 8. Remove/Soft Delete Turf
+  async removeTurf(authId: string, turfId: string) {
+    const profile = await this.prisma.ownerProfile.findUnique({
+      where: { authId },
+    });
+
+    if (!profile) throw new NotFoundException('Owner profile not found');
+
+    const turf = await this.prisma.turf.findUnique({ where: { id: turfId } });
+    if (!turf) throw new NotFoundException('Turf not found');
+    if (turf.ownerProfileId !== profile.id)
+      throw new ForbiddenException('You are not allowed to delete this turf');
+
+    await this.prisma.turf.update({
+      where: { id: turfId },
+      data: {
+        status: TurfStatus.INACTIVE,
+        deletedAt: new Date(),
+      },
+    });
+
+    // Invalidate turf caches
+    this.cache.invalidate(`turf:${turfId}`);
+    this.cache.invalidate('turfs:all');
+    this.cache.invalidate('home:activeTurfs');
+
+    return {
+      success: true,
+      message: 'Turf deleted successfully',
+    };
+  }
 }
