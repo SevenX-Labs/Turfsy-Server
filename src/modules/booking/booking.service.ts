@@ -29,6 +29,7 @@ const NIGHT_START_HOUR = 18; // 6 PM onwards = night pricing
 const PIN_MAX_ATTEMPTS = 5; // Lock PIN after 5 wrong attempts
 const PIN_WINDOW_MINUTES = 10; // ±10 min for PIN verification
 const SLOT_LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes reservation window
+const MIN_ADVANCE_BOOKING_MINS = 30; // Must book at least 30 minutes before start time
 
 @Injectable()
 export class BookingService {
@@ -181,6 +182,29 @@ export class BookingService {
     today.setHours(0, 0, 0, 0);
     if (bookingDate < today) {
       throw new BadRequestException('Cannot book for a past date');
+    }
+
+    // ── Enforce minimum 1-hour advance booking for same-day ──
+    const now = new Date();
+    const bookingDateNorm = new Date(bookingDate);
+    bookingDateNorm.setHours(0, 0, 0, 0);
+    const todayNorm = new Date(now);
+    todayNorm.setHours(0, 0, 0, 0);
+
+    if (bookingDateNorm.getTime() === todayNorm.getTime()) {
+      const [sH, sM] = dto.startTime.split(':').map(Number);
+      const slotStartMins = sH * 60 + sM;
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      const minAdvanceMins = currentMins + MIN_ADVANCE_BOOKING_MINS;
+
+      if (slotStartMins < minAdvanceMins) {
+        const cutoffH = Math.floor(minAdvanceMins / 60);
+        const cutoffM = minAdvanceMins % 60;
+        const cutoffStr = `${cutoffH.toString().padStart(2, '0')}:${cutoffM.toString().padStart(2, '0')}`;
+        throw new BadRequestException(
+          `Bookings must be made at least 30 minutes in advance. Earliest available start time for today is ${cutoffStr}.`,
+        );
+      }
     }
 
     // ── Flexible Operating Hours logic ──
@@ -435,12 +459,57 @@ export class BookingService {
 
     const isWeekend = this.isWeekend(bookingDate);
 
+    // ── Calculate minimum bookable time for same-day bookings ──
+    // Rule: Must book at least 30 minutes BEFORE the slot start time.
+    // e.g., For an 11:00 AM slot, booking closes at 10:30 AM.
+    // So any slot whose startTime < (now + 30 minutes) is NOT available.
+    const now = new Date();
+    const todayDate = new Date(now);
+    todayDate.setHours(0, 0, 0, 0);
+    const requestedDate = new Date(bookingDate);
+    requestedDate.setHours(0, 0, 0, 0);
+
+    let minBookableTime: string | null = null;
+    const allSlots: { startTime: string; endTime: string; isExpired?: boolean }[] = [...bookings];
+
+    if (requestedDate.getTime() === todayDate.getTime()) {
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      const minStartMins = currentMins + MIN_ADVANCE_BOOKING_MINS;
+      // Round UP to next 30-minute boundary for clean UX
+      const roundedMins = Math.ceil(minStartMins / 30) * 30;
+      const h = Math.floor(roundedMins / 60);
+      const m = roundedMins % 60;
+
+      if (h >= 24) {
+        // All slots have passed for today
+        minBookableTime = '24:00';
+      } else {
+        minBookableTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+      }
+
+      // ── Inject a synthetic "unavailable" block from openTime to minBookableTime ──
+      // This makes the frontend automatically treat these time slots as booked/taken.
+      // The frontend overlap logic will prevent selecting any start time before minBookableTime.
+      if (minBookableTime && minBookableTime > turf.openTime) {
+        const blockEnd = minBookableTime === '24:00' ? turf.closeTime : minBookableTime;
+        allSlots.unshift({
+          startTime: turf.openTime,
+          endTime: blockEnd,
+          isExpired: true, // Flag so frontend can distinguish from real bookings
+        });
+      }
+    }
+
+    // Sort all slots (real + synthetic) by startTime
+    allSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
     return {
       success: true,
       data: {
         openTime: turf.openTime,
         closeTime: turf.closeTime,
-        bookedSlots: bookings,
+        bookedSlots: allSlots,
+        minBookableTime, // null for future dates, "HH:MM" for today
         pricing: {
           dayPrice: isWeekend ? turf.weekendDayPrice : turf.weekdayDayPrice,
           nightPrice: isWeekend
