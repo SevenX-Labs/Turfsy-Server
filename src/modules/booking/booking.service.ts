@@ -1909,11 +1909,17 @@ export class BookingService {
   async markNoShows(ip?: string) {
     this.rateLimiter.check(`cron:no-shows:${ip || 'system'}`, RATE_LIMITS.CRON);
 
+    // Filter to only check bookings from today or earlier to optimize query
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     const confirmedBookings = await this.prisma.booking.findMany({
-      where: { bookingStatus: 'CONFIRMED' },
+      where: {
+        bookingStatus: 'CONFIRMED',
+        bookingDate: { lte: today },
+      },
     });
 
-    const now = new Date();
     let updatedCount = 0;
 
     for (const booking of confirmedBookings) {
@@ -1922,6 +1928,7 @@ export class BookingService {
         booking.startTime,
       );
 
+      // No-show if 15 minutes past start time
       const noShowThreshold = new Date(slotStart.getTime() + 15 * 60 * 1000);
 
       if (now > noShowThreshold) {
@@ -2016,6 +2023,7 @@ export class BookingService {
 
     const mapped = bookings.map((b) => ({
       ...b,
+      bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
       // Layer 11: Strip sensitive fields
       checkInPin: undefined,
@@ -2070,6 +2078,7 @@ export class BookingService {
       success: true,
       data: {
         ...booking,
+        bookingStatus: this.mapBookingStatus(booking),
         displayId: this.formatBookingId(booking.id),
         // PIN visible for single booking detail
         pinAttempts: undefined,
@@ -2114,6 +2123,7 @@ export class BookingService {
       count: bookings.length,
       data: bookings.map((b) => ({
         ...b,
+        bookingStatus: this.mapBookingStatus(b),
         displayId: this.formatBookingId(b.id),
       })),
     };
@@ -2125,6 +2135,8 @@ export class BookingService {
   // ═══════════════════════════════════════════════════════
   async getBookingsByStatus(authId: string, status: 'upcoming' | 'past') {
     const now = new Date();
+
+    // Today in IST/Local
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const where: any = { userId: authId };
@@ -2159,8 +2171,24 @@ export class BookingService {
       orderBy: { bookingDate: status === 'upcoming' ? 'asc' : 'desc' },
     });
 
-    const mapped = bookings.map((b) => ({
+    const filtered = bookings.filter((b) => {
+      const slotEnd = this.buildSlotDateTime(b.bookingDate, b.endTime);
+      if (status === 'upcoming') {
+        // If it's confirmed/pending but the slot has already ended, it's not "upcoming"
+        return slotEnd > now;
+      } else {
+        // If it's a past date or already marked as past status, it belongs here
+        // OR if it's today but the slot has already ended, it also belongs here
+        return (
+          ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(b.bookingStatus) ||
+          slotEnd <= now
+        );
+      }
+    });
+
+    const mapped = filtered.map((b) => ({
       ...b,
+      bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
       checkInPin: undefined,
       pinAttempts: undefined,
@@ -2232,6 +2260,7 @@ export class BookingService {
 
     const mapped = bookings.map((b) => ({
       ...b,
+      bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
       checkInPin: undefined,
       pinAttempts: undefined,
@@ -2617,19 +2646,45 @@ export class BookingService {
     return `TRF-${uuid.slice(0, 7).toUpperCase()}`;
   }
 
-  private buildSlotDateTime(dateSource: string | Date, timeStr: string, dayOffset = 0): Date {
+  private buildSlotDateTime(
+    dateSource: string | Date,
+    timeStr: string,
+    dayOffset = 0,
+  ): Date {
     const rawDate =
-      dateSource instanceof Date
-        ? dateSource
-        : new Date(dateSource);
-        
+      dateSource instanceof Date ? dateSource : new Date(dateSource);
+
     const date = new Date(rawDate);
     if (dayOffset !== 0) {
       date.setDate(date.getDate() + dayOffset);
     }
-    
+
     const dateStr = date.toISOString().split('T')[0];
-    return new Date(`${dateStr}T${timeStr}:00`);
+    // Enforce IST timezone for correct comparison with current server time
+    return new Date(`${dateStr}T${timeStr}:00+05:30`);
+  }
+
+  /**
+   * Helper to map status based on time (synthetic status for UI)
+   */
+  private mapBookingStatus(booking: any): string {
+    if (booking.bookingStatus !== 'CONFIRMED') {
+      return booking.bookingStatus;
+    }
+
+    const now = new Date();
+    const slotEnd = this.buildSlotDateTime(
+      booking.bookingDate,
+      booking.endTime,
+      0,
+    );
+
+    // If current time exceeds slot end time, show as NO_SHOW
+    if (now > slotEnd) {
+      return 'NO_SHOW';
+    }
+
+    return booking.bookingStatus;
   }
 
   /**
