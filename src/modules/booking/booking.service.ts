@@ -2686,7 +2686,8 @@ export class BookingService {
 
     return booking.bookingStatus;
   }
-}
+
+  /**
    * Layer 10: Strip HTML tags from user input to prevent XSS
    */
   private stripHtml(str: string): string {
