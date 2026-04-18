@@ -1,0 +1,19 @@
+--- src/modules/upload/upload.service.ts
++++ src/modules/upload/upload.service.ts
+@@ -124,14 +124,14 @@
+     imageType: 'entrance' | 'dayTurf' | 'nightTurf',
+     file: Express.Multer.File,
+   ) {
+     try {
+       // 1. Validate MIME type
+       const allowedMimeTypes = [
+         'image/jpeg',
+         'image/jpg',
+         'image/png',
+         'image/webp',
++        'image/heic',
++        'image/heif',
++        'application/octet-stream', // Often sent by clients like RN/Expo when type is missing
+       ];
+       if (!allowedMimeTypes.includes(file.mimetype)) {
+         throw new BadRequestException(

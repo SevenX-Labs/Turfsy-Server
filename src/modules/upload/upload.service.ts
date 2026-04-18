@@ -56,11 +56,15 @@ export class UploadService {
   }
 
   private async optimizeImageToWebp(input: Buffer): Promise<Buffer> {
-    return sharp(input)
-      .rotate()
-      .resize({ width: 800, withoutEnlargement: true })
-      .webp({ quality: this.imageOutputQuality })
-      .toBuffer();
+    try {
+      return await sharp(input)
+        .rotate()
+        .resize({ width: 800, withoutEnlargement: true })
+        .webp({ quality: this.imageOutputQuality })
+        .toBuffer();
+    } catch (error) {
+      throw new BadRequestException('Invalid image format or corrupted file');
+    }
   }
 
 
@@ -114,10 +118,13 @@ export class UploadService {
         'image/jpg',
         'image/png',
         'image/webp',
+        'image/heic',
+        'image/heif',
+        'application/octet-stream',
       ];
       if (!allowedMimeTypes.includes(file.mimetype)) {
         throw new BadRequestException(
-          'Only jpeg, jpg, png, and webp images are allowed',
+          'Only jpeg, jpg, png, webp, heic, heif, and octet-stream images are allowed',
         );
       }
 
@@ -220,10 +227,13 @@ export class UploadService {
         'image/jpg',
         'image/png',
         'image/webp',
+        'image/heic',
+        'image/heif',
+        'application/octet-stream',
       ];
       if (!allowedMimeTypes.includes(file.mimetype)) {
         throw new BadRequestException(
-          'Only jpeg, jpg, png, and webp images are allowed',
+          'Only jpeg, jpg, png, webp, heic, heif, and octet-stream images are allowed',
         );
       }
 

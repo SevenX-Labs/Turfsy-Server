@@ -71,10 +71,7 @@ export class SecurityExceptionFilter implements ExceptionFilter {
     // Client-side response — generic message only
     // For 4xx: keep original message for dev-friendly responses (remove in prod if desired)
     // For 5xx: always generic
-    const clientMessage =
-      status >= 500
-        ? GENERIC_MESSAGES[status] || 'Something went wrong.'
-        : originalMessage;
+    const clientMessage = originalMessage;
 
     const responseBody: Record<string, any> = {
       success: false,

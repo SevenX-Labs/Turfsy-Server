@@ -1,0 +1,255 @@
+### 1. Create a Turf
+**POST** /api/v3/turfs
+
+**Request Body (multipart/form-data - include text fields and optional files `"entrance"`, `"dayTurf"`, `"nightTurf"`):**
+{
+  "name": "Champions Arena",
+  "description": "Premium 5-a-side football turf with high-quality grass.",
+  "sportsType": "FOOTBALL",
+  "turfSize": "100x60 ft",
+  "address": "123 Sports Complex, MG Road",
+  "city": "Mumbai",
+  "pincode": "400001",
+  "lat": 19.0760,
+  "lng": 72.8777,
+  "openTime": "06:00",
+  "closeTime": "23:00",
+  "minSlotDurationMins": 60,
+  "floodLights": true,
+  "parking": true,
+  "washroom": true,
+  "changingRoom": false,
+  "drinkingWater": true,
+  "seatingArea": true,
+  "cafeteria": true,
+  "weekdayDayPrice": 1200,
+  "weekdayNightPrice": 1500,
+  "weekendDayPrice": 1500,
+  "weekendNightPrice": 1800
+}
+
+**Response (201 Created):**
+{
+  "id": "turf-uuid-1",
+  "ownerProfileId": "owner-uuid-1",
+  "name": "Champions Arena",
+  "description": "Premium 5-a-side football turf with high-quality grass.",
+  "sportsType": "FOOTBALL",
+  "turfSize": "100x60 ft",
+  "status": "ACTIVE",
+  "address": "123 Sports Complex, MG Road",
+  "city": "Mumbai",
+  "pincode": "400001",
+  "lat": 19.076,
+  "lng": 72.8777,
+  "openTime": "06:00",
+  "closeTime": "23:00",
+  "minSlotDurationMins": 60,
+  "groundDayUrl": null,
+  "groundNightUrl": null,
+  "entranceUrl": null,
+  "videoUrl": null,
+  "floodLights": true,
+  "parking": true,
+  "washroom": true,
+  "changingRoom": false,
+  "drinkingWater": true,
+  "seatingArea": true,
+  "cafeteria": true,
+  "weekdayDayPrice": 1200,
+  "weekdayNightPrice": 1500,
+  "weekendDayPrice": 1500,
+  "weekendNightPrice": 1800,
+  "cancellationAllowedBeforeHours": 2,
+  "cancellationRefundPercentage": 75,
+  "createdAt": "2026-04-18T13:58:16.638Z",
+  "updatedAt": "2026-04-18T13:58:16.638Z",
+  "owner": {
+    "name": "Owner Name",
+    "contactNumber": "9876543210"
+  },
+  "images": [],
+  "rating": 0
+}
+
+---
+
+### 2. Update Turf
+**PATCH** /api/v3/turfs/:turfId
+
+**Request Body (multipart/form-data - include text fields and optional files `"entrance"`, `"dayTurf"`, `"nightTurf"`):**
+{
+  "name": "Champions Arena (Updated)",
+  "openTime": "07:00",
+  "closeTime": "22:00",
+  "weekdayDayPrice": 1300
+}
+
+**Response (200 OK):**
+{
+  "id": "turf-uuid-1",
+  "name": "Champions Arena (Updated)",
+  "openTime": "07:00",
+  "closeTime": "22:00",
+  "weekdayDayPrice": 1300,
+  "...": "(rest of turf fields similarly formatted as above)"
+}
+
+---
+
+### 3. Upload/Update Turf Images (Bulk)
+**POST** /api/v3/turfs/:turfId/images
+
+**Request Body (multipart/form-data):**
+- entrance: [File]
+- dayTurf: [File]
+- nightTurf: [File]
+
+**Response (200 OK):**
+{
+  "id": "turf-uuid-1",
+  "entranceUrl": "https://zgryqgoajdousrqdofcs.supabase.co/.../entrance.webp",
+  "groundDayUrl": "https://zgryqgoajdousrqdofcs.supabase.co/.../dayTurf.webp",
+  "groundNightUrl": "https://zgryqgoajdousrqdofcs.supabase.co/.../nightTurf.webp",
+  "...": "(rest of turf fields similarly formatted as above)"
+}
+
+---
+
+### 4. Upload Single Turf Image (One-by-One)
+**PATCH** /api/v3/turfs/:turfId/upload-image/:type
+(type: entrance, dayTurf, or nightTurf)
+
+**Request Body (multipart/form-data):**
+- file: [File]
+
+**Response (200 OK):**
+{
+  "id": "turf-uuid-1",
+  "entranceUrl": "https://zgryqgoajdousrqdofcs.supabase.co/.../entrance.webp",
+  "...": "(rest of turf fields similarly formatted as above)"
+}
+
+---
+
+### 5. Upload/Update Turf Video
+**POST / PATCH** /api/v3/turfs/:turfId/video
+
+**Request Body (multipart/form-data):**
+- file: [Video File] (mp4, mov, avi, mkv, webm. Max 50MB)
+
+**Response (200 OK):**
+{
+  "id": "turf-uuid-1",
+  "videoUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/turf-uuid-1/video.mp4",
+  "...": "(rest of turf fields similarly formatted as above)"
+}
+
+---
+
+### 6. Get Turf Details
+**GET** /api/v3/turfs/:turfId
+
+**Request Body:** None
+
+**Response (200 OK):**
+{
+  "id": "turf-uuid-1",
+  "name": "Champions Arena",
+  "description": "Premium 5-a-side football turf...",
+  "videoUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/.../video.mp4",
+  "images": [
+    "https://zgryqgoajdousrqdofcs.supabase.co/storage/.../entrance.webp",
+    "https://zgryqgoajdousrqdofcs.supabase.co/storage/.../dayTurf.webp"
+  ],
+  "rating": 4.5,
+  "openTime": "06:00",
+  "closeTime": "23:00",
+  "status": "ACTIVE",
+  "weekdayDayPrice": 1200,
+  "weekendDayPrice": 1500,
+  "owner": {
+    "name": "Owner Name",
+    "contactNumber": "+91 9876543210"
+  }
+}
+
+---
+
+### 7. Update Turf Status
+**PATCH** /api/v3/turfs/:turfId/status
+
+**Request Body (multipart/form-data - include text fields and optional files `"entrance"`, `"dayTurf"`, `"nightTurf"`):**
+{
+  "status": "ACTIVE" 
+}
+(Options: ACTIVE, INACTIVE)
+
+**Response (200 OK):**
+{
+  "success": true,
+  "data": {
+    "id": "turf-uuid-1",
+    "status": "ACTIVE"
+  }
+}
+
+---
+
+### 8. Search Nearby Turfs
+**GET** /api/v3/turfs/nearby?lat=19.0760&lng=72.8777&radiusKm=10
+
+**Request Body:** None
+
+**Response (200 OK):**
+{
+  "success": true,
+  "count": 3,
+  "radiusKm": 10,
+  "data": [
+    {
+      "id": "turf-uuid-1",
+      "name": "Champions Arena",
+      "distanceKm": 1.23,
+      "images": [
+        "https://zgryqgoajdousrqdofcs.supabase.co/.../entrance.webp"
+      ],
+      "weekdayDayPrice": 1200,
+      "weekendDayPrice": 1500
+    }
+  ]
+}
+
+---
+
+### 9. List All Turfs
+**GET** /api/v3/turfs
+
+**Request Body:** None
+
+**Response (200 OK):**
+{
+  "success": true,
+  "count": 15,
+  "data": [
+    {
+      "id": "turf-uuid-1",
+      "name": "Champions Arena",
+      "city": "Mumbai",
+      "address": "123 MG Road",
+      "status": "ACTIVE",
+      "weekdayDayPrice": 1200,
+      "weekdayNightPrice": 1500,
+      "weekendDayPrice": 1500,
+      "weekendNightPrice": 1800,
+      "images": [
+        "https://example.com/entrance.webp",
+        "https://example.com/dayTurf.webp"
+      ],
+      "owner": {
+        "name": "Owner Name",
+        "contactNumber": "+91 9876543210"
+      }
+    }
+  ]
+}
