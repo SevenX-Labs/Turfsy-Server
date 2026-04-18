@@ -407,4 +407,84 @@ export class TurfsController {
     );
     return this.turfsService.getTurfDetails(turfId);
   }
+
+  // 8. Upload/Update Turf Video - Idempotent (overwrites existing)
+  @Post(':turfId/video')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: tmpDiskStorage,
+      limits: { fileSize: 50 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const allowed = [
+          'video/mp4',
+          'video/quicktime',
+          'video/x-matroska',
+          'video/webm',
+          'video/x-msvideo',
+          'video/avi',
+        ];
+        if (!allowed.includes(file.mimetype)) {
+          return cb(
+            new BadRequestException(
+              'Only mp4, mov, avi, mkv, and webm videos are allowed',
+            ),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadTurfVideo(
+    @Req() req: any,
+    @Param('turfId') turfId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Video file is required');
+
+    await this.uploadService.uploadTurfVideo(req.user.authId, turfId, file);
+    return this.turfsService.getTurfDetails(turfId);
+  }
+
+  // 9. Update Turf Video (alias route) - behaves same as upload, overwrites existing
+  @Patch(':turfId/video')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: tmpDiskStorage,
+      limits: { fileSize: 50 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const allowed = [
+          'video/mp4',
+          'video/quicktime',
+          'video/x-matroska',
+          'video/webm',
+          'video/x-msvideo',
+          'video/avi',
+        ];
+        if (!allowed.includes(file.mimetype)) {
+          return cb(
+            new BadRequestException(
+              'Only mp4, mov, avi, mkv, and webm videos are allowed',
+            ),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async updateTurfVideo(
+    @Req() req: any,
+    @Param('turfId') turfId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Video file is required');
+
+    await this.uploadService.uploadTurfVideo(req.user.authId, turfId, file);
+    return this.turfsService.getTurfDetails(turfId);
+  }
 }

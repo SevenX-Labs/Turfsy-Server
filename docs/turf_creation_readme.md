@@ -101,7 +101,23 @@ Upload or replace a single specific image for a turf.
 
 ---
 
-### 5. Get Turf Details (Consumer View)
+### 5. Upload/Update Turf Video
+Upload (or replace) a single turf video. The uploaded file is automatically converted/compressed to MP4 (H.264 + AAC) before being stored in Supabase.
+
+- **URL**:
+  - `POST /api/v3/turfs/:turfId/video`
+  - `PATCH /api/v3/turfs/:turfId/video`
+- **Auth**: Required (Owner)
+- **Body (`multipart/form-data`)**:
+  - `file`: (File) The video file to upload
+
+**Accepted input formats**: `mp4`, `mov`, `avi`, `mkv`, `webm` (max 50MB)
+
+**Stored at**: `turfs/{turfId}/video.mp4`
+
+---
+
+### 6. Get Turf Details (Consumer View)
 Retrieve full turf data formatted for the UI (Autoswipe, Reviews, Owner Contact). Images are served directly via public Supabase URLs.
 
 - **URL**: `GET /api/v3/turfs/:turfId`
@@ -132,7 +148,7 @@ Retrieve full turf data formatted for the UI (Autoswipe, Reviews, Owner Contact)
 
 ---
 
-### 6. Update Turf Status
+### 7. Update Turf Status
 For admin/owner to toggle visibility.
 
 - **URL**: `PATCH /api/v3/turfs/:turfId/status`
@@ -146,7 +162,7 @@ For admin/owner to toggle visibility.
 
 ---
 
-### 7. Search Nearby Turfs
+### 8. Search Nearby Turfs
 Fetch turfs near a given location.
 
 - **URL**: `GET /api/v3/turfs/nearby?lat=19.0760&lng=72.8777&radiusKm=10`
@@ -168,7 +184,7 @@ Fetch turfs near a given location.
       "name": "Champions Arena",
       "distanceKm": 1.23,
       "images": [
-        "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.jpg"
+        "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.webp"
       ]
     }
   ]
@@ -177,7 +193,7 @@ Fetch turfs near a given location.
 
 ---
 
-### 8. List All Turfs
+### 9. List All Turfs
 
 - **URL**: `GET /api/v3/turfs`
 - **Auth**: Optional
@@ -200,8 +216,8 @@ Fetch turfs near a given location.
       "weekendDayPrice": 1500,
       "weekendNightPrice": 1800,
       "images": [
-        "https://example.com/entrance.jpg",
-        "https://example.com/day.jpg"
+        "https://example.com/entrance.webp",
+        "https://example.com/dayTurf.webp"
       ],
       "owner": {
         "name": "Sahil",
@@ -227,6 +243,20 @@ curl -X POST http://localhost:3000/api/v3/turfs/YOUR_TURF_ID/images \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -F "entrance=@/path/to/entrance.jpg" \
   -F "dayTurf=@/path/to/ground_day.jpg"
+```
+
+### Uploading Turf Video via cURL:
+```bash
+curl -X POST http://localhost:3000/api/v3/turfs/YOUR_TURF_ID/video \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@/path/to/turf_video.mov"
+```
+
+### Updating Turf Video via cURL:
+```bash
+curl -X PATCH http://localhost:3000/api/v3/turfs/YOUR_TURF_ID/video \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@/path/to/turf_video.mov"
 ```
 
 ## 🎥 Turf Video (DB + Storage)
