@@ -10,8 +10,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawn } from 'child_process';
 import sharp from 'sharp';
+import { v2 as cloudinary } from 'cloudinary';
 
 @Injectable()
 export class UploadService {
@@ -33,6 +33,14 @@ export class UploadService {
     }
 
     this.supabase = createClient(url, key);
+
+    // Cloudinary configuration for video uploads
+    const cloudinaryUrl = this.config.get<string>('CLOUDINARY_URL');
+    if (cloudinaryUrl) {
+      cloudinary.config({
+        cloudinary_url: cloudinaryUrl,
+      });
+    }
   }
 
   private parsePositiveInt(value: unknown): number | null {
@@ -55,50 +63,6 @@ export class UploadService {
       .toBuffer();
   }
 
-  private async transcodeToMp4H264(inputPath: string, outputPath: string) {
-    await new Promise<void>((resolve, reject) => {
-      const args = [
-        '-y',
-        '-i',
-        inputPath,
-        // keep the same visual size; only ensure even dimensions for H.264
-        '-vf',
-        'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-        '-c:v',
-        'libx264',
-        '-preset',
-        'medium',
-        // visually similar with meaningful savings (constant quality + capped peak bitrate)
-        '-crf',
-        '23',
-        '-maxrate',
-        '3M',
-        '-bufsize',
-        '6M',
-        '-pix_fmt',
-        'yuv420p',
-        '-c:a',
-        'aac',
-        '-b:a',
-        '128k',
-        // better streaming / faster start on CDNs
-        '-movflags',
-        '+faststart',
-        outputPath,
-      ];
-
-      const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
-      let stderr = '';
-      proc.stderr.on('data', (chunk) => {
-        stderr += chunk.toString();
-      });
-      proc.on('error', (err) => reject(err));
-      proc.on('close', (code) => {
-        if (code === 0) return resolve();
-        reject(new Error(stderr || `ffmpeg exited with code ${code}`));
-      });
-    });
-  }
 
   private sanitizeNameForFile(name: string): string {
     const sanitized = name
@@ -394,13 +358,12 @@ export class UploadService {
   // ─────────────────────────────────────────
   // Upload turf video (H.264 MP4)
   // ─────────────────────────────────────────
+  // ─────────────────────────────────────────
+  // Upload turf video (using Cloudinary)
+  // ─────────────────────────────────────────
   async uploadTurfVideo(authId: string, turfId: string, file: Express.Multer.File) {
     let inputPath = file.path;
     let createdInputPath = false;
-    const outputPath = path.join(
-      os.tmpdir(),
-      `turf-video-${turfId}-${Date.now()}-${Math.round(Math.random() * 1e9)}.mp4`,
-    );
 
     try {
       const allowedMimeTypes = [
@@ -454,39 +417,22 @@ export class UploadService {
         );
       }
 
-      await this.transcodeToMp4H264(inputPath, outputPath);
+      // Upload to Cloudinary with automatic optimization
+      const result = await cloudinary.uploader.upload(inputPath, {
+        resource_type: 'video',
+        folder: `turfs/${turfId}`,
+        public_id: 'video',
+        overwrite: true,
+        invalidate: true,
+      });
 
-      const outputBuffer = await fs.promises.readFile(outputPath);
-      const storagePath = `turfs/${turfId}/video.mp4`;
-
-      const { error: uploadError } = await this.supabase.storage
-        .from(this.bucket)
-        .upload(storagePath, outputBuffer, {
-          contentType: 'video/mp4',
-          cacheControl: '31536000',
-          upsert: true,
-        });
-
-      if (uploadError) {
-        if (
-          typeof uploadError.message === 'string' &&
-          uploadError.message.toLowerCase().includes('mime type') &&
-          uploadError.message.toLowerCase().includes('not supported')
-        ) {
-          throw new BadRequestException(
-            'Supabase bucket does not allow video uploads (mime type video/mp4 not supported). Update the Storage bucket allowed MIME types to include video/mp4 (and optional mov/mkv/webm) or disable MIME restrictions.',
-          );
-        }
-        throw new InternalServerErrorException(
-          `Supabase upload failed: ${uploadError.message}`,
-        );
-      }
-
-      const { data: urlData } = this.supabase.storage
-        .from(this.bucket)
-        .getPublicUrl(storagePath);
-
-      const videoUrl = urlData.publicUrl;
+      // Generate an optimized URL (auto format and quality) for fast loading
+      const videoUrl = cloudinary.url(result.public_id, {
+        resource_type: 'video',
+        quality: 'auto',
+        fetch_format: 'auto',
+        secure: true,
+      });
 
       await this.prisma.turf.update({
         where: { id: turfId },
@@ -495,27 +441,17 @@ export class UploadService {
 
       return { success: true, videoUrl };
     } catch (err: any) {
-      if (err?.message?.includes('ffmpeg')) {
-        throw new InternalServerErrorException('Video processing failed');
-      }
       if (err instanceof BadRequestException) throw err;
       if (err instanceof NotFoundException) throw err;
       if (err instanceof InternalServerErrorException) throw err;
 
-      // Ensure we log a useful message in SecurityExceptionFilter (5xx responses are generic to clients).
-      if (err?.name?.includes('Prisma')) {
-        throw new InternalServerErrorException(
-          'Database update failed for turf videoUrl (ensure migrations are applied)',
-        );
-      }
-      throw new InternalServerErrorException('Video upload failed');
+      throw new InternalServerErrorException(
+        `Video upload failed: ${err.message || 'Unknown error'}`,
+      );
     } finally {
-      if (inputPath && createdInputPath) {
+      if (inputPath && (createdInputPath || file.path)) {
         await fs.promises.unlink(inputPath).catch(() => {});
-      } else if (file.path) {
-        await fs.promises.unlink(file.path).catch(() => {});
       }
-      await fs.promises.unlink(outputPath).catch(() => {});
     }
   }
 }
