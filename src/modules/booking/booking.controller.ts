@@ -489,6 +489,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Get('my-bookings/:bookingId')
   @UseGuards(JwtAuthGuard)
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async getBookingDetails(
     @Req() req: any,
