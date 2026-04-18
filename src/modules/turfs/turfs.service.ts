@@ -211,7 +211,8 @@ export class TurfsService {
         ...(dto.address !== undefined && { address: dto.address }),
         ...(dto.city !== undefined && { city: dto.city }),
         ...(dto.pincode !== undefined && { pincode: dto.pincode }),
-        // lat and lng are omitted here as per requirements
+        ...(dto.lat !== undefined && { lat: dto.lat }),
+        ...(dto.lng !== undefined && { lng: dto.lng }),
         ...(dto.openTime !== undefined && { openTime: dto.openTime }),
         ...(dto.closeTime !== undefined && { closeTime: dto.closeTime }),
         ...(dto.minSlotDurationMins !== undefined && {
@@ -286,7 +287,20 @@ export class TurfsService {
   }
 
   // 5. Get Turf Details (Consumer View) — cached for 2 minutes
-  async getTurfDetails(turfId: string) {
+  async getTurfDetails(turfId: string, authId?: string) {
+    if (authId) {
+      // Record view asynchronously (don't block the response)
+      (this.prisma as any).recentView
+        .upsert({
+          where: { userId_turfId: { userId: authId, turfId } },
+          create: { userId: authId, turfId },
+          update: { viewedAt: new Date() },
+        })
+        .catch((err) =>
+          console.error('[TURFS] Failed to record recent view:', err.message),
+        );
+    }
+
     return this.cache.getOrSet(
       `turf:${turfId}`,
       async () => {
@@ -308,9 +322,11 @@ export class TurfsService {
 
         return {
           ...turf,
-          images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
-            Boolean,
-          ),
+          images: [
+            turf.entranceUrl,
+            turf.groundDayUrl,
+            turf.groundNightUrl,
+          ].filter(Boolean),
           rating: 4.5, // Placeholder
           rules: [
             'No smoking inside the turf',
