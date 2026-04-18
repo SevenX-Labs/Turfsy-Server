@@ -115,6 +115,8 @@ Upload (or replace) a single turf video. The uploaded file is automatically conv
 
 **Stored at**: `turfs/{turfId}/video.mp4`
 
+**Supabase bucket config**: Ensure the `uploads` bucket allows video MIME types (at minimum `video/mp4`). If the bucket is restricted to images only, the API will reject uploads.
+
 ---
 
 ### 6. Get Turf Details (Consumer View)

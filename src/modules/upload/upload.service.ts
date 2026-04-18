@@ -468,6 +468,15 @@ export class UploadService {
         });
 
       if (uploadError) {
+        if (
+          typeof uploadError.message === 'string' &&
+          uploadError.message.toLowerCase().includes('mime type') &&
+          uploadError.message.toLowerCase().includes('not supported')
+        ) {
+          throw new BadRequestException(
+            'Supabase bucket does not allow video uploads (mime type video/mp4 not supported). Update the Storage bucket allowed MIME types to include video/mp4 (and optional mov/mkv/webm) or disable MIME restrictions.',
+          );
+        }
         throw new InternalServerErrorException(
           `Supabase upload failed: ${uploadError.message}`,
         );
