@@ -1,5 +1,17 @@
 ## 🚀 Endpoints
 
+## 🟢 Media Optimization (Internal)
+Image uploads are automatically optimized **before** being uploaded to Supabase Storage:
+
+- **Accepted input formats**: `jpg`, `jpeg`, `png`, `webp`
+- **Stored format (standardized)**: `webp`
+- **Processing**: resize to max width `800px` (no upscaling) + WEBP quality ~`75`
+- **Upload headers**:
+  - `contentType`: `image/webp`
+  - `cacheControl`: `31536000` (1 year)
+
+This is an internal optimization layer—**routes and request payloads stay the same**. Existing turfs that already have `.jpg` URLs will keep working until the images are re-uploaded.
+
 ### 1. Create a Turf
 Owners can create a turf profile. You can either supply the details as JSON, or as `multipart/form-data` to optionally upload the images simultaneously.
 **Note**: This is the only time `lat` and `lng` are accepted.
@@ -69,9 +81,9 @@ Upload the 3 specific images for a turf in a single request. This endpoint is id
 ```json
 {
   "id": "turf-uuid-here",
-  "entranceUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.jpg",
-  "groundDayUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/dayTurf.jpg",
-  "groundNightUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/nightTurf.jpg",
+  "entranceUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.webp",
+  "groundDayUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/dayTurf.webp",
+  "groundNightUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/nightTurf.webp",
   "...otherFields": "..."
 }
 ```
@@ -100,9 +112,10 @@ Retrieve full turf data formatted for the UI (Autoswipe, Reviews, Owner Contact)
   "id": "turf-uuid",
   "name": "Champions Arena",
   "description": "Premium 5-a-side football turf...",
+  "videoUrl": "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/video.mp4",
   "images": [
-    "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.jpg",
-    "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/dayTurf.jpg"
+    "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/entrance.webp",
+    "https://zgryqgoajdousrqdofcs.supabase.co/storage/v1/object/public/uploads/turfs/{turfId}/dayTurf.webp"
   ],
   "rating": 4.5,
   "openTime": "06:00",
@@ -201,7 +214,7 @@ Fetch turfs near a given location.
 
 ## 🛠️ Testing with Postman/cURL
 
-### Uploading a Single Image via cURL (New Flow):
+### Uploading a Single Image via cURL
 ```bash
 curl -X PATCH http://localhost:3000/api/v3/turfs/YOUR_TURF_ID/upload-image/dayTurf \
   -H "Authorization: Bearer YOUR_TOKEN" \
@@ -215,3 +228,14 @@ curl -X POST http://localhost:3000/api/v3/turfs/YOUR_TURF_ID/images \
   -F "entrance=@/path/to/entrance.jpg" \
   -F "dayTurf=@/path/to/ground_day.jpg"
 ```
+
+## 🎥 Turf Video (DB + Storage)
+Turf videos are stored in Supabase at:
+
+- `turfs/{turfId}/video.mp4`
+
+And persisted in DB in the new nullable field:
+
+- `Turf.videoUrl`
+
+When present, `videoUrl` is included in `GET /api/v3/turfs/:turfId` responses (since it returns the full Turf model fields).
