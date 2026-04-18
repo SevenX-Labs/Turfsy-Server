@@ -232,7 +232,7 @@ export class TurfsController {
     });
   }
 
-  // 3. Update Turf (lat and lng are omitted to prevent constant changes)
+  // 3. Update Turf
   @Patch(':turfId')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

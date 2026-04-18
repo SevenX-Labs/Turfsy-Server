@@ -211,7 +211,8 @@ export class TurfsService {
         ...(dto.address !== undefined && { address: dto.address }),
         ...(dto.city !== undefined && { city: dto.city }),
         ...(dto.pincode !== undefined && { pincode: dto.pincode }),
-        // lat and lng are omitted here as per requirements
+        ...(dto.lat !== undefined && { lat: dto.lat }),
+        ...(dto.lng !== undefined && { lng: dto.lng }),
         ...(dto.openTime !== undefined && { openTime: dto.openTime }),
         ...(dto.closeTime !== undefined && { closeTime: dto.closeTime }),
         ...(dto.minSlotDurationMins !== undefined && {
