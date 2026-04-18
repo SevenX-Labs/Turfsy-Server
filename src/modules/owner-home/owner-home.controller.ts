@@ -1,10 +1,10 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
-import { OwnerHomeService } from './owner-home.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OwnerHomeService } from './owner-home.service';
 
-@Controller('owner-home')
+@Controller('api/v3/owner-home')
 export class OwnerHomeController {
   constructor(private readonly ownerHomeService: OwnerHomeService) {}
 
