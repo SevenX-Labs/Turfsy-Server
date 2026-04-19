@@ -9,9 +9,10 @@ import { RateLimiterService } from '../../common/services/rate-limiter.service';
 
 import { UserGamificationModule } from '../user-gamification/user-gamification.module';
 import { EmailModule } from '../../common/email/email.module';
+import { NotificationsModule } from '../../common/notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ConfigModule, UserGamificationModule, EmailModule],
+  imports: [PrismaModule, AuthModule, ConfigModule, UserGamificationModule, EmailModule, NotificationsModule],
   controllers: [BookingController],
   providers: [BookingService, PaymentLoggerService, RateLimiterService],
   exports: [BookingService],

@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/services/cache.service';
 import { RateLimiterService } from '../../common/services/rate-limiter.service';
 import { PaymentLoggerService } from '../../common/services/payment-logger.service';
+import { NotificationsService } from '../../common/notifications/notifications.service';
 import { AddPlayersDto } from './dto/add-players.dto';
 import { SetAmountsDto } from './dto/set-amounts.dto';
 import { SplitPlayerStatus } from '@prisma/client';
@@ -19,6 +20,7 @@ export class UserBookingSplitwiseService {
     private readonly cache: CacheService,
     private readonly rateLimiter: RateLimiterService,
     private readonly paymentLogger: PaymentLoggerService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private async getLeadUsernameOrThrow(authId: string): Promise<string> {
@@ -242,16 +244,17 @@ export class UserBookingSplitwiseService {
         const bookingDateStr = booking.bookingDate.toISOString().split('T')[0];
 
         for (const player of notifiablePlayers) {
-          // TODO: Trigger real push notification here
-          // Target UserId: player.userId
-          // Message: `${leadProfile?.name} added you to a split for ${turfInfo?.name} on ${bookingDateStr} (${booking.startTime}-${booking.endTime}). You need to pay ₹${player.amount}.`
-          
-          // Structure for later implementation:
-          // await this.notificationService.sendPush(player.userId, {
-          //   title: 'New Split Invitation',
-          //   body: `${leadProfile?.name} added you to pay for ${turfInfo?.name}. Your share is ₹${player.amount}.`,
-          //   data: { bookingId, splitId: split.id, type: 'SPLIT_INVITE', amount: player.amount }
-          // });
+          if (player.userId) {
+            this.triggerPushNotification(
+              player.userId,
+              'Added to Split 👥',
+              `You were added to a split for ${turfInfo?.name || 'a turf'}`,
+              {
+                type: 'SPLIT_ADDED',
+                bookingId,
+              },
+            );
+          }
         }
       }
     }
@@ -342,6 +345,24 @@ export class UserBookingSplitwiseService {
       include: { players: true },
     });
 
+    // ── Push Notification (Payment Required for All) ──
+    if (split.players && split.players.length > 0) {
+      split.players.forEach((p) => {
+        if (p.userId && p.amount > 0) {
+          this.triggerPushNotification(
+            p.userId,
+            'Payment Required 💸',
+            `You need to pay ₹${p.amount} for your booking`,
+            {
+              type: 'SPLIT_PAYMENT',
+              bookingId,
+              amount: p.amount,
+            },
+          );
+        }
+      });
+    }
+
     this.cache.invalidate(`split:${bookingId}`);
 
     this.paymentLogger.log({
@@ -429,6 +450,14 @@ export class UserBookingSplitwiseService {
       data: { status },
     });
 
+    // ── Push Notification (Payment Marked Paid) ──
+    if (status === SplitPlayerStatus.PAID && player.userId) {
+      this.triggerPushNotification(player.userId, 'You are settled! ✅', 'Your split payment has been marked as paid. All set!', {
+        type: 'SPLIT_PAID',
+        bookingId,
+      });
+    }
+
     if (split.isSplitDone) {
       await this.recalculatePendingPlayers(split.id);
     }
@@ -481,5 +510,19 @@ export class UserBookingSplitwiseService {
       },
       1000 * 60 * 2, // 120 seconds TTL
     );
+  }
+
+  private async triggerPushNotification(userId: string, title: string, body: string, data: any) {
+    try {
+      const auth = await this.prisma.auth.findUnique({
+        where: { id: userId },
+        select: { expoPushToken: true },
+      });
+      if (auth?.expoPushToken) {
+        this.notificationsService.sendPush(auth.expoPushToken, title, body, data).catch(() => {});
+      }
+    } catch (error) {
+      console.error(`[NOTIFICATION_TRIGGER_ERROR] ${error.message}`);
+    }
   }
 }

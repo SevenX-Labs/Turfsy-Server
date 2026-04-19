@@ -22,6 +22,7 @@ import * as PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
 import { UserGamificationService } from '../user-gamification/user-gamification.service';
 import { EmailService } from '../../common/email/email.service';
+import { NotificationsService } from '../../common/notifications/notifications.service';
 
 // ─── CONSTANTS ───────────────────────────────────────────
 const CASH_DEPOSIT_PERCENT = 0.5; // 50% advance for CASH bookings
@@ -43,6 +44,7 @@ export class BookingService {
     private readonly rateLimiter: RateLimiterService,
     private readonly userGamificationService: UserGamificationService,
     private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService,
   ) {
     this.razorpay = new Razorpay({
       key_id: this.configService.get<string>('RAZORPAY_KEY_ID') || '',
@@ -351,6 +353,12 @@ export class BookingService {
       this.sendBookingConfirmationEmail(booking.id).catch((err) =>
         console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
       );
+
+      // ── Push Notification ──
+      this.triggerPushNotification(booking.userId, 'Booking Confirmed ✅', 'Your turf is booked successfully', {
+        type: 'BOOKING_CONFIRMED',
+        bookingId: booking.id,
+      });
     } else if (booking.bookingStatus === 'PENDING') {
       this.sendPaymentPendingEmail(booking.id).catch((err) =>
         console.error(
@@ -865,6 +873,20 @@ export class BookingService {
       console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
     );
 
+    // ── Push Notification ──
+    const isPartial = booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH;
+    this.triggerPushNotification(
+      updated.userId,
+      isPartial ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
+      isPartial
+        ? 'Your advance payment is successful. Pay remaining at venue.'
+        : 'Your turf is booked successfully',
+      {
+        type: isPartial ? 'PAYMENT_PARTIAL' : 'BOOKING_CONFIRMED',
+        bookingId: updated.id,
+      },
+    );
+
     return {
       success: true,
       message:
@@ -1075,6 +1097,20 @@ export class BookingService {
 
     this.sendBookingConfirmationEmail(updated.id).catch((err) =>
       console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
+    );
+
+    // ── Push Notification ──
+    const isPartialWebhook = booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH;
+    this.triggerPushNotification(
+      updated.userId,
+      isPartialWebhook ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
+      isPartialWebhook
+        ? 'Your advance payment is successful. Pay remaining at venue.'
+        : 'Your turf is booked successfully',
+      {
+        type: isPartialWebhook ? 'PAYMENT_PARTIAL' : 'BOOKING_CONFIRMED',
+        bookingId: updated.id,
+      },
     );
 
     return {
@@ -1304,6 +1340,12 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
+    // ── Push Notification (Final Payment) ──
+    this.triggerPushNotification(updated.userId, 'Payment Completed ✔', 'Your booking is fully paid. Enjoy your game!', {
+      type: 'PAYMENT_FULL',
+      bookingId: updated.id,
+    });
+
     return {
       success: true,
       message: `Check-in verified! Welcome ${userName}. Booking ${this.formatBookingId(updated.id)} completed.`,
@@ -1393,6 +1435,12 @@ export class BookingService {
       action: 'complete',
       ip,
       result: 'SUCCESS',
+    });
+
+    // ── Push Notification (Final Payment - Manual Override) ──
+    this.triggerPushNotification(updated.userId, 'Payment Completed ✔', 'Your booking is fully paid. Enjoy your game!', {
+      type: 'PAYMENT_FULL',
+      bookingId: updated.id,
     });
 
     return {
@@ -1963,6 +2011,12 @@ export class BookingService {
           where: { id: booking.id },
           data: { bookingStatus: 'NO_SHOW' as any },
         });
+
+        // ── Gamification Penalty & Push ──
+        await this.userGamificationService.handleNoShow(booking.userId, booking.id).catch(err =>
+           console.error(`[GAMIFICATION] Failed to handle no-show: ${err.message}`)
+        );
+
         updatedCount++;
         this.sendNoShowEmail(booking.id).catch(err =>
           console.error(`[EMAIL] Failed to send no-show email: ${err.message}`)
@@ -2838,5 +2892,21 @@ export class BookingService {
     });
 
     return { success: true, message: `Test email sent to ${user.userProfile.email}` };
+  }
+
+  private async triggerPushNotification(userId: string, title: string, body: string, data: any) {
+    try {
+      const auth = await this.prisma.auth.findUnique({
+        where: { id: userId },
+        select: { expoPushToken: true },
+      });
+      if (auth?.expoPushToken) {
+        this.notificationsService.sendPush(auth.expoPushToken, title, body, data).catch((err) => {
+           console.error(`[PUSH_ERROR] ${err.message}`);
+        });
+      }
+    } catch (error) {
+       console.error(`[NOTIFICATION_TRIGGER_ERROR] ${error.message}`);
+    }
   }
 }

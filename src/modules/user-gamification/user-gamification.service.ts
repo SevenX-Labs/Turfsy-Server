@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../../common/notifications/notifications.service';
 
 @Injectable()
 export class UserGamificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   /**
    * Handle booking completion logic
@@ -21,7 +25,7 @@ export class UserGamificationService {
     }
 
     const durationHours = booking.durationMins / 60;
-    const pointsToAdd = Math.max(1, Math.floor(durationHours * 10));
+    const pointsToAdd = 30; // 30 pts per booking completion
 
     let gamification = await this.prisma.userGamification.findUnique({
       where: { authId: userId },
@@ -38,6 +42,14 @@ export class UserGamificationService {
           lastPlayedDate: new Date(),
         },
       });
+
+      // ── Push Notification (New Gamification) ──
+      this.triggerPushNotification(userId, 'Level Up! 🌟', `You earned ${pointsToAdd} pts! Started your streak 🔥`, {
+        type: 'GAMIFICATION_UPDATE',
+        points: pointsToAdd,
+        streak: 1,
+      });
+
       return gamification;
     }
 
@@ -75,7 +87,7 @@ export class UserGamificationService {
       }
     }
 
-    return await this.prisma.userGamification.update({
+    const result = await this.prisma.userGamification.update({
       where: { authId: userId },
       data: {
         streak: newStreak,
@@ -85,6 +97,15 @@ export class UserGamificationService {
         lastPlayedDate: now,
       },
     });
+
+    // ── Push Notification (Gamification Update) ──
+    this.triggerPushNotification(userId, 'Game Completed! 🏆', `You earned ${pointsToAdd} pts! Current streak: ${newStreak} 🔥`, {
+      type: 'GAMIFICATION_UPDATE',
+      points: pointsToAdd,
+      streak: newStreak,
+    });
+
+    return result;
   }
 
   async getOverallStats(userId: string) {
@@ -217,5 +238,48 @@ export class UserGamificationService {
     }
 
     return 'Great job! You are among the top players! 🌟';
+  }
+
+  async handleNoShow(userId: string, bookingId: string) {
+    const pointsToDeduct = 30; // 30 pts penalty
+    
+    const result = await this.prisma.userGamification.upsert({
+      where: { authId: userId },
+      create: {
+        authId: userId,
+        streak: 0,
+        points: -pointsToDeduct,
+        totalMatches: 0,
+        totalHours: 0,
+        lastPlayedDate: new Date(),
+      },
+      update: {
+        streak: 0,
+        points: { decrement: pointsToDeduct }
+      }
+    });
+
+    // ── Push Notification (Penalty) ──
+    this.triggerPushNotification(userId, 'Booking Missed 😞', `Points deducted (-${pointsToDeduct} pts) and streak broken. Don't miss your next game!`, {
+      type: 'GAMIFICATION_PENALTY',
+      pointsDeducted: pointsToDeduct,
+      streak: 0,
+    });
+
+    return result;
+  }
+
+  private async triggerPushNotification(userId: string, title: string, body: string, data: any) {
+    try {
+      const auth = await this.prisma.auth.findUnique({
+        where: { id: userId },
+        select: { expoPushToken: true },
+      });
+      if (auth?.expoPushToken) {
+        this.notificationsService.sendPush(auth.expoPushToken, title, body, data).catch(() => {});
+      }
+    } catch (error) {
+      console.error(`[GAMIFICATION_NOTIFICATION_ERROR] ${error.message}`);
+    }
   }
 }

@@ -5,9 +5,10 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { RateLimiterService } from '../../common/services/rate-limiter.service';
 import { PaymentLoggerService } from '../../common/services/payment-logger.service';
+import { NotificationsModule } from '../../common/notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, NotificationsModule],
   controllers: [UserBookingSplitwiseController],
   providers: [
     UserBookingSplitwiseService,
