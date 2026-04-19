@@ -27,6 +27,13 @@ export class NotificationsService {
     }
 
     const expoAccessToken = this.configService.get<string>('EXPO_ACCESS_TOKEN');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (expoAccessToken) {
+      headers['Authorization'] = `Bearer ${expoAccessToken}`;
+    }
 
     try {
       const response = await axios.post(
@@ -38,22 +45,19 @@ export class NotificationsService {
           sound: 'default',
           data: data || {},
         },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${expoAccessToken}`,
-          },
-        },
+        { headers },
       );
 
       const dataResponse = response.data?.data;
       if (Array.isArray(dataResponse)) {
         const ticket = dataResponse[0];
         if (ticket.status === 'error') {
-          this.logger.error(`Expo push error: ${ticket.message}`);
+          this.logger.error(`Expo push error for token ${token}: ${ticket.message}`);
           if (ticket.details?.error === 'DeviceNotRegistered') {
             await this.handleInvalidToken(token);
           }
+        } else {
+          this.logger.log(`Push notification sent successfully to ${token}`);
         }
       } else if (response.data.errors) {
         this.logger.error(`Expo global errors: ${JSON.stringify(response.data.errors)}`);

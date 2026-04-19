@@ -30,10 +30,10 @@ export class NotificationsController {
         return { success: false, message: 'Token is required' };
     }
 
-    // Validate token format briefly (should start with ExponentPushToken[ or expo.v2: or similar)
-    // Actually Expo tokens usually look like ExponentPushToken[xxx]
-    if (!expoPushToken.startsWith('ExponentPushToken[')) {
-        return { success: false, message: 'Invalid token format' };
+    // Expo tokens usually look like ExponentPushToken[xxx] or expo.v2:xxx
+    const expoTokenRegex = /^(ExponentPushToken\[.+\]|expo\.v2:.+)$/;
+    if (!expoTokenRegex.test(expoPushToken)) {
+        return { success: false, message: 'Invalid Expo push token format' };
     }
 
     await this.prisma.auth.update({
