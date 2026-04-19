@@ -20,6 +20,7 @@ import { UserGamificationModule } from './modules/user-gamification/user-gamific
 import { UserSettingsModule } from './modules/user-settings/user-settings.module';
 import { UserBookingSplitwiseModule } from './modules/user-booking-splitwise/user-booking-splitwise.module';
 import { NotificationsModule } from './common/notifications/notifications.module';
+import { EmailModule } from './common/email/email.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { NotificationsModule } from './common/notifications/notifications.module
     UserSettingsModule,
     UserBookingSplitwiseModule,
     NotificationsModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [

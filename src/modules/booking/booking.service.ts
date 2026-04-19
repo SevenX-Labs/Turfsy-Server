@@ -21,6 +21,7 @@ import { Parser } from 'json2csv';
 import * as PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
 import { UserGamificationService } from '../user-gamification/user-gamification.service';
+import { EmailService } from '../../common/email/email.service';
 
 // ─── CONSTANTS ───────────────────────────────────────────
 const CASH_DEPOSIT_PERCENT = 0.5; // 50% advance for CASH bookings
@@ -41,6 +42,7 @@ export class BookingService {
     private readonly paymentLogger: PaymentLoggerService,
     private readonly rateLimiter: RateLimiterService,
     private readonly userGamificationService: UserGamificationService,
+    private readonly emailService: EmailService,
   ) {
     this.razorpay = new Razorpay({
       key_id: this.configService.get<string>('RAZORPAY_KEY_ID') || '',
@@ -344,6 +346,18 @@ export class BookingService {
       ip,
       result: 'SUCCESS',
     });
+
+    if (booking.bookingStatus === 'CONFIRMED') {
+      this.sendBookingConfirmationEmail(booking.id).catch((err) =>
+        console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
+      );
+    } else if (booking.bookingStatus === 'PENDING') {
+      this.sendPaymentPendingEmail(booking.id).catch((err) =>
+        console.error(
+          `[EMAIL] Failed to send pending payment email: ${err.message}`,
+        ),
+      );
+    }
 
     return {
       success: true,
@@ -847,6 +861,10 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
+    this.sendBookingConfirmationEmail(updated.id).catch((err) =>
+      console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
+    );
+
     return {
       success: true,
       message:
@@ -1054,6 +1072,10 @@ export class BookingService {
       ip,
       result: 'SUCCESS',
     });
+
+    this.sendBookingConfirmationEmail(updated.id).catch((err) =>
+      console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
+    );
 
     return {
       success: true,
@@ -1887,6 +1909,11 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
+    this.sendCancellationEmail(updated.id, sanitizedReason || 'User Request').catch(
+      (err) =>
+        console.error(`[EMAIL] Failed to send cancellation email: ${err.message}`),
+    );
+
     return {
       success: true,
       message:
@@ -1937,6 +1964,9 @@ export class BookingService {
           data: { bookingStatus: 'NO_SHOW' as any },
         });
         updatedCount++;
+        this.sendNoShowEmail(booking.id).catch(err =>
+          console.error(`[EMAIL] Failed to send no-show email: ${err.message}`)
+        );
       }
     }
 
@@ -2692,5 +2722,97 @@ export class BookingService {
    */
   private stripHtml(str: string): string {
     return str.replace(/<[^>]*>/g, '').trim();
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // EMAIL HELPERS
+  // ═══════════════════════════════════════════════════════
+  private async sendBookingConfirmationEmail(bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { 
+        user: { include: { userProfile: true } },
+        turf: true 
+      }
+    });
+
+    if (!booking || !booking.user?.userProfile?.email) return;
+
+    await this.emailService.sendBookingConfirmation(booking.user.userProfile.email, {
+      id: booking.id,
+      turfName: booking.turf.name,
+      date: booking.bookingDate.toISOString().split('T')[0],
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      amount: booking.amount,
+      paymentStatus: booking.paymentStatus,
+      pin: booking.checkInPin
+    });
+  }
+
+  private async sendCancellationEmail(bookingId: string, reason: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { 
+        user: { include: { userProfile: true } },
+        turf: true 
+      }
+    });
+
+    if (!booking || !booking.user?.userProfile?.email) return;
+
+    let refundAmount = 0;
+    if (booking.paymentStatus === 'REFUNDED') {
+      refundAmount = Math.floor(
+        booking.depositAmount * (booking.turf.cancellationRefundPercentage / 100),
+      );
+    }
+
+    await this.emailService.sendBookingCancellation(booking.user.userProfile.email, {
+      turfName: booking.turf.name,
+      date: booking.bookingDate.toISOString().split('T')[0],
+      startTime: booking.startTime,
+      amount: booking.amount,
+      refundAmount,
+      reason
+    });
+  }
+
+  private async sendPaymentPendingEmail(bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { 
+        user: { include: { userProfile: true } },
+        turf: true 
+      }
+    });
+
+    if (!booking || !booking.user?.userProfile?.email) return;
+
+    const expiryTime = new Date(booking.createdAt.getTime() + SLOT_LOCK_TTL_MS).toLocaleTimeString();
+
+    await this.emailService.sendPaymentPending(booking.user.userProfile.email, {
+      turfName: booking.turf.name,
+      amount: booking.depositAmount,
+      expiryTime
+    });
+  }
+
+  private async sendNoShowEmail(bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { 
+        user: { include: { userProfile: true } },
+        turf: true 
+      }
+    });
+
+    if (!booking || !booking.user?.userProfile?.email) return;
+
+    await this.emailService.sendNoShowNotice(booking.user.userProfile.email, {
+      turfName: booking.turf.name,
+      date: booking.bookingDate.toISOString().split('T')[0],
+      startTime: booking.startTime
+    });
   }
 }

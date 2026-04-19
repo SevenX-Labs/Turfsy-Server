@@ -8,9 +8,10 @@ import { PaymentLoggerService } from '../../common/services/payment-logger.servi
 import { RateLimiterService } from '../../common/services/rate-limiter.service';
 
 import { UserGamificationModule } from '../user-gamification/user-gamification.module';
+import { EmailModule } from '../../common/email/email.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ConfigModule, UserGamificationModule],
+  imports: [PrismaModule, AuthModule, ConfigModule, UserGamificationModule, EmailModule],
   controllers: [BookingController],
   providers: [BookingService, PaymentLoggerService, RateLimiterService],
   exports: [BookingService],
