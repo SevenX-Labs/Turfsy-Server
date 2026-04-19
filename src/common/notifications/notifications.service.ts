@@ -171,5 +171,28 @@ export class NotificationsService {
       return { success: false, message: 'Failed' };
     }
   }
+  async deleteNotification(authId: string, notificationId: string) {
+    try {
+      await this.prisma.notification.deleteMany({
+        where: { id: notificationId, authId },
+      });
+      return { success: true, message: 'Notification deleted successfully' };
+    } catch (e) {
+      this.logger.error(`Failed to delete notification: ${e.message}`);
+      return { success: false, message: 'Failed to delete notification' };
+    }
+  }
+
+  async clearAll(authId: string) {
+    try {
+      await this.prisma.notification.deleteMany({
+        where: { authId },
+      });
+      return { success: true, message: 'All notifications cleared' };
+    } catch (e) {
+      this.logger.error(`Failed to clear notifications: ${e.message}`);
+      return { success: false, message: 'Failed to clear notifications' };
+    }
+  }
 }
 

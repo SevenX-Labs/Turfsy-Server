@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Post,
   Patch,
+  Delete,
   Param,
   Query,
   Req,
@@ -100,6 +101,20 @@ export class NotificationsController {
   @HttpCode(HttpStatus.OK)
   async markAllAsRead(@Req() req: any) {
     return this.notificationsService.markAllAsRead(req.user.authId);
+  }
+
+  @Delete('clear-all')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async clearAll(@Req() req: any) {
+    return this.notificationsService.clearAll(req.user.authId);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async deleteNotification(@Req() req: any, @Param('id') notificationId: string) {
+    return this.notificationsService.deleteNotification(req.user.authId, notificationId);
   }
 }
 
