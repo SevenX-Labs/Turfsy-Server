@@ -19,6 +19,7 @@ import { OwnerSettingsModule } from './modules/owner-settings/owner-settings.mod
 import { UserGamificationModule } from './modules/user-gamification/user-gamification.module';
 import { UserSettingsModule } from './modules/user-settings/user-settings.module';
 import { UserBookingSplitwiseModule } from './modules/user-booking-splitwise/user-booking-splitwise.module';
+import { NotificationsModule } from './common/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { UserBookingSplitwiseModule } from './modules/user-booking-splitwise/use
     UserGamificationModule,
     UserSettingsModule,
     UserBookingSplitwiseModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

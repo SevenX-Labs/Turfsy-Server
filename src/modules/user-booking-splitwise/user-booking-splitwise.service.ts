@@ -218,6 +218,42 @@ export class UserBookingSplitwiseService {
 
       // 3. Recalculate based on newly added array securely
       await this.recalculatePendingPlayers(split.id);
+
+      // ─── PUSH NOTIFICATION LOGIC ───
+      // Determine which of the newly added players are registered users to notify them
+      const notifiablePlayers = await this.prisma.bookingSplitPlayer.findMany({
+        where: {
+          splitId: split.id,
+          username: { in: newUsernames },
+          userId: { not: null },
+        },
+      });
+
+      if (notifiablePlayers.length > 0) {
+        const leadProfile = await this.prisma.userProfile.findUnique({
+          where: { authId },
+          select: { name: true },
+        });
+        const turfInfo = await this.prisma.turf.findUnique({
+          where: { id: booking.turfId },
+          select: { name: true },
+        });
+
+        const bookingDateStr = booking.bookingDate.toISOString().split('T')[0];
+
+        for (const player of notifiablePlayers) {
+          // TODO: Trigger real push notification here
+          // Target UserId: player.userId
+          // Message: `${leadProfile?.name} added you to a split for ${turfInfo?.name} on ${bookingDateStr} (${booking.startTime}-${booking.endTime}). You need to pay ₹${player.amount}.`
+          
+          // Structure for later implementation:
+          // await this.notificationService.sendPush(player.userId, {
+          //   title: 'New Split Invitation',
+          //   body: `${leadProfile?.name} added you to pay for ${turfInfo?.name}. Your share is ₹${player.amount}.`,
+          //   data: { bookingId, splitId: split.id, type: 'SPLIT_INVITE', amount: player.amount }
+          // });
+        }
+      }
     }
 
     this.cache.invalidate(`split:${bookingId}`);
