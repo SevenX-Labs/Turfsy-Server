@@ -85,70 +85,88 @@ export class EmailService {
             text-align: center;
           }
           .info-card { 
-            background: #f1f5f9; 
+            background: #f8fafc; 
+            border: 1px solid #e2e8f0;
             border-radius: 16px; 
-            padding: 24px; 
+            padding: 20px; 
             margin: 24px 0; 
           }
-          .info-row { 
-            display: flex; 
-            justify-content: space-between; 
-            padding: 12px 0; 
-            border-bottom: 1px solid rgba(0,0,0,0.05); 
+          .info-table {
+            width: 100%;
+            border-collapse: collapse;
           }
-          .info-row:last-child { border-bottom: none; }
-          .info-label { color: #64748b; font-size: 14px; font-weight: 500; }
-          .info-value { color: #1e293b; font-size: 15px; font-weight: 600; text-align: right; }
+          .info-row td {
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+          }
+          .info-row:last-child td { border-bottom: none; }
+          .info-label { 
+            color: #64748b; 
+            font-size: 13px; 
+            font-weight: 500; 
+            width: 40%;
+            text-align: left;
+          }
+          .info-value { 
+            color: #0f172a; 
+            font-size: 14px; 
+            font-weight: 600; 
+            width: 60%;
+            text-align: right;
+          }
           
           .pin-container {
             text-align: center;
             background: #ffffff;
-            border: 2px dashed #e2e8f0;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
+            border: 2px dashed #cbd5e1;
+            border-radius: 16px;
+            padding: 24px;
+            margin: 24px 0;
           }
           .pin-code {
-            font-size: 36px;
-            font-weight: 700;
-            letter-spacing: 0.2em;
+            font-size: 42px;
+            font-weight: 800;
+            letter-spacing: 0.15em;
             color: #10b981;
-            margin: 10px 0;
+            margin: 8px 0;
+            line-height: 1;
           }
           
           .footer { 
             padding: 30px; 
             text-align: center; 
-            font-size: 14px; 
+            font-size: 13px; 
             color: #94a3b8;
             background: #f8fafc;
           }
-          .footer p { margin: 5px 0; }
+          .footer p { margin: 4px 0; }
           .social-links { margin-top: 20px; }
           .social-link {
-            color: #94a3b8;
+            color: #64748b;
             text-decoration: none;
-            margin: 0 10px;
+            margin: 0 8px;
+            font-weight: 500;
           }
           
           .btn { 
             display: block; 
-            padding: 16px 24px; 
+            padding: 16px 20px; 
             background: #10b981; 
             color: #ffffff !important; 
             text-decoration: none; 
             border-radius: 12px; 
             font-weight: 600; 
             text-align: center;
-            margin-top: 30px;
-            transition: background 0.2s;
+            margin-top: 32px;
+            font-size: 16px;
             box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
           }
           .badge { 
             display: inline-block; 
             padding: 4px 10px; 
-            border-radius: 8px; 
-            font-size: 12px; 
+            border-radius: 6px; 
+            font-size: 11px; 
             font-weight: 700; 
             text-transform: uppercase; 
           }
@@ -156,9 +174,14 @@ export class EmailService {
           .badge-pending { background: #fef9c3; color: #854d0e; }
           .badge-danger { background: #fee2e2; color: #991b1b; }
           
-          @media only screen and (max-width: 600px) {
+          @media only screen and (max-width: 480px) {
             .container { border-radius: 0; }
             .wrapper { padding: 0; }
+            .content { padding: 30px 20px; }
+            .pin-code { font-size: 32px; }
+            .hero-text { font-size: 18px; }
+            .info-label { font-size: 12px; }
+            .info-value { font-size: 13px; }
           }
         </style>
       </head>
@@ -194,23 +217,25 @@ export class EmailService {
     
     const content = `
       <div class="hero-text">Your Stadium is Ready! ⚽</div>
-      <p>Hey champion! Your booking at <strong>${turfName}</strong> is confirmed. It's time to lace up and hit the pitch.</p>
+      <p style="text-align: center; color: #64748b; font-size: 15px;">Hey champion! Your booking at <strong>${turfName}</strong> is confirmed. It's time to lace up and hit the pitch.</p>
       
       <div class="info-card">
-        <div class="info-row"><span class="info-label">Booking ID</span> <span class="info-value">#${id.slice(0, 8).toUpperCase()}</span></div>
-        <div class="info-row"><span class="info-label">Date</span> <span class="info-value">${date}</span></div>
-        <div class="info-row"><span class="info-label">Time Slot</span> <span class="info-value">${startTime} – ${endTime}</span></div>
-        <div class="info-row"><span class="info-label">Payment</span> <span class="info-value"><span class="badge ${paymentStatus === 'SUCCESS' ? 'badge-success' : 'badge-pending'}">${paymentStatus}</span></span></div>
-        <div class="info-row"><span class="info-label">Total Paid</span> <span class="info-value">₹${amount}</span></div>
+        <table class="info-table">
+          <tr class="info-row"><td class="info-label">Booking ID</td> <td class="info-value">#${id.slice(0, 8).toUpperCase()}</td></tr>
+          <tr class="info-row"><td class="info-label">Date</td> <td class="info-value">${date}</td></tr>
+          <tr class="info-row"><td class="info-label">Time Slot</td> <td class="info-value">${startTime} – ${endTime}</td></tr>
+          <tr class="info-row"><td class="info-label">Payment</td> <td class="info-value"><span class="badge ${paymentStatus === 'SUCCESS' ? 'badge-success' : 'badge-pending'}">${paymentStatus}</span></td></tr>
+          <tr class="info-row"><td class="info-label">Total Amount</td> <td class="info-value">₹${amount}</td></tr>
+        </table>
       </div>
 
       <div class="pin-container">
-        <div class="info-label">YOUR CHECK-IN PIN</div>
+        <div style="color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Your Check-In PIN</div>
         <div class="pin-code">${pin || '0000'}</div>
-        <p style="font-size: 13px; color: #64748b; margin: 0;">Show this at the turf to start your session</p>
+        <p style="font-size: 13px; color: #94a3b8; margin: 0;">Show this code at the turf entrance</p>
       </div>
       
-      <a href="#" class="btn">Manage My Booking</a>
+      <a href="#" class="btn">Manage Booking</a>
     `;
 
     return this.sendMail(email, `Booking Confirmed - ${turfName}`, this.getBaseTemplate(content, 'Booking Summary'));
@@ -221,17 +246,19 @@ export class EmailService {
 
     const content = `
       <div class="hero-text" style="color: #64748b;">Booking Cancelled</div>
-      <p>We're sorry to hear you won't be making it. Your booking for <strong>${turfName}</strong> has been cancelled.</p>
+      <p style="text-align: center; color: #64748b; font-size: 15px;">We're sorry to hear you won't be making it. Your booking for <strong>${turfName}</strong> has been cancelled.</p>
       
       <div class="info-card">
-        <div class="info-row"><span class="info-label">Turf</span> <span class="info-value">${turfName}</span></div>
-        <div class="info-row"><span class="info-label">Date</span> <span class="info-value">${date} at ${startTime}</span></div>
-        <div class="info-row"><span class="info-label">Reason</span> <span class="info-value">${reason || 'User Request'}</span></div>
-        <div class="info-row"><span class="info-label">Refund Status</span> <span class="info-value" style="color: #10b981;">₹${refundAmount || 0} initiated</span></div>
+        <table class="info-table">
+          <tr class="info-row"><td class="info-label">Venue</td> <td class="info-value">${turfName}</td></tr>
+          <tr class="info-row"><td class="info-label">Date/Time</td> <td class="info-value">${date} at ${startTime}</td></tr>
+          <tr class="info-row"><td class="info-label">Reason</td> <td class="info-value">${reason || 'User Request'}</td></tr>
+          <tr class="info-row"><td class="info-label">Refund Initiated</td> <td class="info-value" style="color: #10b981;">₹${refundAmount || 0}</td></tr>
+        </table>
       </div>
       
-      <p style="font-size: 14px; color: #64748b; text-align: center;">Refunds typically take 5-7 business days to reflect in your account.</p>
-      <a href="#" class="btn" style="background: #64748b;">Browse Other Turfs</a>
+      <p style="font-size: 13px; color: #94a3b8; text-align: center; margin-top: 20px;">Refunds usually reflect in your account within 5-7 business days.</p>
+      <a href="#" class="btn" style="background: #64748b;">Book Another Turf</a>
     `;
 
     return this.sendMail(email, `Cancellation Confirmed - ${turfName}`, this.getBaseTemplate(content, 'Cancellation Details'));
@@ -242,12 +269,14 @@ export class EmailService {
 
     const content = `
       <div class="hero-text">Don't Lose Your Slot! ⏳</div>
-      <p>Your session at <strong>${turfName}</strong> is almost ready. Complete your payment to lock in your time.</p>
+      <p style="text-align: center; color: #64748b; font-size: 15px;">Your session at <strong>${turfName}</strong> is reserved. Complete payment to secure your time before it expires.</p>
       
       <div class="info-card">
-        <div class="info-row"><span class="info-label">Venue</span> <span class="info-value">${turfName}</span></div>
-        <div class="info-row"><span class="info-label">Amount</span> <span class="info-value">₹${amount}</span></div>
-        <div class="info-row"><span class="info-label">Expires At</span> <span class="info-value" style="color: #ef4444;">${expiryTime}</span></div>
+        <table class="info-table">
+          <tr class="info-row"><td class="info-label">Venue</td> <td class="info-value">${turfName}</td></tr>
+          <tr class="info-row"><td class="info-label">Payable Amount</td> <td class="info-value">₹${amount}</td></tr>
+          <tr class="info-row"><td class="info-label">Expires At</td> <td class="info-value" style="color: #ef4444;">${expiryTime}</td></tr>
+        </table>
       </div>
       
       <a href="#" class="btn">Complete Payment</a>
@@ -261,14 +290,16 @@ export class EmailService {
 
     const content = `
       <div class="hero-text" style="color: #ef4444;">We Missed You! 🏟️</div>
-      <p>Our team at <strong>${turfName}</strong> noticed you couldn't make it to your slot today at ${startTime}.</p>
+      <p style="text-align: center; color: #64748b; font-size: 15px;">Our team at <strong>${turfName}</strong> noticed you didn't check in for your booking today at ${startTime}.</p>
       
       <div class="info-card" style="border-left: 4px solid #ef4444;">
-        <p style="margin: 0; font-size: 15px;"><strong>Date:</strong> ${date}</p>
-        <p style="margin: 5px 0 0; font-size: 14px; color: #64748b;">Status: <span class="badge badge-danger">No Show</span></p>
+        <table class="info-table">
+          <tr class="info-row"><td class="info-label">Date</td> <td class="info-value">${date}</td></tr>
+          <tr class="info-row"><td class="info-label">Status</td> <td class="info-value"><span class="badge badge-danger">No Show</span></td></tr>
+        </table>
       </div>
       
-      <p style="font-size: 14px; text-align: center;">No-shows are non-refundable, but we hope to see you back on the field soon!</p>
+      <p style="font-size: 13px; text-align: center; color: #94a3b8; margin-top: 20px;">No-shows are non-refundable, but we hope to see you back on the field soon!</p>
       <a href="#" class="btn">Book for Tomorrow</a>
     `;
 
