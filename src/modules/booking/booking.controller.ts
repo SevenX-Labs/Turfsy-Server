@@ -520,4 +520,11 @@ export class BookingController {
     }
     return this.bookingService.getBookedSlots(turfId, date, req.user.authId);
   }
+
+  @Get('email-test')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async testEmail(@Req() req: any) {
+    return this.bookingService.sendTestEmail(req.user.authId);
+  }
 }

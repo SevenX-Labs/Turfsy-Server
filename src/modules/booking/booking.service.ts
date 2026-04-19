@@ -2815,4 +2815,28 @@ export class BookingService {
       startTime: booking.startTime
     });
   }
+
+  async sendTestEmail(authId: string) {
+    const user = await this.prisma.auth.findUnique({
+      where: { id: authId },
+      include: { userProfile: true }
+    });
+
+    if (!user?.userProfile?.email) {
+      throw new BadRequestException('User profile must have an email address to send a test email.');
+    }
+
+    await this.emailService.sendBookingConfirmation(user.userProfile.email, {
+      id: 'TEST-123456',
+      turfName: 'Turfsy Arena (Test)',
+      date: new Date().toISOString().split('T')[0],
+      startTime: '18:00',
+      endTime: '19:00',
+      amount: 1200,
+      paymentStatus: 'SUCCESS',
+      pin: '1234'
+    });
+
+    return { success: true, message: `Test email sent to ${user.userProfile.email}` };
+  }
 }
