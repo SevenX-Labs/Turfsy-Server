@@ -514,13 +514,7 @@ export class UserBookingSplitwiseService {
 
   private async triggerPushNotification(userId: string, title: string, body: string, data: any) {
     try {
-      const auth = await this.prisma.auth.findUnique({
-        where: { id: userId },
-        select: { expoPushToken: true },
-      });
-      if (auth?.expoPushToken) {
-        this.notificationsService.sendPush(auth.expoPushToken, title, body, data).catch(() => {});
-      }
+      this.notificationsService.sendNotification(userId, title, body, data).catch(() => {});
     } catch (error) {
       console.error(`[NOTIFICATION_TRIGGER_ERROR] ${error.message}`);
     }

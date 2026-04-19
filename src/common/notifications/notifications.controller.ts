@@ -5,6 +5,9 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Patch,
+  Param,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -59,8 +62,8 @@ export class NotificationsController {
       return { success: false, message: 'No push token found for user' };
     }
 
-    await this.notificationsService.sendPush(
-      user.expoPushToken,
+    await this.notificationsService.sendNotification(
+      authId,
       'Test Notification',
       'This is a test notification from Turfsy! 🚀',
       { type: 'test' },
@@ -68,4 +71,35 @@ export class NotificationsController {
 
     return { success: true, message: 'Test notification sent' };
   }
+  @Get('inbox')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getInbox(
+    @Req() req: any,
+    @Query('page') page: string,
+    @Query('limit') limit: string,
+  ) {
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 20;
+    return this.notificationsService.getInbox(
+      req.user.authId,
+      pageNumber,
+      limitNumber,
+    );
+  }
+
+  @Patch(':id/read')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async markAsRead(@Req() req: any, @Param('id') notificationId: string) {
+    return this.notificationsService.markAsRead(req.user.authId, notificationId);
+  }
+
+  @Patch('read-all')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async markAllAsRead(@Req() req: any) {
+    return this.notificationsService.markAllAsRead(req.user.authId);
+  }
 }
+

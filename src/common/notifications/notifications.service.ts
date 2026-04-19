@@ -14,15 +14,41 @@ export class NotificationsService {
   ) {}
 
   /**
-   * Send a push notification using Expo API
-   * @param token ExponentPushToken
+   * Send a notification by saving it to DB and pushing via Expo if token exists
+   * @param authId Auth ID of the user
    * @param title Title of notification
    * @param body Body content
    * @param data Optional data payload
    */
-  async sendPush(token: string, title: string, body: string, data?: any) {
+  async sendNotification(authId: string, title: string, body: string, data?: any) {
+    if (!authId) {
+      this.logger.warn('AuthID is null, skipping notification');
+      return;
+    }
+
+    try {
+      await this.prisma.notification.create({
+        data: {
+          authId,
+          title,
+          body,
+          type: data?.type || null,
+          data: data || {},
+        },
+      });
+    } catch (e) {
+      this.logger.error(`Failed to save notification to DB: ${e.message}`);
+    }
+
+    const user = await this.prisma.auth.findUnique({
+      where: { id: authId },
+      select: { expoPushToken: true },
+    });
+
+    const token = user?.expoPushToken;
+
     if (!token) {
-      this.logger.warn('Token is null, skipping push notification');
+      this.logger.log(`No push token for user ${authId}, saved to inbox only`);
       return;
     }
 
@@ -88,6 +114,61 @@ export class NotificationsService {
       });
     } catch (dbError) {
       this.logger.error(`Failed to remove invalid token from DB: ${dbError.message}`);
+    }
+  }
+
+  async getInbox(authId: string, page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
+    const [notifications, total] = await Promise.all([
+      this.prisma.notification.findMany({
+        where: { authId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.notification.count({ where: { authId } }),
+    ]);
+
+    const unreadCount = await this.prisma.notification.count({
+      where: { authId, isRead: false },
+    });
+
+    return {
+      success: true,
+      data: notifications,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        unreadCount,
+      },
+    };
+  }
+
+  async markAsRead(authId: string, notificationId: string) {
+    try {
+      await this.prisma.notification.updateMany({
+        where: { id: notificationId, authId },
+        data: { isRead: true },
+      });
+      return { success: true, message: 'Notification marked as read' };
+    } catch (e) {
+      this.logger.error(`Failed to mark read: ${e.message}`);
+      return { success: false, message: 'Failed to mark as read' };
+    }
+  }
+
+  async markAllAsRead(authId: string) {
+    try {
+      await this.prisma.notification.updateMany({
+        where: { authId, isRead: false },
+        data: { isRead: true },
+      });
+      return { success: true, message: 'All notifications marked as read' };
+    } catch (e) {
+      this.logger.error(`Failed to mark all as read: ${e.message}`);
+      return { success: false, message: 'Failed' };
     }
   }
 }

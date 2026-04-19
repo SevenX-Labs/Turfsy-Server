@@ -28,6 +28,7 @@ model Auth {
   userSettings  UserSettings?
   ownerSettings OwnerSettings?
   recentViews   RecentView[]
+  notifications Notification[]
 
   @@index([phone])
   @@index([role])
@@ -313,6 +314,7 @@ enum SportsType {
 enum TurfStatus {
   ACTIVE
   INACTIVE
+  MAINTENANCE
 }
 
 enum BookingStatus {
@@ -442,3 +444,22 @@ model RecentView {
   @@index([userId])
   @@map("recent_views")
 }
+
+model Notification {
+  id        String   @id @default(uuid())
+  authId    String   @map("auth_id")
+  title     String
+  body      String
+  type      String?
+  data      Json?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  auth      Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@index([authId])
+  @@index([authId, isRead])
+  @@map("notifications")
+}
+

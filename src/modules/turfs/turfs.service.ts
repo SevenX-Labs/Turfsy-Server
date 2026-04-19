@@ -113,7 +113,8 @@ export class TurfsService {
   }
 
   // 2. Get Nearby Turfs (Haversine distance calculation)
-  async getNearbyTurfs(userLat: number, userLng: number, radiusKm: number) {
+  async getNearbyTurfs(userLat: number, userLng: number, radiusKm: number, page: number = 1, limit: number = 50) {
+    const offset = (page - 1) * limit;
     const rawIds = await this.prisma.$queryRaw<
       { id: string; distanceKm: number }[]
     >`
@@ -129,7 +130,7 @@ export class TurfsService {
       ) AS t
       WHERE t."distanceKm" <= ${radiusKm}
       ORDER BY t."distanceKm" ASC
-      LIMIT 50
+      LIMIT ${limit} OFFSET ${offset}
     `;
 
     if (!rawIds.length) {
@@ -304,21 +305,50 @@ export class TurfsService {
     return this.cache.getOrSet(
       `turf:${turfId}`,
       async () => {
-        const turf = await this.prisma.turf.findUnique({
-          where: { id: turfId },
-          include: {
-            owner: {
-              select: {
-                name: true,
-                contactNumber: true,
+        const [turf, ratingAgg, reviewsData] = await Promise.all([
+          this.prisma.turf.findUnique({
+            where: { id: turfId },
+            include: {
+              owner: {
+                select: {
+                  name: true,
+                  contactNumber: true,
+                },
               },
             },
-          },
-        });
+          }),
+          this.prisma.turfRating.aggregate({
+            where: { turfId },
+            _avg: { rating: true },
+            _count: { rating: true },
+          }),
+          this.prisma.turfRating.findMany({
+            where: { turfId, review: { not: null } },
+            include: {
+              user: {
+                include: { userProfile: { select: { name: true } } },
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          }),
+        ]);
 
         if (!turf) {
           throw new NotFoundException('Turf not found');
         }
+
+        const customerReviews = reviewsData.map((r) => ({
+          id: r.id,
+          reviewerName: r.user?.userProfile?.name || 'Anonymous',
+          rating: r.rating,
+          comment: r.review,
+          createdAt: r.createdAt,
+        }));
+
+        const rating = ratingAgg._avg.rating
+          ? parseFloat(ratingAgg._avg.rating.toFixed(1))
+          : 0;
 
         return {
           ...turf,
@@ -327,50 +357,50 @@ export class TurfsService {
             turf.groundDayUrl,
             turf.groundNightUrl,
           ].filter(Boolean),
-          rating: 4.5, // Placeholder
+          rating,
+          reviewCount: ratingAgg._count.rating,
           rules: [
             'No smoking inside the turf',
             'Wear proper non-marking sports shoes',
             'Please arrive 10 minutes before your slot',
           ],
-          customerReviews: [
-            {
-              reviewerName: 'Rohit Sharma',
-              rating: 5,
-              comment: 'Excellent quality ground!',
-            },
-            {
-              reviewerName: 'Virat Kohli',
-              rating: 4,
-              comment: 'Good pitch, floodlights could be better.',
-            },
-          ],
+          customerReviews,
         };
       },
       1000 * 60 * 2, // 2-minute TTL
     );
   }
 
-  async listAllTurfs() {
+  async listAllTurfs(page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
     return this.cache.getOrSet(
-      'turfs:all',
+      `turfs:all:${page}:${limit}`,
       async () => {
-        const turfs = await this.prisma.turf.findMany({
-          where: {
-            status: 'ACTIVE',
-            deletedAt: null,
-          },
-          include: {
-            owner: {
-              select: {
-                name: true,
-                contactNumber: true,
+        const [turfs, total] = await Promise.all([
+          this.prisma.turf.findMany({
+            where: {
+              status: 'ACTIVE',
+              deletedAt: null,
+            },
+            include: {
+              owner: {
+                select: {
+                  name: true,
+                  contactNumber: true,
+                },
               },
             },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 100, // Hard limit added to prevent OOM
-        });
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+          }),
+          this.prisma.turf.count({
+            where: {
+              status: 'ACTIVE',
+              deletedAt: null,
+            },
+          })
+        ]);
 
         const formatted = turfs.map((turf) => ({
           ...turf,
@@ -385,6 +415,12 @@ export class TurfsService {
           success: true,
           count: formatted.length,
           data: formatted,
+          meta: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+          }
         };
       },
       1000 * 60 * 3, // 3-minute TTL
@@ -392,19 +428,30 @@ export class TurfsService {
   }
 
   // 6. Basic Search
-  async searchTurfs(q: string) {
-    const turfs = await this.prisma.turf.findMany({
-      where: {
-        status: 'ACTIVE',
-        deletedAt: null,
-        name: { contains: q, mode: 'insensitive' },
-      },
-      include: {
-        owner: { select: { name: true, contactNumber: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+  async searchTurfs(q: string, page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
+    const [turfs, total] = await Promise.all([
+      this.prisma.turf.findMany({
+        where: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          name: { contains: q, mode: 'insensitive' },
+        },
+        include: {
+          owner: { select: { name: true, contactNumber: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.turf.count({
+        where: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          name: { contains: q, mode: 'insensitive' },
+        },
+      })
+    ]);
 
     const formatted = turfs.map((turf) => ({
       ...turf,
@@ -419,6 +466,12 @@ export class TurfsService {
       success: true,
       count: formatted.length,
       data: formatted,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      }
     };
   }
 
@@ -431,9 +484,13 @@ export class TurfsService {
     sortBy?: 'price_low' | 'price_high' | 'distance' | 'popular' | 'newest';
     userLat?: number;
     userLng?: number;
+    page?: number;
+    limit?: number;
   }) {
-    const { city, sportsType, minPrice, maxPrice, sortBy, userLat, userLng } =
-      params;
+    const { city, sportsType, minPrice, maxPrice, sortBy, userLat, userLng } = params;
+    const page = params.page || 1;
+    const limit = params.limit || 50;
+    const skip = (page - 1) * limit;
 
     const where: any = {
       status: 'ACTIVE',
@@ -462,14 +519,18 @@ export class TurfsService {
       prismaOrderBy = { savedByUsers: { _count: 'desc' } };
     else if (sortBy === 'newest') prismaOrderBy = { createdAt: 'desc' };
 
-    const turfs = await this.prisma.turf.findMany({
-      where,
-      include: {
-        owner: { select: { name: true, contactNumber: true } },
-      },
-      orderBy: sortBy === 'distance' ? undefined : prismaOrderBy,
-      take: sortBy === 'distance' ? 200 : 50,
-    });
+    const [turfs, total] = await Promise.all([
+      this.prisma.turf.findMany({
+        where,
+        include: {
+          owner: { select: { name: true, contactNumber: true } },
+        },
+        orderBy: sortBy === 'distance' ? undefined : prismaOrderBy,
+        skip: sortBy === 'distance' ? undefined : skip,
+        take: sortBy === 'distance' ? 200 : limit,
+      }),
+      this.prisma.turf.count({ where }),
+    ]);
 
     const haversine = (
       lat1: number,
@@ -524,13 +585,19 @@ export class TurfsService {
       formatted = formatted
         .filter((t) => t.distanceKm !== undefined)
         .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0))
-        .slice(0, 50);
+        .slice(skip, skip + limit);
     }
 
     return {
       success: true,
       count: formatted.length,
       data: formatted,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      }
     };
   }
 

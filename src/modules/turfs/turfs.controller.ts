@@ -112,8 +112,13 @@ export class TurfsController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async listTurfs() {
-    return this.turfsService.listAllTurfs();
+  async listTurfs(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 50;
+    return this.turfsService.listAllTurfs(pageNumber, limitNumber);
   }
 
   // 2. Search Nearby Turfs (by current location or manual map pin)
@@ -124,6 +129,8 @@ export class TurfsController {
     @Query('lat') lat: string,
     @Query('lng') lng: string,
     @Query('radiusKm') radiusKm?: string,
+    @Query('page') reqPage?: string,
+    @Query('limit') reqLimit?: string,
   ) {
     if (!lat || !lng) {
       throw new BadRequestException('lat and lng query params are required');
@@ -153,7 +160,10 @@ export class TurfsController {
       );
     }
 
-    return this.turfsService.getNearbyTurfs(parsedLat, parsedLng, radius);
+    const pageNumber = reqPage ? parseInt(reqPage, 10) : 1;
+    const limitNumber = reqLimit ? parseInt(reqLimit, 10) : 50;
+
+    return this.turfsService.getNearbyTurfs(parsedLat, parsedLng, radius, pageNumber, limitNumber);
   }
 
   // 3. Get All My Turfs (for Owners)
@@ -167,9 +177,15 @@ export class TurfsController {
   // 4. Basic Search (Text based)
   @Get('search')
   @HttpCode(HttpStatus.OK)
-  async searchTurfs(@Query('q') q: string) {
+  async searchTurfs(
+    @Query('q') q: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     if (!q) throw new BadRequestException('Search query "q" is required');
-    return this.turfsService.searchTurfs(q);
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 50;
+    return this.turfsService.searchTurfs(q, pageNumber, limitNumber);
   }
 
   // 5. Advanced Filtration & Sorting
@@ -184,6 +200,8 @@ export class TurfsController {
     sortBy?: 'price_low' | 'price_high' | 'distance' | 'popular' | 'newest',
     @Query('userLat') userLat?: string,
     @Query('userLng') userLng?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     let parsedMinPrice: number | undefined;
     let parsedMaxPrice: number | undefined;
@@ -222,6 +240,9 @@ export class TurfsController {
       parsedLng = parseFloat(userLng);
     }
 
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 50;
+
     return this.turfsService.filterTurfs({
       city,
       sportsType,
@@ -230,6 +251,8 @@ export class TurfsController {
       sortBy: sortBy || 'newest',
       userLat: parsedLat,
       userLng: parsedLng,
+      page: pageNumber,
+      limit: limitNumber,
     });
   }
 
@@ -304,8 +327,8 @@ export class TurfsController {
     @Body() body: { status: TurfStatus },
   ) {
     if (!body.status) throw new BadRequestException('status is required');
-    if (![TurfStatus.ACTIVE, TurfStatus.INACTIVE].includes(body.status)) {
-      throw new BadRequestException('status must be ACTIVE or INACTIVE');
+    if (![TurfStatus.ACTIVE, TurfStatus.INACTIVE, TurfStatus.MAINTENANCE].includes(body.status)) {
+      throw new BadRequestException('status must be ACTIVE, INACTIVE, or MAINTENANCE');
     }
     return this.turfsService.updateTurfStatus(
       req.user.authId,
