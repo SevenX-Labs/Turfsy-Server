@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/services/cache.service';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -22,6 +23,7 @@ export class UploadService {
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
   ) {
     const url = this.config.get<string>('SUPABASE_URL');
     const key = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY');
@@ -182,6 +184,10 @@ export class UploadService {
         data: { avatarUrl },
       });
 
+      // Invalidate caches
+      this.cache.invalidate(`profile:${authId}`);
+      this.cache.invalidate(`auth:getMe:${authId}`);
+
       return { success: true, avatarUrl };
     } finally {
       if (file.path) {
@@ -207,6 +213,10 @@ export class UploadService {
       where: { authId },
       data: { avatarUrl: null },
     });
+
+    // Invalidate caches
+    this.cache.invalidate(`profile:${authId}`);
+    this.cache.invalidate(`auth:getMe:${authId}`);
 
     return { success: true, message: 'Profile image deleted successfully' };
   }
@@ -300,6 +310,11 @@ export class UploadService {
         data: { [dbField]: imageUrl },
       });
 
+      // 8. Invalidate cache
+      this.cache.invalidate(`turf:${turfId}`);
+      this.cache.invalidate('turfs:all');
+      this.cache.invalidate('home:activeTurfs');
+
       return { success: true, imageUrl, type: imageType };
     } finally {
       if (file && file.path) {
@@ -358,6 +373,11 @@ export class UploadService {
       where: { id: turfId },
       data: { [dbField]: null },
     });
+
+    // 4. Invalidate cache
+    this.cache.invalidate(`turf:${turfId}`);
+    this.cache.invalidate('turfs:all');
+    this.cache.invalidate('home:activeTurfs');
 
     return {
       success: true,
@@ -448,6 +468,11 @@ export class UploadService {
         where: { id: turfId },
         data: { videoUrl },
       });
+
+      // Invalidate cache
+      this.cache.invalidate(`turf:${turfId}`);
+      this.cache.invalidate('turfs:all');
+      this.cache.invalidate('home:activeTurfs');
 
       return { success: true, videoUrl };
     } catch (err: any) {
