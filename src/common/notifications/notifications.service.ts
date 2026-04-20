@@ -69,6 +69,7 @@ export class NotificationsService {
           title,
           body,
           sound: 'default',
+          channelId: 'default',
           data: data || {},
         },
         { headers },
