@@ -2081,6 +2081,83 @@ export class BookingService {
   }
 
   // ═══════════════════════════════════════════════════════
+  // 6.7 CRON: UPCOMING CHECK-IN NOTIFICATIONS
+  // ═══════════════════════════════════════════════════════
+  async handleUpcomingCheckInNotifications(ip?: string) {
+    this.rateLimiter.check(
+      `cron:upcoming-checkins:${ip || 'system'}`,
+      RATE_LIMITS.CRON,
+    );
+
+    const now = new Date();
+    // Calculate target time (10 minutes from now in IST)
+    const tenMinsFromNow = new Date(now.getTime() + 10 * 60 * 1000);
+    
+    const istTime = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(tenMinsFromNow);
+
+    // Get today's date at 00:00:00 for the database query
+    // We use Asia/Kolkata date to match how bookings are stored
+    const istDateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
+    
+    const today = new Date(istDateStr);
+
+    const upcomingBookings = await this.prisma.booking.findMany({
+      where: {
+        bookingStatus: 'CONFIRMED',
+        bookingDate: today,
+        startTime: istTime,
+      },
+      include: {
+        turf: {
+          select: {
+            name: true,
+            owner: { select: { authId: true } },
+          },
+        },
+      },
+    });
+
+    let sentCount = 0;
+    for (const booking of upcomingBookings) {
+      const ownerAuthId = booking.turf?.owner?.authId;
+      if (!ownerAuthId) continue;
+
+      try {
+        await this.notificationsService.sendNotification(
+          ownerAuthId,
+          'Guest Arriving Soon! 🏃‍♂️',
+          `The PIN verification window for ${booking.turf.name} at ${booking.startTime} is now OPEN.`,
+          {
+            type: 'PIN_WINDOW_OPEN',
+            bookingId: booking.id,
+            startTime: booking.startTime,
+          },
+        );
+        sentCount++;
+      } catch (err) {
+        console.error(`[NOTIFICATION_CRON_ERROR] ${err.message}`);
+      }
+    }
+
+    return {
+      success: true,
+      count: sentCount,
+      message: `Notifications sent to ${sentCount} owners for upcoming bookings.`,
+    };
+  }
+
+
+  // ═══════════════════════════════════════════════════════
   // 7. GET ALL MY BOOKINGS
   //    Layer 11: checkInPin stripped by interceptor
   // ═══════════════════════════════════════════════════════

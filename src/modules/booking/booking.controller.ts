@@ -358,14 +358,15 @@ export class BookingController {
   // POST /api/v3/booking/cron/auto-complete
   // Layer 1: CronGuard
   // ──────────────────────────────────────────────
-  @Post('cron/auto-complete')
+  @Post('cron/upcoming-checkins')
   @UseGuards(CronGuard)
   @SkipThrottle()
   @HttpCode(HttpStatus.OK)
-  async cronAutoComplete(@Req() req: any) {
+  async cronUpcomingCheckins(@Req() req: any) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.autoCompleteOnlineBookings(ip);
+    return this.bookingService.handleUpcomingCheckInNotifications(ip);
   }
+
 
   // ──────────────────────────────────────────────
   // 10. RATE TURF (User)
