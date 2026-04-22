@@ -174,6 +174,7 @@ export class BookingService {
 
     const turf = await this.prisma.turf.findUnique({
       where: { id: dto.turfId },
+      include: { owner: true }
     });
     if (!turf) throw new NotFoundException('Turf not found');
     if (turf.status !== 'ACTIVE')
@@ -359,12 +360,24 @@ export class BookingService {
         type: 'BOOKING_CONFIRMED',
         bookingId: booking.id,
       });
+
+      // ── Notify Owner ──
+      this.triggerPushNotification(turf.owner.authId, 'New Booking Received! 💸', `You have a new confirmed booking for ${turf.name} at ${booking.startTime}`, {
+        type: 'NEW_BOOKING_OWNER',
+        bookingId: booking.id,
+      });
     } else if (booking.bookingStatus === 'PENDING') {
       this.sendPaymentPendingEmail(booking.id).catch((err) =>
         console.error(
           `[EMAIL] Failed to send pending payment email: ${err.message}`,
         ),
       );
+
+      // ── Notify Owner ──
+      this.triggerPushNotification(turf.owner.authId, 'Booking Pending ⏳', `A customer is performing payment for ${turf.name} at ${booking.startTime}`, {
+        type: 'NEW_PENDING_OWNER',
+        bookingId: booking.id,
+      });
     }
 
     return {
@@ -711,6 +724,7 @@ export class BookingService {
 
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
+      include: { turf: { include: { owner: true } } }
     });
     if (!booking) throw new NotFoundException('Booking not found');
 
@@ -887,6 +901,17 @@ export class BookingService {
       },
     );
 
+    // ── Notify Owner ──
+    this.triggerPushNotification(
+      booking.turf.owner.authId,
+      'Payment Received! 💰',
+      `Advance payment received for ${booking.turf.name} at ${booking.startTime}`,
+      {
+        type: 'PAYMENT_RECEIVED_OWNER',
+        bookingId: updated.id,
+      }
+    );
+
     return {
       success: true,
       message:
@@ -982,15 +1007,17 @@ export class BookingService {
           ? notes.booking_id
           : undefined;
 
-    let booking: Booking | null = null;
+    let booking: any = null;
     if (bookingIdFromNotes) {
       booking = await this.prisma.booking.findUnique({
         where: { id: bookingIdFromNotes },
+        include: { turf: { include: { owner: true } } }
       });
     }
     if (!booking && orderId) {
       booking = await this.prisma.booking.findFirst({
         where: { razorpayOrderId: orderId },
+        include: { turf: { include: { owner: true } } }
       });
     }
 
@@ -1112,6 +1139,19 @@ export class BookingService {
         bookingId: updated.id,
       },
     );
+
+    // ── Notify Owner ──
+    if (booking.turf?.owner?.authId) {
+      this.triggerPushNotification(
+        booking.turf.owner.authId,
+        'Payment Confirmed! 💳',
+        `Payment successful via webhook for ${booking.turf.name} at ${booking.startTime}`,
+        {
+          type: 'PAYMENT_RECEIVED_OWNER',
+          bookingId: updated.id,
+        }
+      );
+    }
 
     return {
       success: true,
@@ -1346,6 +1386,12 @@ export class BookingService {
       bookingId: updated.id,
     });
 
+    // ── Notify Owner ──
+    this.triggerPushNotification(ownerAuthId, 'Visit Completed! 🏟️', `Booking ${this.formatBookingId(updated.id)} is now complete.`, {
+      type: 'VISIT_COMPLETED_OWNER',
+      bookingId: updated.id,
+    });
+
     return {
       success: true,
       message: `Check-in verified! Welcome ${userName}. Booking ${this.formatBookingId(updated.id)} completed.`,
@@ -1440,6 +1486,12 @@ export class BookingService {
     // ── Push Notification (Final Payment - Manual Override) ──
     this.triggerPushNotification(updated.userId, 'Payment Completed ✔', 'Your booking is fully paid. Enjoy your game!', {
       type: 'PAYMENT_FULL',
+      bookingId: updated.id,
+    });
+
+    // ── Notify Owner ──
+    this.triggerPushNotification(ownerAuthId, 'Booking Completed manually! ✅', `You've marked ${this.formatBookingId(updated.id)} as complete.`, {
+      type: 'MANUAL_COMPLETED_OWNER',
       bookingId: updated.id,
     });
 
@@ -1814,7 +1866,7 @@ export class BookingService {
 
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { turf: true },
+      include: { turf: { include: { owner: true } } },
     });
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.userId !== authId)
@@ -1962,6 +2014,19 @@ export class BookingService {
         console.error(`[EMAIL] Failed to send cancellation email: ${err.message}`),
     );
 
+    // ── Notify Owner ──
+    if (booking.turf?.owner?.authId) {
+      this.triggerPushNotification(
+        booking.turf.owner.authId,
+        'Booking Cancelled! 🚨',
+        `${booking.turf.name} slot at ${booking.startTime} was cancelled by the customer.`,
+        {
+          type: 'BOOKING_CANCELLED_OWNER',
+          bookingId: updated.id,
+        }
+      );
+    }
+
     return {
       success: true,
       message:
@@ -1993,6 +2058,7 @@ export class BookingService {
         bookingStatus: 'CONFIRMED',
         bookingDate: { lte: today },
       },
+      include: { turf: { include: { owner: true } } }
     });
 
     let updatedCount = 0;
@@ -2021,6 +2087,19 @@ export class BookingService {
         this.sendNoShowEmail(booking.id).catch(err =>
           console.error(`[EMAIL] Failed to send no-show email: ${err.message}`)
         );
+
+        // ── Notify Owner ──
+        if (booking.turf?.owner?.authId) {
+          this.triggerPushNotification(
+            booking.turf.owner.authId,
+            'No-Show Recorded ⚠️',
+            `Customer didn't arrive for ${booking.turf.name} at ${booking.startTime}`,
+            {
+              type: 'NO_SHOW_OWNER',
+              bookingId: booking.id,
+            }
+          );
+        }
       }
     }
 
