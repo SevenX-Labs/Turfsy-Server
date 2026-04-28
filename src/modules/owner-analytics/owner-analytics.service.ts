@@ -209,15 +209,23 @@ export class OwnerAnalyticsService {
     return { success: true, data: { totalVenues: owner.turfs.length } };
   }
 
-  async getVenuesAndRatingsSummary(ownerAuthId: string) {
+  async getVenuesAndRatingsSummary(ownerAuthId: string, turfId?: string) {
     const owner = await this.prisma.ownerProfile.findUnique({
       where: { authId: ownerAuthId },
       include: { turfs: { select: { id: true } } },
     });
     if (!owner) throw new NotFoundException('Owner profile not found');
 
-    const totalVenues = owner.turfs.length;
-    const turfIds = owner.turfs.map((t) => t.id);
+    let turfIds = owner.turfs.map((t) => t.id);
+
+    // If specifically asked for one turf, filter to just that turf (if the owner owns it)
+    if (turfId) {
+      const ownsTurf = turfIds.includes(turfId);
+      if (!ownsTurf) throw new NotFoundException('Turf not found or does not belong to owner');
+      turfIds = [turfId];
+    }
+
+    const totalVenues = turfIds.length;
     const ratings = await this.prisma.turfRating.findMany({
       where: { turfId: { in: turfIds } },
       select: { rating: true },
