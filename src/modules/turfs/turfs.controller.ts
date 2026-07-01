@@ -327,7 +327,7 @@ export class TurfsController {
     @Body() body: { status: TurfStatus },
   ) {
     if (!body.status) throw new BadRequestException('status is required');
-    if (![TurfStatus.ACTIVE, TurfStatus.INACTIVE, TurfStatus.MAINTENANCE].includes(body.status)) {
+    if (!([TurfStatus.ACTIVE, TurfStatus.INACTIVE, TurfStatus.MAINTENANCE] as TurfStatus[]).includes(body.status)) {
       throw new BadRequestException('status must be ACTIVE, INACTIVE, or MAINTENANCE');
     }
     return this.turfsService.updateTurfStatus(

@@ -6,12 +6,316 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── ENUMS ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  USER
+  OWNER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum SportsType {
+  FOOTBALL
+  CRICKET
+}
+
+enum TurfStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  SUSPENDED
+  UNDER_REVIEW
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  FULL_ONLINE
+  HALF_ONLINE_HALF_CASH
+  FULL_CASH
+}
+
+enum PayoutMethod {
+  UPI
+  BANK
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  SUPPORT_STAFF
+}
+
+enum AdminActionType {
+  USER_BANNED
+  USER_UNBANNED
+  TURF_SUSPENDED
+  TURF_UNSUSPENDED
+  TURF_ACTIVATED
+  TURF_FEATURED
+  TURF_UNFEATURED
+  OWNER_BANNED
+  OWNER_UNBANNED
+  BOOKING_CANCELLED
+  BOOKING_REFUNDED
+  PRICE_OVERRIDE
+  REVIEW_REMOVED
+  KYC_APPROVED
+  KYC_REJECTED
+  ADMIN_CREATED
+  ADMIN_DEACTIVATED
+  SYSTEM_CONFIG_CHANGED
+  NOTIFICATION_SENT
+  SUPPORT_TICKET_REPLIED
+  LEADERBOARD_RESET
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SplitPlayerStatus {
+  PENDING
+  PAID
+}
+
+// ─── ADMIN MODELS ───────────────────────────────────────────────────────────
+
+model Admin {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String
+  name            String
+  role            AdminRole        @default(ADMIN)
+  isActive        Boolean          @default(true)
+  lastLoginAt     DateTime?
+  lastLoginIp     String?
+  failedAttempts  Int              @default(0)
+  lockedUntil     DateTime?
+  passwordChanged DateTime         @default(now())
+  refreshToken    String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  sessions        AdminSession[]
+  actionLogs      AdminActionLog[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model AdminSession {
+  id        String    @id @default(uuid())
+  adminId   String
+  tokenHash String    @unique
+  ipAddress String
+  userAgent String
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+  admin     Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([adminId])
+}
+
+model AdminActionLog {
+  id         String          @id @default(uuid())
+  adminId    String
+  action     AdminActionType
+  targetType String
+  targetId   String
+  reason     String?
+  metadata   Json?
+  ipAddress  String
+  createdAt  DateTime        @default(now())
+  admin      Admin           @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([action])
+  @@index([targetId])
+  @@index([createdAt])
+}
+
+model AdminBooking {
+  id            String        @id @default(uuid())
+  userProfileId String
+  turfId        String
+  bookingDate   DateTime
+  slotStartTime String
+  slotEndTime   String
+  durationMins  Int
+  totalAmount   Float
+  platformFee   Float         @default(0)
+  ownerPayout   Float         @default(0)
+  status        BookingStatus @default(PENDING)
+  paymentMethod String?
+  transactionId String?
+  cancelledAt   DateTime?
+  cancelledBy   String?
+  cancelReason  String?
+  completedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  turf          Turf          @relation(fields: [turfId], references: [id], name: "AdminBookingToTurf")
+  user          UserProfile   @relation(fields: [userProfileId], references: [id], name: "AdminBookingToUser")
+
+  @@index([bookingDate])
+  @@index([createdAt])
+  @@index([status])
+  @@index([turfId])
+  @@index([userProfileId])
+  @@map("Booking")
+}
+
+model Review {
+  id            String      @id @default(uuid())
+  userProfileId String
+  turfId        String
+  rating        Int
+  comment       String?
+  isVisible     Boolean     @default(true)
+  isFlagged     Boolean     @default(false)
+  flagReason    String?
+  flaggedBy     String?
+  removedBy     String?
+  removeReason  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          UserProfile @relation(fields: [userProfileId], references: [id])
+  turf          Turf        @relation(fields: [turfId], references: [id])
+
+  @@unique([userProfileId, turfId])
+  @@index([isFlagged])
+  @@index([rating])
+  @@index([turfId])
+}
+
+model PriceHistory {
+  id                String   @id @default(uuid())
+  turfId            String
+  weekdayDayPrice   Float
+  weekdayNightPrice Float
+  weekendDayPrice   Float
+  weekendNightPrice Float
+  changedBy         String
+  changeReason      String?
+  createdAt         DateTime @default(now())
+  turf              Turf     @relation(fields: [turfId], references: [id])
+
+  @@index([createdAt])
+  @@index([turfId])
+}
+
+model PlatformConfig {
+  id                        String   @id @default(uuid())
+  platformFeePercent        Float    @default(10)
+  gstPercent                Float    @default(18)
+  minBookingAmount          Float    @default(100)
+  maxRefundDays             Int      @default(7)
+  cancellationAllowedHours  Int      @default(2)
+  cancellationRefundPercent Float    @default(75)
+  maxBookingsPerUser        Int      @default(5)
+  maintenanceMode           Boolean  @default(false)
+  bookingEnabled            Boolean  @default(true)
+  registrationEnabled       Boolean  @default(true)
+  updatedBy                 String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+model SupportTicket {
+  id                 String               @id @default(uuid())
+  userId             String
+  userRole           Role
+  subject            String
+  description        String
+  status             TicketStatus         @default(OPEN)
+  priority           TicketPriority       @default(MEDIUM)
+  assignedTo         String?
+  resolvedAt         DateTime?
+  closedAt           DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  replies            SupportTicketReply[]
+
+  @@index([assignedTo])
+  @@index([createdAt])
+  @@index([priority])
+  @@index([status])
+  @@index([userId])
+}
+
+model SupportTicketReply {
+  id         String        @id @default(uuid())
+  ticketId   String
+  senderId   String
+  senderType String
+  message    String
+  createdAt  DateTime      @default(now())
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([ticketId])
+}
+
+model NotificationLog {
+  id         String   @id @default(uuid())
+  title      String
+  body       String
+  targetType String
+  targetIds  String[] @default([])
+  sentBy     String
+  sentCount  Int      @default(0)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([sentBy])
+  @@index([targetType])
+}
+
+// ─── USER / OWNER MODELS ────────────────────────────────────────────────────
+
 model Auth {
   id            String            @id @default(uuid())
   phone         String            @unique
   role          Role              @default(USER)
   isVerified    Boolean           @default(false)
   isActive      Boolean           @default(true)
+  isBanned      Boolean           @default(false)
+  banReason     String?
+  bannedAt      DateTime?
+  bannedBy      String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   expoPushToken String?
@@ -35,25 +339,28 @@ model Auth {
 }
 
 model UserProfile {
-  id             String      @id @default(uuid())
-  authId         String      @unique
-  username       String?     @unique
+  id             String         @id @default(uuid())
+  authId         String         @unique
+  username       String?        @unique
   name           String?
-  email          String?     @unique
+  email          String?        @unique
   avatarUrl      String?
   dob            DateTime?
   gender         Gender?
-  preferredSport SportsType? @map("preferred_sport")
+  preferredSport SportsType?    @map("preferred_sport")
   currentLat     Float?
   currentLng     Float?
   address        String?
   city           String?
   state          String?
   pincode        String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  currentCity    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
   payment        Payment?
-  auth           Auth        @relation(fields: [authId], references: [id], onDelete: Cascade)
+  auth           Auth           @relation(fields: [authId], references: [id], onDelete: Cascade)
+  reviews        Review[]
+  adminBookings  AdminBooking[] @relation("AdminBookingToUser")
 
   @@index([username])
 }
@@ -78,13 +385,19 @@ model OwnerProfile {
 }
 
 model Turf {
-  id                             String       @id @default(uuid())
+  id                             String         @id @default(uuid())
   ownerProfileId                 String
   name                           String
   description                    String?
   sportsType                     SportsType
   turfSize                       String
-  status                         TurfStatus   @default(ACTIVE)
+  status                         TurfStatus     @default(ACTIVE)
+  isFeatured                     Boolean        @default(false)
+  featuredAt                     DateTime?
+  featuredBy                     String?
+  suspensionReason               String?
+  suspendedAt                    DateTime?
+  suspendedBy                    String?
   address                        String
   city                           String
   pincode                        String
@@ -97,28 +410,31 @@ model Turf {
   groundNightUrl                 String?
   entranceUrl                    String?
   videoUrl                       String?
-  floodLights                    Boolean      @default(false)
-  parking                        Boolean      @default(false)
-  washroom                       Boolean      @default(false)
-  changingRoom                   Boolean      @default(false)
-  drinkingWater                  Boolean      @default(false)
-  seatingArea                    Boolean      @default(false)
-  cafeteria                      Boolean      @default(false)
+  floodLights                    Boolean        @default(false)
+  parking                        Boolean        @default(false)
+  washroom                       Boolean        @default(false)
+  changingRoom                   Boolean        @default(false)
+  drinkingWater                  Boolean        @default(false)
+  seatingArea                    Boolean        @default(false)
+  cafeteria                      Boolean        @default(false)
   weekdayDayPrice                Float
   weekdayNightPrice              Float
   weekendDayPrice                Float
   weekendNightPrice              Float
   // Cancellation Policy
-  cancellationAllowedBeforeHours Int          @default(2)
-  cancellationRefundPercentage   Float        @default(75.0)
-  createdAt                      DateTime     @default(now())
-  updatedAt                      DateTime     @updatedAt
+  cancellationAllowedBeforeHours Int            @default(2)
+  cancellationRefundPercentage   Float          @default(75.0)
+  createdAt                      DateTime       @default(now())
+  updatedAt                      DateTime       @updatedAt
   deletedAt                      DateTime?
-  owner                          OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+  owner                          OwnerProfile   @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
   bookings                       Booking[]
   savedByUsers                   SavedTurf[]
   ratings                        TurfRating[]
   recentViews                    RecentView[]
+  reviews                        Review[]
+  priceHistory                   PriceHistory[]
+  adminBookings                  AdminBooking[] @relation("AdminBookingToTurf")
 
   @@index([ownerProfileId])
   @@index([city])
@@ -133,6 +449,7 @@ model Turf {
   @@index([status, city, weekdayDayPrice])
   @@index([status, deletedAt])              // Hot: fetchAllActiveTurfs, listAllTurfs, searchTurfs
   @@index([ownerProfileId, deletedAt])      // Hot: getMyTurfs
+  @@index([isFeatured])
 }
 
 model Payment {
@@ -294,55 +611,6 @@ model TurfRating {
   @@map("turf_ratings")
 }
 
-enum Role {
-  USER
-  OWNER
-}
-
-enum Gender {
-  MALE
-  FEMALE
-  OTHER
-  PREFER_NOT_TO_SAY
-}
-
-enum SportsType {
-  FOOTBALL
-  CRICKET
-}
-
-enum TurfStatus {
-  ACTIVE
-  INACTIVE
-  MAINTENANCE
-}
-
-enum BookingStatus {
-  PENDING
-  CONFIRMED
-  COMPLETED
-  CANCELLED
-  NO_SHOW
-}
-
-enum PaymentStatus {
-  PENDING
-  SUCCESS
-  FAILED
-  REFUNDED
-}
-
-enum PaymentType {
-  FULL_ONLINE
-  HALF_ONLINE_HALF_CASH
-  FULL_CASH
-}
-
-enum PayoutMethod {
-  UPI
-  BANK
-}
-
 model UserGamification {
   id             String    @id @default(uuid())
   authId         String    @unique @map("auth_id")
@@ -426,17 +694,11 @@ model BookingSplitPlayer {
   @@map("booking_split_players")
 }
 
-enum SplitPlayerStatus {
-  PENDING
-  PAID
-}
-
 model RecentView {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
   turfId    String   @map("turf_id")
   viewedAt  DateTime @default(now()) @map("viewed_at")
-
   user      Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
   turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
 
@@ -455,11 +717,9 @@ model Notification {
   isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-
   auth      Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
 
   @@index([authId])
   @@index([authId, isRead])
   @@map("notifications")
 }
-
