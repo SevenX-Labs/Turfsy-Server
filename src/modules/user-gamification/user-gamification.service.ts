@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../common/notifications/notifications.service';
 
 @Injectable()
 export class UserGamificationService {
+  private readonly logger = new Logger(UserGamificationService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
@@ -273,7 +274,7 @@ export class UserGamificationService {
     try {
       this.notificationsService.sendNotification(userId, title, body, data).catch(() => {});
     } catch (error) {
-      console.error(`[GAMIFICATION_NOTIFICATION_ERROR] ${error.message}`);
+      this.logger.error(`[GAMIFICATION_NOTIFICATION_ERROR] ${error.message}`);
     }
   }
 }

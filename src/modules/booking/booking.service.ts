@@ -6,6 +6,7 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -35,6 +36,7 @@ const MIN_ADVANCE_BOOKING_MINS = 30; // Must book at least 30 minutes before sta
 
 @Injectable()
 export class BookingService {
+  private readonly logger = new Logger(BookingService.name);
   private razorpay: Razorpay;
 
   constructor(
@@ -350,9 +352,17 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
+    this.logger.log({
+      event: 'booking_created',
+      bookingId: booking.id,
+      userId: authId,
+      amount: booking.amount,
+      status: booking.bookingStatus,
+    });
+
     if (booking.bookingStatus === 'CONFIRMED') {
       this.sendBookingConfirmationEmail(booking.id).catch((err) =>
-        console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
+        this.logger.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
       );
 
       // ── Push Notification ──
@@ -368,7 +378,7 @@ export class BookingService {
       });
     } else if (booking.bookingStatus === 'PENDING') {
       this.sendPaymentPendingEmail(booking.id).catch((err) =>
-        console.error(
+        this.logger.error(
           `[EMAIL] Failed to send pending payment email: ${err.message}`,
         ),
       );
@@ -848,8 +858,8 @@ export class BookingService {
       } catch (err) {
         if (err instanceof BadRequestException) throw err;
         // If Razorpay fetch fails, log but proceed (signature was valid)
-        console.warn(
-          `[PAYMENT] Could not fetch Razorpay order for amount verification: ${err}`,
+        this.logger.warn(
+          `[PAYMENT] Could not fetch Razorpay order for amount verification: ${err.message || err}`,
         );
       }
     }
@@ -883,8 +893,17 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
+    this.logger.log({
+      event: 'payment_verified',
+      userId: authId,
+      bookingId,
+      amount: booking.depositAmount,
+      razorpayOrderId: dto.razorpayOrderId,
+      razorpayPaymentId: dto.razorpayPaymentId,
+    });
+
     this.sendBookingConfirmationEmail(updated.id).catch((err) =>
-      console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
+      this.logger.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
     );
 
     // ── Push Notification ──
@@ -1089,8 +1108,8 @@ export class BookingService {
         if (err instanceof BadRequestException) {
           throw err;
         }
-        console.warn(
-          `[PAYMENT] Could not fetch Razorpay order for webhook verification: ${err}`,
+        this.logger.warn(
+          `[PAYMENT] Could not fetch Razorpay order for webhook verification: ${err.message || err}`,
         );
       }
     }
@@ -1122,8 +1141,16 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
+    this.logger.log({
+      event: 'razorpay_webhook_processed',
+      bookingId: booking.id,
+      paymentId,
+      orderId,
+      status: updated.bookingStatus,
+    });
+
     this.sendBookingConfirmationEmail(updated.id).catch((err) =>
-      console.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
+      this.logger.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
     );
 
     // ── Push Notification ──
@@ -1964,7 +1991,7 @@ export class BookingService {
           newPaymentStatus = 'REFUNDED' as PaymentStatus;
         } catch (refundError) {
           // Razorpay failed → cancel booking but DON'T mark as refunded
-          console.error(`[REFUND FAILED] bookingId=${bookingId}`, refundError);
+          this.logger.error(`[REFUND FAILED] bookingId=${bookingId}`, refundError?.stack || refundError);
           this.paymentLogger.alert('Refund API call failed', {
             bookingId,
             userId: authId,
@@ -2009,9 +2036,17 @@ export class BookingService {
       result: 'SUCCESS',
     });
 
+    this.logger.log({
+      event: 'booking_cancelled',
+      bookingId: updated.id,
+      userId: authId,
+      refundAmount,
+      reason: sanitizedReason || 'User Request',
+    });
+
     this.sendCancellationEmail(updated.id, sanitizedReason || 'User Request').catch(
       (err) =>
-        console.error(`[EMAIL] Failed to send cancellation email: ${err.message}`),
+        this.logger.error(`[EMAIL] Failed to send cancellation email: ${err.message}`),
     );
 
     // ── Notify Owner ──
@@ -2080,12 +2115,12 @@ export class BookingService {
 
         // ── Gamification Penalty & Push ──
         await this.userGamificationService.handleNoShow(booking.userId, booking.id).catch(err =>
-           console.error(`[GAMIFICATION] Failed to handle no-show: ${err.message}`)
+           this.logger.error(`[GAMIFICATION] Failed to handle no-show: ${err.message}`)
         );
 
         updatedCount++;
         this.sendNoShowEmail(booking.id).catch(err =>
-          console.error(`[EMAIL] Failed to send no-show email: ${err.message}`)
+          this.logger.error(`[EMAIL] Failed to send no-show email: ${err.message}`)
         );
 
         // ── Notify Owner ──
@@ -2224,7 +2259,7 @@ export class BookingService {
         );
         sentCount++;
       } catch (err) {
-        console.error(`[NOTIFICATION_CRON_ERROR] ${err.message}`);
+        this.logger.error(`[NOTIFICATION_CRON_ERROR] ${err.message}`);
       }
     }
 
@@ -3053,10 +3088,10 @@ export class BookingService {
   private async triggerPushNotification(userId: string, title: string, body: string, data: any) {
     try {
       this.notificationsService.sendNotification(userId, title, body, data).catch((err) => {
-         console.error(`[PUSH_ERROR] ${err.message}`);
+         this.logger.error(`[PUSH_ERROR] ${err.message}`);
       });
     } catch (error) {
-       console.error(`[NOTIFICATION_TRIGGER_ERROR] ${error.message}`);
+       this.logger.error(`[NOTIFICATION_TRIGGER_ERROR] ${error.message}`);
     }
   }
 }

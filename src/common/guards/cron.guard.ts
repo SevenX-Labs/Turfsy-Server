@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -12,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
  */
 @Injectable()
 export class CronGuard implements CanActivate {
+  private readonly logger = new Logger(CronGuard.name);
   constructor(private readonly configService: ConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -20,15 +22,13 @@ export class CronGuard implements CanActivate {
     const expectedSecret = this.configService.get<string>('CRON_SECRET');
 
     if (!expectedSecret) {
-      console.error('[SECURITY] CRON_SECRET not configured in environment');
+      this.logger.error('CRON_SECRET not configured in environment');
       throw new UnauthorizedException('Authentication required.');
     }
 
     if (!cronSecret || cronSecret !== expectedSecret) {
       const ip = request.ip || request.connection?.remoteAddress || 'unknown';
-      console.error(
-        `[SECURITY ALERT] Cron secret mismatch from IP: ${ip} at ${new Date().toISOString()}`,
-      );
+      this.logger.warn(`Cron secret mismatch from IP: ${ip}`);
       throw new UnauthorizedException('Authentication required.');
     }
 

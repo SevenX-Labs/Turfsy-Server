@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/services/cache.service';
@@ -15,6 +16,7 @@ import { SplitPlayerStatus } from '@prisma/client';
 
 @Injectable()
 export class UserBookingSplitwiseService {
+  private readonly logger = new Logger(UserBookingSplitwiseService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
@@ -516,7 +518,7 @@ export class UserBookingSplitwiseService {
     try {
       this.notificationsService.sendNotification(userId, title, body, data).catch(() => {});
     } catch (error) {
-      console.error(`[NOTIFICATION_TRIGGER_ERROR] ${error.message}`);
+      this.logger.error(`[NOTIFICATION_TRIGGER_ERROR] ${error.message}`);
     }
   }
 }

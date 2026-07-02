@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/services/cache.service';
@@ -11,6 +12,7 @@ import { TurfStatus, SportsType } from '@prisma/client';
 
 @Injectable()
 export class TurfsService {
+  private readonly logger = new Logger(TurfsService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
@@ -298,7 +300,7 @@ export class TurfsService {
           update: { viewedAt: new Date() },
         })
         .catch((err) =>
-          console.error('[TURFS] Failed to record recent view:', err.message),
+          this.logger.error(`Failed to record recent view: ${err.message}`),
         );
     }
 

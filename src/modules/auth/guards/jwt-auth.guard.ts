@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -15,6 +16,7 @@ const sessionCache = new LRUCache<string, string>({
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  private readonly logger = new Logger(JwtAuthGuard.name);
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
@@ -87,9 +89,8 @@ export class JwtAuthGuard implements CanActivate {
           data: { expiresAt: new Date(now.getTime() + msIn30Days) },
         })
         .catch((err) =>
-          console.error(
-            '[AUTH] Failed to update session activity:',
-            err.message,
+          this.logger.error(
+            `Failed to update session activity: ${err.message}`,
           ),
         );
     }

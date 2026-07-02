@@ -6,6 +6,7 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -27,6 +28,7 @@ const otpRateLimitCache = new LRUCache<string, number>({
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly OTP_EXPIRY_SECONDS = 60;
   private readonly RESEND_LIMIT_SECONDS = 60;
 
@@ -50,7 +52,8 @@ export class AuthService {
   }
 
   private async sendOtpViaSms(phone: string, otp: string): Promise<void> {
-    console.log(`[OTP] Phone: ${phone} | OTP: ${otp}`);
+    const displayOtp = process.env.NODE_ENV === 'production' ? '[REDACTED]' : otp;
+    this.logger.log({ message: `Sending OTP to ${phone}`, phone, otp: displayOtp });
     try {
       const response = await axios.post(
         'https://www.fast2sms.com/dev/bulkV2',
@@ -66,11 +69,12 @@ export class AuthService {
           },
         },
       );
-      console.log(`[Fast2SMS] Response:`, response.data);
+      this.logger.log({ message: 'Fast2SMS response received', response: response.data });
     } catch (err) {
-      console.error(
-        `[Fast2SMS] Error:`,
-        JSON.stringify(err?.response?.data || err.message),
+      this.logger.error(
+        `Fast2SMS OTP transmission error: ${err.message}`,
+        err.stack,
+        { errorDetails: err?.response?.data || err.message }
       );
     }
   }
@@ -147,6 +151,7 @@ export class AuthService {
     });
 
     await this.sendOtpViaSms(phone, otp);
+    this.logger.log({ event: 'otp_generated', phone, expiresAt, role });
 
     return {
       success: true,
@@ -205,6 +210,8 @@ export class AuthService {
       data: { verifiedAt: new Date() },
     });
 
+    this.logger.log({ event: 'otp_verified', phone, role });
+
     // Ensure role in DB matches the endpoint role
     await this.prisma.auth.update({
       where: { id: auth.id },
@@ -220,6 +227,12 @@ export class AuthService {
     // Determine if this is a new user (no profile yet)
     const isNewUser =
       role === Role.USER ? !auth.userProfile : !auth.ownerProfile;
+
+    if (isNewUser) {
+      this.logger.log({ event: 'user_signup', phone, role, userId: auth.id });
+    } else {
+      this.logger.log({ event: 'user_login', phone, role, userId: auth.id });
+    }
 
     // Generate JWT with the role from the endpoint
     const token = this.generateSessionToken(auth.id, session.id, role);
@@ -310,6 +323,7 @@ export class AuthService {
     });
 
     await this.sendOtpViaSms(auth.phone, otp);
+    this.logger.log({ event: 'otp_regenerated', phone: auth.phone, expiresAt, role: auth.role });
 
     return {
       success: true,
@@ -337,6 +351,8 @@ export class AuthService {
       where: { id: sessionId },
       data: { revokedAt: new Date() },
     });
+
+    this.logger.log({ event: 'logout', sessionId, authId: session.authId });
 
     // Invalidate cached user data on logout
     this.cacheService.invalidate(`auth:getMe:${session.authId}`);

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 export interface PaymentLogEntry {
   userId: string;
@@ -29,6 +29,7 @@ export interface PaymentLogEntry {
 
 @Injectable()
 export class PaymentLoggerService {
+  private readonly logger = new Logger(PaymentLoggerService.name);
   /**
    * Mask razorpay payment ID: pay_***last4
    */
@@ -61,9 +62,9 @@ export class PaymentLoggerService {
     };
 
     if (entry.result === 'SUCCESS') {
-      console.log(`[PAYMENT] ${JSON.stringify(logData)}`);
+      this.logger.log({ message: 'Payment event successful', ...logData });
     } else {
-      console.warn(`[PAYMENT-${entry.result}] ${JSON.stringify(logData)}`);
+      this.logger.warn({ message: `Payment event ${entry.result}`, ...logData });
     }
   }
 
@@ -71,9 +72,6 @@ export class PaymentLoggerService {
    * Alert on critical security events
    */
   alert(message: string, details: Record<string, any>): void {
-    const timestamp = new Date().toISOString();
-    console.error(
-      `[SECURITY ALERT] ${timestamp} | ${message} | ${JSON.stringify(details)}`,
-    );
+    this.logger.error({ message: `[SECURITY ALERT] ${message}`, details });
   }
 }

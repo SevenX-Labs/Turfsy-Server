@@ -131,7 +131,7 @@ export class UserHomeService {
       const location = await this.resolveLocation(options);
       // Fetch all active turfs once with aggregates
       const allTurfs = await this.fetchAllActiveTurfs(options.refresh);
-      console.log(`[UserHomeService] Found ${allTurfs.length} active turfs`);
+      this.logger.log(`Found ${allTurfs.length} active turfs`);
       const scopedTurfs = this.filterByPreferredSport(
         allTurfs,
         location.preferredSport,

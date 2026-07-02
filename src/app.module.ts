@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { LoggerModule } from 'nestjs-pino';
+import * as crypto from 'crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -26,6 +28,34 @@ import { EmailModule } from './common/email/email.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        genReqId: (req, res) => {
+          const reqId = req.headers['x-request-id'] || crypto.randomUUID();
+          res.setHeader('x-request-id', reqId);
+          return reqId;
+        },
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'req.headers["x-cron-secret"]',
+            'req.body.otp',
+            'req.body.password',
+            'req.body.accessToken',
+            'req.body.token',
+            'req.body.refreshToken',
+            'req.body.sessionToken',
+            'req.body.paymentSecret',
+            'req.body.secret',
+            'req.body.checkInPin',
+            'res.headers["set-cookie"]',
+          ],
+          censor: '[REDACTED]',
+        },
+        autoLogging: true,
+      },
     }),
     // ── Per-route throttling tiers ──
     // Named throttlers: "strict" for auth/OTP, "medium" for booking/payment, "default" for general

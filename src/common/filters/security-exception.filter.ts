@@ -4,6 +4,7 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 
@@ -24,6 +25,8 @@ const GENERIC_MESSAGES: Record<number, string> = {
 
 @Catch()
 export class SecurityExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(SecurityExceptionFilter.name);
+
   catch(exception: any, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -49,22 +52,37 @@ export class SecurityExceptionFilter implements ExceptionFilter {
 
     // Server-side logging — full details
     if (status >= 500) {
-      console.error(`[ERROR ${status}]`, {
+      this.logger.error(`[ERROR ${status}]`, {
         path: request.url,
         method: request.method,
         message: originalMessage,
         stack: exception?.stack,
         ip: request.ip,
-        timestamp: new Date().toISOString(),
+        requestId: request.id || request.headers['x-request-id'],
+      });
+    } else if (status === 400) {
+      this.logger.warn(`[VALIDATION ERROR]`, {
+        path: request.url,
+        method: request.method,
+        message: originalMessage,
+        ip: request.ip,
+        requestId: request.id || request.headers['x-request-id'],
       });
     } else if (status === 401 || status === 403) {
-      console.warn(`[AUTH ${status}]`, {
+      this.logger.warn(`[AUTH ${status}]`, {
         path: request.url,
         method: request.method,
         message: originalMessage,
         ip: request.ip,
         userId: request.user?.authId || 'anonymous',
-        timestamp: new Date().toISOString(),
+        requestId: request.id || request.headers['x-request-id'],
+      });
+    } else {
+      this.logger.debug(`[EXCEPTION ${status}]`, {
+        path: request.url,
+        method: request.method,
+        message: originalMessage,
+        requestId: request.id || request.headers['x-request-id'],
       });
     }
 

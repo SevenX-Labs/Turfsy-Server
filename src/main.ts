@@ -6,17 +6,16 @@ import { join } from 'path';
 import { json } from 'express';
 import { SecurityExceptionFilter } from './common/filters/security-exception.filter';
 import helmet from 'helmet';
+import { Logger } from 'nestjs-pino';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const compression = require('compression');
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    // ── Disable verbose logging in production ──
-    logger:
-      process.env.NODE_ENV === 'production'
-        ? ['error', 'warn']
-        : ['log', 'debug', 'error', 'warn', 'verbose'],
+    bufferLogs: true,
   });
+
+  app.useLogger(app.get(Logger));
 
   // ── Layer 1: Secure HTTP Headers ──
   app.use(
@@ -101,6 +100,8 @@ async function bootstrap() {
   // ── Disable express header that leaks tech stack ──
   app.getHttpAdapter().getInstance().disable('x-powered-by');
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port);
+  app.get(Logger).log(`Server started successfully on port ${port}`, 'Bootstrap');
 }
 bootstrap();
