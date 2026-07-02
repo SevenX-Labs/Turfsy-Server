@@ -13,6 +13,9 @@ import {
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
+import { CacheService } from '../../common/services/cache.service';
+import { MetricsService } from '../../common/metrics/metrics.service';
+
 jest.mock('axios');
 jest.mock('bcrypt');
 
@@ -50,6 +53,21 @@ const mockPrisma = {
 
 const mockJwt = { sign: jest.fn().mockReturnValue('mocked.jwt.token') };
 const mockConfig = { get: jest.fn((_key, def) => def ?? '7') };
+const mockCache = {
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  invalidate: jest.fn(),
+};
+const mockMetrics = {
+  otpSentTotal: { inc: jest.fn() },
+  otpVerifiedTotal: { inc: jest.fn() },
+  loginTotal: { inc: jest.fn() },
+  signupTotal: { inc: jest.fn() },
+  logoutTotal: { inc: jest.fn() },
+  refreshTokenTotal: { inc: jest.fn() },
+  activeUsersGauge: { inc: jest.fn(), dec: jest.fn() },
+};
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -62,6 +80,8 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: JwtService, useValue: mockJwt },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: CacheService, useValue: mockCache },
+        { provide: MetricsService, useValue: mockMetrics },
       ],
     }).compile();
 

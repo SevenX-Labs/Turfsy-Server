@@ -4,6 +4,9 @@ import { TurfsService } from './turfs.service';
 import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../../prisma/prisma.service';
+
 const mockTurfsService = {
   createTurf: jest.fn(),
   getTurfDetails: jest.fn(),
@@ -29,6 +32,18 @@ describe('TurfsController', () => {
       providers: [
         { provide: TurfsService, useValue: mockTurfsService },
         { provide: UploadService, useValue: mockUploadService },
+        {
+          provide: JwtService,
+          useValue: {
+            verify: jest.fn(),
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            auth: { findUnique: jest.fn() },
+          },
+        },
       ],
     });
 

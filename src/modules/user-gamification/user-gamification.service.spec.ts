@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserGamificationService } from './user-gamification.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../../common/notifications/notifications.service';
 
 const mockPrisma = {
   booking: { findUnique: jest.fn() },
@@ -21,6 +22,12 @@ describe('UserGamificationService', () => {
       providers: [
         UserGamificationService,
         { provide: PrismaService, useValue: mockPrisma },
+        {
+          provide: NotificationsService,
+          useValue: {
+            sendNotification: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

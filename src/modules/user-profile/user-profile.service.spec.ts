@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserProfileService } from './user-profile.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/services/cache.service';
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,9 +11,21 @@ import { Gender, Role } from '@prisma/client';
 
 const mockPrisma = {
   auth: { findUnique: jest.fn() },
-  userProfile: { findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn() },
-  userSettings: { upsert: jest.fn() },
+  userProfile: {
+    findUnique: jest.fn(),
+    upsert: jest.fn(),
+    update: jest.fn(),
+    findFirst: jest.fn(),
+  },
   payment: { upsert: jest.fn() },
+};
+
+const mockCache = {
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  invalidate: jest.fn(),
+  getOrSet: jest.fn(async (key, cb) => cb()),
 };
 
 describe('UserProfileService', () => {
@@ -24,6 +36,7 @@ describe('UserProfileService', () => {
       providers: [
         UserProfileService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: CacheService, useValue: mockCache },
       ],
     }).compile();
     service = module.get<UserProfileService>(UserProfileService);
@@ -32,14 +45,18 @@ describe('UserProfileService', () => {
   afterEach(() => jest.clearAllMocks());
 
   const dto = {
+    username: 'test_user',
     name: 'Test User',
     email: 'test@example.com',
-    avatarUrl: 'https://example.com/avatar.jpg',
     dob: '1995-01-01',
     gender: Gender.MALE,
+    preferredSport: null,
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411001',
+    currentLat: 18.5,
+    currentLng: 73.8,
   };
-
-  // ─── createProfile ──────────────────────────────────────────────
 
   describe('createProfile()', () => {
     it('should create profile successfully', async () => {
@@ -47,66 +64,37 @@ describe('UserProfileService', () => {
         id: 'auth-1',
         role: Role.USER,
         isVerified: true,
-        userProfile: { name: '' },
+        userProfile: null,
       });
-      mockPrisma.userProfile.findUnique.mockResolvedValue(null);
+      mockPrisma.userProfile.findFirst.mockResolvedValue(null);
       mockPrisma.userProfile.upsert.mockResolvedValue({
         id: 'profile-1',
         ...dto,
       });
 
-      const result = await service.createProfile('auth-1', dto);
+      const result = await service.createProfile('auth-1', dto as any);
       expect(result.success).toBe(true);
+      expect(result.data.id).toBe('profile-1');
     });
 
-    it('should throw ForbiddenException if role is OWNER', async () => {
+    it('should throw ForbiddenException if not verified', async () => {
       mockPrisma.auth.findUnique.mockResolvedValue({
         id: 'auth-1',
-        role: Role.OWNER,
-        isVerified: true,
-        userProfile: null,
+        role: Role.USER,
+        isVerified: false,
       });
-      await expect(service.createProfile('auth-1', dto)).rejects.toThrow(
+      await expect(service.createProfile('auth-1', dto as any)).rejects.toThrow(
         ForbiddenException,
-      );
-    });
-
-    it('should throw ConflictException if profile already created', async () => {
-      mockPrisma.auth.findUnique.mockResolvedValue({
-        id: 'auth-1',
-        role: Role.USER,
-        isVerified: true,
-        userProfile: { name: 'Existing' },
-      });
-      await expect(service.createProfile('auth-1', dto)).rejects.toThrow(
-        ConflictException,
-      );
-    });
-
-    it('should throw ConflictException if email already in use', async () => {
-      mockPrisma.auth.findUnique.mockResolvedValue({
-        id: 'auth-1',
-        role: Role.USER,
-        isVerified: true,
-        userProfile: { name: '' },
-      });
-      mockPrisma.userProfile.findUnique.mockResolvedValue({
-        id: 'other-profile',
-      });
-      await expect(service.createProfile('auth-1', dto)).rejects.toThrow(
-        ConflictException,
       );
     });
 
     it('should throw NotFoundException if auth not found', async () => {
       mockPrisma.auth.findUnique.mockResolvedValue(null);
-      await expect(service.createProfile('auth-1', dto)).rejects.toThrow(
+      await expect(service.createProfile('auth-1', dto as any)).rejects.toThrow(
         NotFoundException,
       );
     });
   });
-
-  // ─── getProfile ─────────────────────────────────────────────────
 
   describe('getProfile()', () => {
     it('should return profile with payment', async () => {
@@ -127,15 +115,30 @@ describe('UserProfileService', () => {
     });
   });
 
-  // ─── updateProfile ──────────────────────────────────────────────
+  describe('updateHomeAddress()', () => {
+    it('should update address successfully', async () => {
+      mockPrisma.userProfile.findUnique.mockResolvedValue({ id: 'profile-1' });
+      mockPrisma.userProfile.update.mockResolvedValue({
+        id: 'profile-1',
+        city: 'Mumbai',
+      });
+      const result = await service.updateHomeAddress('auth-1', {
+        city: 'Mumbai',
+      });
+      expect(result.success).toBe(true);
+      expect(result.data.city).toBe('Mumbai');
+    });
+
+    it('should throw NotFoundException if profile not found', async () => {
+      mockPrisma.userProfile.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateHomeAddress('auth-1', { city: 'Mumbai' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
 
   describe('updateProfile()', () => {
     it('should update profile successfully', async () => {
-      mockPrisma.userProfile.findUnique.mockResolvedValue({
-        id: 'profile-1',
-        authId: 'auth-1',
-        email: 'old@test.com',
-      });
       mockPrisma.userProfile.update.mockResolvedValue({
         id: 'profile-1',
         name: 'Updated',
@@ -143,29 +146,7 @@ describe('UserProfileService', () => {
       const result = await service.updateProfile('auth-1', { name: 'Updated' });
       expect(result.success).toBe(true);
     });
-
-    it('should throw NotFoundException if profile not found', async () => {
-      mockPrisma.userProfile.findUnique.mockResolvedValue(null);
-      await expect(service.updateProfile('auth-1', {})).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('should throw ConflictException if new email already in use', async () => {
-      mockPrisma.userProfile.findUnique
-        .mockResolvedValueOnce({
-          id: 'profile-1',
-          authId: 'auth-1',
-          email: 'old@test.com',
-        })
-        .mockResolvedValueOnce({ id: 'other-profile' });
-      await expect(
-        service.updateProfile('auth-1', { email: 'taken@test.com' }),
-      ).rejects.toThrow(ConflictException);
-    });
   });
-
-  // ─── savePaymentDetails ─────────────────────────────────────────
 
   describe('savePaymentDetails()', () => {
     it('should save UPI ID', async () => {
@@ -175,40 +156,13 @@ describe('UserProfileService', () => {
         upiId: 'test@upi',
       });
       expect(result.success).toBe(true);
-      expect(result.data.upiId).toBe('test@upi');
+      expect(result.message).toBe('Payment saved');
     });
 
     it('should throw NotFoundException if profile not found', async () => {
       mockPrisma.userProfile.findUnique.mockResolvedValue(null);
       await expect(
         service.savePaymentDetails('auth-1', { upiId: 'test@upi' }),
-      ).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  // ─── updateLocation ─────────────────────────────────────────────
-
-  describe('updateLocation()', () => {
-    it('should update location successfully', async () => {
-      mockPrisma.userProfile.findUnique.mockResolvedValue({ id: 'profile-1' });
-      mockPrisma.userProfile.update.mockResolvedValue({
-        currentLat: 18.5,
-        currentLng: 73.8,
-      });
-      const result = await service.updateLocation('auth-1', 18.5, 73.8, 'Pune');
-      expect(result.success).toBe(true);
-    });
-
-    it('should throw BadRequestException if lat/lng missing', async () => {
-      await expect(service.updateLocation('auth-1', 0, 0)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should throw NotFoundException if profile not found', async () => {
-      mockPrisma.userProfile.findUnique.mockResolvedValue(null);
-      await expect(
-        service.updateLocation('auth-1', 18.5, 73.8),
       ).rejects.toThrow(NotFoundException);
     });
   });

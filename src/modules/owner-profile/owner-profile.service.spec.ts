@@ -213,6 +213,9 @@ describe('OwnerProfileService', () => {
           name: 'Updated Owner',
           contactNumber: '9876543210',
         },
+        include: {
+          payment: true,
+        },
       });
     });
 

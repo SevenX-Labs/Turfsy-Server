@@ -9,7 +9,7 @@ const mockService = {
   getProfile: jest.fn(),
   updateProfile: jest.fn(),
   savePaymentDetails: jest.fn(),
-  updateLocation: jest.fn(),
+  updateHomeAddress: jest.fn(),
 };
 
 describe('UserProfileController', () => {
@@ -73,18 +73,17 @@ describe('UserProfileController', () => {
     expect(result.success).toBe(true);
   });
 
-  it('POST /location — updateLocation', async () => {
-    mockService.updateLocation.mockResolvedValue({ success: true });
-    const result = await controller.updateLocation(req, {
-      lat: 18.5,
-      lng: 73.8,
+  it('PATCH /address — updateAddress', async () => {
+    mockService.updateHomeAddress.mockResolvedValue({ success: true });
+    const dto = {
+      currentLat: 18.5,
+      currentLng: 73.8,
       city: 'Pune',
-    });
-    expect(mockService.updateLocation).toHaveBeenCalledWith(
+    };
+    const result = await controller.updateAddress(req, dto as any);
+    expect(mockService.updateHomeAddress).toHaveBeenCalledWith(
       'auth-1',
-      18.5,
-      73.8,
-      'Pune',
+      dto,
     );
     expect(result.success).toBe(true);
   });
