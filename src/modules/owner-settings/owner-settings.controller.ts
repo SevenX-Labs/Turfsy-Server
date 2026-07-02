@@ -18,7 +18,10 @@ import { UpdatePaymentSettingsDto } from './dto/payment-settings.dto';
 import { UpdateNotificationSettingsDto } from './dto/notification-settings.dto';
 import { UpdateCancellationPolicyDto } from './dto/cancellation-policy.dto';
 import { AuthService } from '../auth/auth.service';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Owners')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/owner-settings')
 @UseGuards(JwtAuthGuard)
 export class OwnerSettingsController {

@@ -1,10 +1,12 @@
-import { Controller, Get, Res, Req } from '@nestjs/common';
+import { Controller, Get, Res } from '@nestjs/common';
 import * as express from 'express';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
 import { MetricsService } from './common/metrics/metrics.service';
 import * as os from 'os';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('Health')
 @Controller()
 export class AppController {
   constructor(
@@ -14,11 +16,15 @@ export class AppController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: 'Hello World root endpoint' })
   getHello(): string {
     return this.appService.getHello();
   }
 
   @Get('turfzy/health')
+  @ApiOperation({ summary: 'Get system and database health diagnostics' })
+  @ApiResponse({ status: 200, description: 'All services are healthy' })
+  @ApiResponse({ status: 503, description: 'One or more critical services are unhealthy' })
   async checkHealth(@Res() res: express.Response) {
     const startTime = performance.now();
 
@@ -153,39 +159,6 @@ export class AppController {
     // 8. Return response with correct status code (200 or 503)
     const httpStatusCode = isCriticalHealthy ? 200 : 503;
     return res.status(httpStatusCode).json(healthResponse);
-  }
-
-  @Get('turfzy/api')
-  async listAllApi(@Req() req: any) {
-    const endpointGroups = this.appService.getEndpointHealthCatalog();
-    const catalogEndpointCount = endpointGroups.reduce(
-      (total, group) => total + group.routes.length,
-      0,
-    );
-    const allEndpoints = this.appService.getLiveEndpoints(req.app);
-    const endpointCount = allEndpoints.length;
-    const numberedModules = endpointGroups.map((group, index) => ({
-      index: index + 1,
-      label: `${index + 1}. ${group.module} - ${group.routes.length} endpoints`,
-      module: group.module,
-      endpoints: group.routes.length,
-      basePath: group.basePath,
-      status: group.status,
-    }));
-
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      api: {
-        groups: endpointGroups.length,
-        endpoints: endpointCount,
-        catalogEndpoints: catalogEndpointCount,
-        message: 'Live endpoint scan completed and grouped endpoint catalog loaded',
-        allEndpoints,
-        numberedModules,
-        modules: endpointGroups,
-      },
-    };
   }
 }
 

@@ -32,7 +32,10 @@ import {
   CancelBookingDto,
   RebookBookingDto,
 } from './dto/booking.dto';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Bookings')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/booking')
 @UseInterceptors(ResponseSanitizerInterceptor)
 export class BookingController {

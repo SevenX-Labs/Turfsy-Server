@@ -10,7 +10,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -18,7 +18,15 @@ import { ResendOtpDto } from './dto/resend-otp.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Role } from '@prisma/client';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+} from '@nestjs/swagger';
 
+@ApiTags('Auth')
 @Controller('api/v3/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -31,6 +39,9 @@ export class AuthController {
   @Post('user/login')
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send OTP to user phone number for login' })
+  @ApiResponse({ status: 200, description: 'OTP sent successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid phone number format' })
   async userLogin(
     @Body() dto: LoginDto,
     @Headers('x-forwarded-for') ip: string,
@@ -42,6 +53,9 @@ export class AuthController {
   @Post('user/verify-otp')
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP and return session token for user' })
+  @ApiResponse({ status: 200, description: 'OTP verified, session token generated' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired OTP' })
   async userVerifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto, Role.USER);
   }
@@ -49,6 +63,8 @@ export class AuthController {
   @Post('user/resend-otp')
   @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend OTP to user phone' })
+  @ApiResponse({ status: 200, description: 'OTP resent successfully' })
   async userResendOtp(@Body() dto: ResendOtpDto) {
     return this.authService.resendOtp(dto);
   }
@@ -60,6 +76,8 @@ export class AuthController {
   @Post('owner/login')
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send OTP to owner phone number for login' })
+  @ApiResponse({ status: 200, description: 'OTP sent successfully' })
   async ownerLogin(
     @Body() dto: LoginDto,
     @Headers('x-forwarded-for') ip: string,
@@ -71,6 +89,8 @@ export class AuthController {
   @Post('owner/verify-otp')
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP and return session token for owner' })
+  @ApiResponse({ status: 200, description: 'OTP verified, session token generated' })
   async ownerVerifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto, Role.OWNER);
   }
@@ -78,6 +98,8 @@ export class AuthController {
   @Post('owner/resend-otp')
   @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend OTP to owner phone' })
+  @ApiResponse({ status: 200, description: 'OTP resent successfully' })
   async ownerResendOtp(@Body() dto: ResendOtpDto) {
     return this.authService.resendOtp(dto);
   }
@@ -86,36 +108,54 @@ export class AuthController {
   //  SHARED ENDPOINTS (both apps use these)
   // ═══════════════════════════════════════════
 
-  // Logout — revoke session
   @Get('logout')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Log out the current session' })
+  @ApiResponse({ status: 200, description: 'Successfully logged out' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async logout(@Req() req: any) {
     return this.authService.logout(req.user.sessionId);
   }
 
-  // Soft delete account
   @Delete('delete-account')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Soft delete current account' })
+  @ApiResponse({ status: 200, description: 'Account queued for deletion' })
   async deleteAccount(@Req() req: any, @Body() dto: DeleteAccountDto) {
     return this.authService.deleteAccount(req.user.authId, dto);
   }
 
-  // Get authenticated user/owner profile
   @Get('get-me')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get current authenticated identity profile' })
+  @ApiResponse({ status: 200, description: 'Identity info fetched successfully' })
   async getMe(@Req() req: any) {
     return this.authService.getMe(req.user.authId);
   }
 
-  // Request phone number change — sends OTP to new number
   @Post('request-phone-change')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request phone change and send OTP to new phone number' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        newPhone: { type: 'string', example: '9876543210' },
+      },
+      required: ['newPhone'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'OTP sent to new phone' })
   async requestPhoneChange(
     @Req() req: any,
     @Body() body: { newPhone: string },
@@ -126,11 +166,24 @@ export class AuthController {
     return this.authService.requestPhoneChange(req.user.authId, body.newPhone);
   }
 
-  // Verify phone change OTP — updates phone in DB
   @Post('verify-phone-change')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP and complete phone number change' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        sessionToken: { type: 'string' },
+        newPhone: { type: 'string', example: '9876543210' },
+        otp: { type: 'string', example: '123456' },
+      },
+      required: ['sessionToken', 'newPhone', 'otp'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Phone number updated successfully' })
   async verifyPhoneChange(
     @Req() req: any,
     @Body() body: { sessionToken: string; newPhone: string; otp: string },

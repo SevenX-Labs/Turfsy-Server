@@ -15,7 +15,10 @@ import {
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../modules/auth/guards/jwt-auth.guard';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Notifications')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/notifications')
 export class NotificationsController {
   constructor(

@@ -21,7 +21,10 @@ import { ResponseSanitizerInterceptor } from '../../common/interceptors/response
 import { AddPlayersDto } from './dto/add-players.dto';
 import { UpdateSplitStatusDto } from './dto/update-status.dto';
 import { SetAmountsDto } from './dto/set-amounts.dto';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Bookings')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/booking')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('USER')

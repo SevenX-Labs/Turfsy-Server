@@ -3,7 +3,10 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OwnerHomeService } from './owner-home.service';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Owners')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/owner-home')
 export class OwnerHomeController {
   constructor(private readonly ownerHomeService: OwnerHomeService) {}

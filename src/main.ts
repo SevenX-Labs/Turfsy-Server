@@ -8,6 +8,7 @@ import { json } from 'express';
 import { SecurityExceptionFilter } from './common/filters/security-exception.filter';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const compression = require('compression');
 
@@ -24,7 +25,7 @@ async function bootstrap() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           imgSrc: ["'self'", 'data:', 'https:'],
         },
@@ -100,6 +101,53 @@ async function bootstrap() {
 
   // ── Disable express header that leaks tech stack ──
   app.getHttpAdapter().getInstance().disable('x-powered-by');
+
+  // ── Layer 7: Swagger API Documentation ──
+  const swaggerEnabled =
+    process.env.SWAGGER_ENABLED === 'true' ||
+    (process.env.SWAGGER_ENABLED === undefined &&
+      process.env.NODE_ENV !== 'production');
+
+  if (swaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('Turfzy API')
+      .setDescription('Production-ready Turf Booking Platform API')
+      .setVersion('1.0.0')
+      .setContact('Turfzy Team', 'https://turfsy.com', 'contact@turfsy.com')
+      .setLicense('MIT License', 'https://opensource.org/licenses/MIT')
+      .addServer('http://localhost:3000', 'Development Server')
+      .addServer('https://api.turfsy.com', 'Production Server')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'JWT',
+          description: 'Enter JWT token',
+          in: 'header',
+        },
+        'JWT-auth',
+      )
+      .addTag('Auth', 'Authentication & Authorization endpoints')
+      .addTag('Users', 'User Profile & User Settings endpoints')
+      .addTag('Owners', 'Owner Profile & Owner Settings endpoints')
+      .addTag('Turfs', 'Turf management & search endpoints')
+      .addTag('Slots', 'Slot lock & availability endpoints')
+      .addTag('Bookings', 'Booking creation & management endpoints')
+      .addTag('Payments', 'Razorpay orders & transaction history endpoints')
+      .addTag('Notifications', 'Expo push notification tokens & alerts')
+      .addTag('Admin', 'Administrative controls & system moderation')
+      .addTag('Analytics', 'Owner business analytics & reports')
+      .addTag('Health', 'System diagnostics & health check endpoints')
+      .build();
+
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('turfzy/api/docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+    });
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

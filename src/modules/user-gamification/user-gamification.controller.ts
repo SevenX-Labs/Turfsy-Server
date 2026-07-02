@@ -9,7 +9,10 @@ import {
 } from '@nestjs/common';
 import { UserGamificationService } from './user-gamification.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/user-gamification')
 @UseGuards(JwtAuthGuard)
 export class UserGamificationController {

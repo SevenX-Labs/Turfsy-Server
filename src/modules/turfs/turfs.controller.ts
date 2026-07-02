@@ -31,6 +31,7 @@ import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import * as os from 'os';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 const tmpDiskStorage = diskStorage({
   destination: os.tmpdir(),
@@ -43,6 +44,8 @@ const tmpDiskStorage = diskStorage({
   },
 });
 
+@ApiTags('Turfs')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/turfs')
 export class TurfsController {
   constructor(

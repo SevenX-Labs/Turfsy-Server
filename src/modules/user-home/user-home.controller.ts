@@ -14,6 +14,7 @@ import { UserHomeSectionResponseDto } from './dto/user-home-section-response.dto
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { UserHomeQueryDto } from './dto/user-home-query.dto';
 import { HomeSectionType } from './types/home-section.enum';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -21,6 +22,8 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
+@ApiTags('Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/user-home')
 export class UserHomeController {
   constructor(private readonly userHomeService: UserHomeService) {}

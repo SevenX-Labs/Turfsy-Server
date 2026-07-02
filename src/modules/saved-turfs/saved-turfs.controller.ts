@@ -12,7 +12,10 @@ import {
 } from '@nestjs/common';
 import { SavedTurfsService } from './saved-turfs.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/saved-turfs')
 @UseGuards(JwtAuthGuard)
 export class SavedTurfsController {

@@ -16,7 +16,10 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ChangePhoneDto } from './dto/change-phone.dto';
 import { UpdateUserPreferencesDto } from './dto/preferences.dto';
 import { UpdateUserNotificationSettingsDto } from './dto/notification-settings.dto';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/user-settings')
 @UseGuards(JwtAuthGuard)
 export class UserSettingsController {

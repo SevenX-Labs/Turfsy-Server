@@ -9,7 +9,10 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OwnerAnalyticsService } from './owner-analytics.service';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Analytics')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/owner-analytics')
 export class OwnerAnalyticsController {
   constructor(private readonly ownerAnalyticsService: OwnerAnalyticsService) {}

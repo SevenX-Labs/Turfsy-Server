@@ -16,7 +16,10 @@ import { CreateUserProfileDto } from './dto/create-profile.dto';
 import { UpdateUserProfileDto } from './dto/update-profile.dto';
 import { PaymentDetailsDto } from './dto/payment-details.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/user-profile')
 @UseGuards(JwtAuthGuard)
 export class UserProfileController {

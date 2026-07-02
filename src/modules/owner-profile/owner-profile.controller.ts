@@ -14,7 +14,10 @@ import { CreateOwnerProfileDto } from './dto/create-owner-profile.dto';
 import { UpdateOwnerProfileDto } from './dto/update-owner-profile.dto';
 import { OwnerPaymentDetailsDto } from './dto/owner-payment-details.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Owners')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/ownerProfile')
 @UseGuards(JwtAuthGuard)
 export class OwnerProfileController {

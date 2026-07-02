@@ -32,7 +32,10 @@ import {
   RateLimiterService,
   RATE_LIMITS,
 } from '../../common/services/rate-limiter.service';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v3/user-profile')
 @UseGuards(JwtAuthGuard)
 export class UploadController {
