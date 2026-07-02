@@ -102,6 +102,17 @@ export class PrismaService
     }
   }
 
+  /**
+   * Expose Postgres connection pool statistics for health checks.
+   */
+  getPoolStats() {
+    return {
+      total: this.pool.totalCount,
+      idle: this.pool.idleCount,
+      waiting: this.pool.waitingCount,
+    };
+  }
+
   async onModuleDestroy() {
     await this.$disconnect();
     await this.pool.end();
