@@ -24,6 +24,7 @@ import { Readable } from 'stream';
 import { UserGamificationService } from '../user-gamification/user-gamification.service';
 import { EmailService } from '../../common/email/email.service';
 import { NotificationsService } from '../../common/notifications/notifications.service';
+import { MetricsService } from '../../common/metrics/metrics.service';
 
 // ─── CONSTANTS ───────────────────────────────────────────
 const CASH_DEPOSIT_PERCENT = 0.5; // 50% advance for CASH bookings
@@ -47,6 +48,7 @@ export class BookingService {
     private readonly userGamificationService: UserGamificationService,
     private readonly emailService: EmailService,
     private readonly notificationsService: NotificationsService,
+    private readonly metrics: MetricsService,
   ) {
     this.razorpay = new Razorpay({
       key_id: this.configService.get<string>('RAZORPAY_KEY_ID') || '',
@@ -358,6 +360,10 @@ export class BookingService {
       userId: authId,
       amount: booking.amount,
       status: booking.bookingStatus,
+    });
+    this.metrics.bookingCreatedTotal.inc({
+      status: booking.bookingStatus,
+      payment_type: booking.paymentType,
     });
 
     if (booking.bookingStatus === 'CONFIRMED') {
@@ -693,6 +699,7 @@ export class BookingService {
       ip,
       result: 'SUCCESS',
     });
+    this.metrics.paymentInitiatedTotal.inc();
 
     return {
       success: true,
@@ -820,6 +827,7 @@ export class BookingService {
           data: { bookingStatus: 'CANCELLED', paymentStatus: 'FAILED' },
         });
 
+        this.metrics.paymentFailedTotal.inc();
         throw new BadRequestException('Invalid payment signature');
       }
 
@@ -901,6 +909,7 @@ export class BookingService {
       razorpayOrderId: dto.razorpayOrderId,
       razorpayPaymentId: dto.razorpayPaymentId,
     });
+    this.metrics.paymentVerifiedTotal.inc();
 
     this.sendBookingConfirmationEmail(updated.id).catch((err) =>
       this.logger.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
@@ -957,6 +966,8 @@ export class BookingService {
       this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET') ||
       this.configService.get<string>('RAZORPAY_KEY_SECRET') ||
       '';
+
+    this.metrics.webhookReceivedTotal.inc();
 
     if (!webhookSecret) {
       throw new BadRequestException('Webhook secret is not configured');
@@ -1148,6 +1159,7 @@ export class BookingService {
       orderId,
       status: updated.bookingStatus,
     });
+    this.metrics.paymentVerifiedTotal.inc();
 
     this.sendBookingConfirmationEmail(updated.id).catch((err) =>
       this.logger.error(`[EMAIL] Failed to send confirmation email: ${err.message}`),
@@ -1997,6 +2009,7 @@ export class BookingService {
             userId: authId,
             error: String(refundError),
           });
+          this.metrics.refundTotal.inc({ status: 'failed' });
           // Keep payment status as-is, just cancel the booking
           newPaymentStatus = booking.paymentStatus;
           refundAmount = 0;
@@ -2043,6 +2056,10 @@ export class BookingService {
       refundAmount,
       reason: sanitizedReason || 'User Request',
     });
+    this.metrics.bookingCancelledTotal.inc();
+    if (refundAmount > 0) {
+      this.metrics.refundTotal.inc({ status: 'success' });
+    }
 
     this.sendCancellationEmail(updated.id, sanitizedReason || 'User Request').catch(
       (err) =>

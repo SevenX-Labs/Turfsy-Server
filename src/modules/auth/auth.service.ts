@@ -12,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/services/cache.service';
+import { MetricsService } from '../../common/metrics/metrics.service';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
@@ -37,6 +38,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly cacheService: CacheService,
+    private readonly metrics: MetricsService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -152,6 +154,7 @@ export class AuthService {
 
     await this.sendOtpViaSms(phone, otp);
     this.logger.log({ event: 'otp_generated', phone, expiresAt, role });
+    this.metrics.otpSentTotal.inc({ role });
 
     return {
       success: true,
@@ -211,6 +214,7 @@ export class AuthService {
     });
 
     this.logger.log({ event: 'otp_verified', phone, role });
+    this.metrics.otpVerifiedTotal.inc({ role });
 
     // Ensure role in DB matches the endpoint role
     await this.prisma.auth.update({
@@ -230,9 +234,12 @@ export class AuthService {
 
     if (isNewUser) {
       this.logger.log({ event: 'user_signup', phone, role, userId: auth.id });
+      this.metrics.signupTotal.inc({ role });
     } else {
       this.logger.log({ event: 'user_login', phone, role, userId: auth.id });
+      this.metrics.loginTotal.inc({ role });
     }
+    this.metrics.activeUsersGauge.inc();
 
     // Generate JWT with the role from the endpoint
     const token = this.generateSessionToken(auth.id, session.id, role);
@@ -353,6 +360,8 @@ export class AuthService {
     });
 
     this.logger.log({ event: 'logout', sessionId, authId: session.authId });
+    this.metrics.logoutTotal.inc();
+    this.metrics.activeUsersGauge.dec();
 
     // Invalidate cached user data on logout
     this.cacheService.invalidate(`auth:getMe:${session.authId}`);

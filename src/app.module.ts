@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import * as crypto from 'crypto';
+import { MetricsModule } from './common/metrics/metrics.module';
+import { HttpMetricsInterceptor } from './common/interceptors/http-metrics.interceptor';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -76,6 +78,7 @@ import { EmailModule } from './common/email/email.module';
         limit: 60,      // 60 req/min — general endpoints
       },
     ]),
+    MetricsModule,
     PrismaModule,
     AuthModule,
     UserProfileModule,
@@ -100,6 +103,10 @@ import { EmailModule } from './common/email/email.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpMetricsInterceptor,
     },
   ],
 })

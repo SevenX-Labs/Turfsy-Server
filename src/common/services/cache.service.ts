@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LRUCache } from 'lru-cache';
+import { MetricsService } from '../metrics/metrics.service';
 
 /**
  * In-memory LRU cache service for frequently accessed data.
@@ -11,6 +12,8 @@ import { LRUCache } from 'lru-cache';
 @Injectable()
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
+
+  constructor(private readonly metrics: MetricsService) {}
 
   private readonly cache = new LRUCache<string, any>({
     max: 2000,                // Max 2000 entries
@@ -70,8 +73,11 @@ export class CacheService {
   ): Promise<T> {
     const cached = this.get<T>(key);
     if (cached !== undefined) {
+      this.metrics.cacheHitTotal.inc();
       return cached;
     }
+
+    this.metrics.cacheMissTotal.inc();
 
     if (this.promiseMap.has(key)) {
       return this.promiseMap.get(key);
