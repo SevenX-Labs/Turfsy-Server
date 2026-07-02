@@ -25,9 +25,11 @@ import { UserSettingsModule } from './modules/user-settings/user-settings.module
 import { UserBookingSplitwiseModule } from './modules/user-booking-splitwise/user-booking-splitwise.module';
 import { NotificationsModule } from './common/notifications/notifications.module';
 import { EmailModule } from './common/email/email.module';
+import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),

@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
+import * as Sentry from '@sentry/nestjs';
 
 /**
  * Layer 11 — Generic error messages to client.
@@ -48,6 +49,32 @@ export class SecurityExceptionFilter implements ExceptionFilter {
           'Unknown error';
         retryAfter = (exceptionResponse as any).retryAfter;
       }
+    }
+
+    const isHttpException = exception instanceof HttpException;
+    const isExpected4xx = isHttpException && status >= 400 && status < 500;
+
+    if (!isExpected4xx) {
+      Sentry.withScope((scope) => {
+        scope.setTag('requestId', request.id || request.headers['x-request-id'] || 'unknown');
+        scope.setTag('method', request.method);
+        scope.setTag('url', request.url);
+
+        scope.setContext('request_details', {
+          method: request.method,
+          url: request.url,
+          ip: request.ip || request.headers['x-forwarded-for'] || 'unknown',
+          requestId: request.id || request.headers['x-request-id'] || 'unknown',
+        });
+
+        if (request.user?.authId) {
+          scope.setUser({ id: request.user.authId });
+        } else if (request.user?.id) {
+          scope.setUser({ id: request.user.id });
+        }
+
+        Sentry.captureException(exception);
+      });
     }
 
     // Server-side logging — full details
