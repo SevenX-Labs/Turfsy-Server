@@ -1,4 +1,6 @@
 import { Controller, Get, Res } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import * as express from 'express';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
@@ -15,6 +17,7 @@ export class AppController {
     private readonly prisma: PrismaService,
     private readonly metrics: MetricsService,
     private readonly redisService: RedisService,
+    @InjectQueue('booking-expiry') private readonly bookingExpiryQueue: Queue,
   ) {}
 
   @Get()
@@ -57,6 +60,26 @@ export class AppController {
     } catch (err: any) {
       redisStatus = 'unhealthy';
       redisMessage = err.message || String(err);
+    }
+
+    // 2.5 Check BullMQ status
+    let bullmqStatus: 'healthy' | 'unhealthy' = 'healthy';
+    let bullmqMessage = 'BullMQ is active and healthy';
+    let waitingJobs = 0;
+    let activeJobs = 0;
+    let failedJobs = 0;
+    try {
+      const counts = await this.bookingExpiryQueue.getJobCounts(
+        'waiting',
+        'active',
+        'failed',
+      );
+      waitingJobs = counts.waiting || 0;
+      activeJobs = counts.active || 0;
+      failedJobs = counts.failed || 0;
+    } catch (err: any) {
+      bullmqStatus = 'unhealthy';
+      bullmqMessage = err.message || String(err);
     }
 
     // 3. Overall status verification
@@ -130,8 +153,8 @@ export class AppController {
           message: redisMessage,
         },
         bullmq: {
-          status: 'inactive',
-          message: 'BullMQ is not active in this environment',
+          status: bullmqStatus,
+          message: bullmqMessage,
         },
         memory,
         cpu,
@@ -145,9 +168,9 @@ export class AppController {
           waiting: poolStats.waiting,
         },
         queueStatistics: {
-          waitingJobs: 0,
-          activeJobs: 0,
-          failedJobs: 0,
+          waitingJobs,
+          activeJobs,
+          failedJobs,
         },
       },
       deployment: {

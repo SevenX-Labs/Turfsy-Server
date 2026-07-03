@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
@@ -38,6 +39,16 @@ describe('AppController', () => {
               latencyMs: 5,
               dbSize: 10,
               usedMemory: '5MB',
+            }),
+          },
+        },
+        {
+          provide: getQueueToken('booking-expiry'),
+          useValue: {
+            getJobCounts: jest.fn().mockResolvedValue({
+              waiting: 0,
+              active: 0,
+              failed: 0,
             }),
           },
         },
