@@ -7,7 +7,7 @@ import {
   Min,
   MaxLength,
 } from 'class-validator';
-import { SportsType, TurfPaymentPreference } from '@prisma/client';
+import { SportsType, TurfPaymentPreference, BookingApprovalType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateTurfDto {
@@ -127,4 +127,15 @@ export class CreateTurfDto {
     message: 'paymentPreference must be FULL_ONLINE, ADVANCE_PAYMENT, or FULL_CASH',
   })
   paymentPreference?: TurfPaymentPreference;
+
+  @ApiProperty({
+    enum: BookingApprovalType,
+    example: 'INSTANT',
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(BookingApprovalType, {
+    message: 'bookingApprovalType must be INSTANT or MANUAL',
+  })
+  bookingApprovalType?: BookingApprovalType;
 }

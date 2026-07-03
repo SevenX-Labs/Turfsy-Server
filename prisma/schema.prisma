@@ -39,13 +39,20 @@ enum TurfPaymentPreference {
   FULL_CASH
 }
 
+enum BookingApprovalType {
+  INSTANT
+  MANUAL
+}
+
 enum BookingStatus {
   PENDING
+  PENDING_APPROVAL
   CONFIRMED
   COMPLETED
   CANCELLED
   NO_SHOW
   REFUNDED
+  REJECTED
 }
 
 enum PaymentStatus {
@@ -437,6 +444,7 @@ model Turf {
   cancellationAllowedBeforeHours Int                   @default(2)
   cancellationRefundPercentage   Float                 @default(75.0)
   paymentPreference              TurfPaymentPreference @default(FULL_ONLINE)
+  bookingApprovalType            BookingApprovalType   @default(INSTANT)
   createdAt                      DateTime              @default(now())
   updatedAt                      DateTime       @updatedAt
   deletedAt                      DateTime?

@@ -17,7 +17,8 @@ export interface PaymentLogEntry {
     | 'split-add-players'
     | 'split-remove-player'
     | 'split-trigger'
-    | 'split-update-status';
+    | 'split-update-status'
+    | 'pending_approval';
   amount?: number;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;

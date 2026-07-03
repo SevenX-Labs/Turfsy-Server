@@ -213,6 +213,15 @@ export class BookingService {
         throw new BadRequestException('Cannot book for a past date');
       }
 
+      // ── Limit booking window to 90 days ──
+      const maxBookingDate = new Date(today);
+      maxBookingDate.setDate(maxBookingDate.getDate() + 90);
+      const bookingDateCheck = new Date(bookingDate);
+      bookingDateCheck.setHours(0, 0, 0, 0);
+      if (bookingDateCheck > maxBookingDate) {
+        throw new BadRequestException('Cannot book slots beyond the 90-day window');
+      }
+
       // ── Enforce minimum 1-hour advance booking for same-day ──
       const now = new Date();
       const bookingDateNorm = new Date(bookingDate);
@@ -387,7 +396,7 @@ export class BookingService {
             `SELECT id FROM bookings
            WHERE turf_id = $1
            AND booking_date = $2
-           AND booking_status IN ('PENDING', 'CONFIRMED')
+           AND booking_status IN ('PENDING', 'PENDING_APPROVAL', 'CONFIRMED')
            AND start_time < $3
            AND end_time > $4
            FOR UPDATE`,
@@ -628,11 +637,23 @@ export class BookingService {
     if (!turf) throw new NotFoundException('Turf not found');
 
     const bookingDate = new Date(date);
+    bookingDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const maxBookingDate = new Date(today);
+    maxBookingDate.setDate(maxBookingDate.getDate() + 90);
+
+    if (bookingDate < today || bookingDate > maxBookingDate) {
+      throw new BadRequestException('Requested date is outside the 90-day booking window');
+    }
+
     const bookings = await this.prisma.booking.findMany({
       where: {
         turfId,
         bookingDate,
-        bookingStatus: { notIn: ['CANCELLED', 'NO_SHOW' as any] },
+        bookingStatus: { notIn: ['CANCELLED', 'NO_SHOW' as any, 'REJECTED' as any] },
       },
       select: { startTime: true, endTime: true },
       orderBy: { startTime: 'asc' },
@@ -1497,10 +1518,13 @@ export class BookingService {
       const newPaymentStatus =
         booking.paymentType === PaymentType.FULL_ONLINE ? 'SUCCESS' : 'PENDING';
 
+      const isManual = booking.turf?.bookingApprovalType === 'MANUAL';
+      const targetStatus = isManual ? 'PENDING_APPROVAL' : 'CONFIRMED';
+
       const updated = await this.prisma.booking.update({
         where: { id: booking.id },
         data: {
-          bookingStatus: 'CONFIRMED',
+          bookingStatus: targetStatus,
           paymentStatus: newPaymentStatus,
           razorpayOrderId: orderId || booking.razorpayOrderId,
           razorpayPaymentId: paymentId,
@@ -1513,7 +1537,7 @@ export class BookingService {
         userId: booking.userId,
         bookingId: booking.id,
         turfId: booking.turfId,
-        action: 'confirm',
+        action: isManual ? 'pending_approval' : 'confirm',
         amount: booking.depositAmount,
         razorpayOrderId: orderId,
         razorpayPaymentId: paymentId,
@@ -1530,38 +1554,68 @@ export class BookingService {
       });
       this.metrics.paymentVerifiedTotal.inc();
 
-      this.sendBookingConfirmationEmail(updated.id).catch((err) =>
-        this.logger.error(
-          `[EMAIL] Failed to send confirmation email: ${err.message}`,
-        ),
-      );
+      if (!isManual) {
+        this.sendBookingConfirmationEmail(updated.id).catch((err) =>
+          this.logger.error(
+            `[EMAIL] Failed to send confirmation email: ${err.message}`,
+          ),
+        );
+      }
 
       // ── Push Notification ──
       const isPartialWebhook =
         booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH;
-      this.triggerPushNotification(
-        updated.userId,
-        isPartialWebhook ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
-        isPartialWebhook
-          ? 'Your advance payment is successful. Pay remaining at venue.'
-          : 'Your turf is booked successfully',
-        {
-          type: isPartialWebhook ? 'PAYMENT_PARTIAL' : 'BOOKING_CONFIRMED',
-          bookingId: updated.id,
-        },
-      );
 
-      // ── Notify Owner ──
-      if (booking.turf?.owner?.authId) {
+      if (isManual) {
+        // Customer Notification
         this.triggerPushNotification(
-          booking.turf.owner.authId,
-          'Payment Confirmed! 💳',
-          `Payment successful via webhook for ${booking.turf.name} at ${booking.startTime}`,
+          updated.userId,
+          'Booking Pending Approval ⏳',
+          'Your payment was successful. Waiting for owner confirmation.',
           {
-            type: 'PAYMENT_RECEIVED_OWNER',
+            type: 'BOOKING_PENDING_APPROVAL',
             bookingId: updated.id,
           },
         );
+
+        // Owner Notification
+        if (booking.turf?.owner?.authId) {
+          this.triggerPushNotification(
+            booking.turf.owner.authId,
+            'New Booking Request',
+            `New booking request received for ${booking.turf.name} at ${booking.startTime}`,
+            {
+              type: 'NEW_BOOKING_REQUEST',
+              bookingId: updated.id,
+            },
+          );
+        }
+      } else {
+        // Customer Notification
+        this.triggerPushNotification(
+          updated.userId,
+          isPartialWebhook ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
+          isPartialWebhook
+            ? 'Your advance payment is successful. Pay remaining at venue.'
+            : 'Your turf is booked successfully',
+          {
+            type: isPartialWebhook ? 'PAYMENT_PARTIAL' : 'BOOKING_CONFIRMED',
+            bookingId: updated.id,
+          },
+        );
+
+        // Owner Notification
+        if (booking.turf?.owner?.authId) {
+          this.triggerPushNotification(
+            booking.turf.owner.authId,
+            'New Booking Confirmed',
+            `New booking confirmed for ${booking.turf.name} at ${booking.startTime}`,
+            {
+              type: 'PAYMENT_RECEIVED_OWNER',
+              bookingId: updated.id,
+            },
+          );
+        }
       }
 
       return {
@@ -2030,9 +2084,9 @@ export class BookingService {
     // Status filtering
     if (status === 'upcoming') {
       where.bookingDate = { gte: new Date(todayStr) };
-      where.bookingStatus = { in: ['CONFIRMED', 'PENDING'] };
+      where.bookingStatus = { in: ['CONFIRMED', 'PENDING', 'PENDING_APPROVAL'] };
     } else if (status === 'past') {
-      where.bookingStatus = { in: ['COMPLETED', 'CANCELLED', 'NO_SHOW'] };
+      where.bookingStatus = { in: ['COMPLETED', 'CANCELLED', 'NO_SHOW', 'REJECTED'] };
     }
 
     // Date/Filter logic
@@ -3575,6 +3629,194 @@ export class BookingService {
     return {
       success: true,
       message: `Test email queued to ${user.userProfile.email}`,
+    };
+  }
+
+  async approveBooking(ownerAuthId: string, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        turf: {
+          include: {
+            owner: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.turf.owner.authId !== ownerAuthId) {
+      throw new ForbiddenException('You do not own the turf for this booking');
+    }
+
+    if (booking.bookingStatus !== 'PENDING_APPROVAL') {
+      throw new BadRequestException('Booking is not in PENDING_APPROVAL state');
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        bookingStatus: 'CONFIRMED',
+      },
+    });
+
+    // Send email confirmation
+    this.sendBookingConfirmationEmail(bookingId).catch((err) =>
+      this.logger.error(
+        `[EMAIL] Failed to send confirmation email: ${err.message}`,
+      ),
+    );
+
+    // Push notification to customer
+    this.triggerPushNotification(
+      booking.userId,
+      'Your Booking has been Confirmed',
+      `Your booking for ${booking.turf.name} on ${booking.bookingDate.toISOString().split('T')[0]} at ${booking.startTime} has been confirmed.`,
+      {
+        type: 'BOOKING_CONFIRMED',
+        bookingId: booking.id,
+      },
+    );
+
+    // Push notification to owner
+    this.triggerPushNotification(
+      ownerAuthId,
+      'New Booking Confirmed',
+      `Booking request approved for ${booking.turf.name} at ${booking.startTime}.`,
+      {
+        type: 'PAYMENT_RECEIVED_OWNER',
+        bookingId: booking.id,
+      },
+    );
+
+    return {
+      success: true,
+      message: 'Booking approved successfully',
+      data: updated,
+    };
+  }
+
+  async rejectBooking(ownerAuthId: string, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        turf: {
+          include: {
+            owner: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.turf.owner.authId !== ownerAuthId) {
+      throw new ForbiddenException('You do not own the turf for this booking');
+    }
+
+    if (booking.bookingStatus !== 'PENDING_APPROVAL') {
+      throw new BadRequestException('Booking is not in PENDING_APPROVAL state');
+    }
+
+    // Reuse the refund logic: 100% refund on rejection
+    let refundAmount = 0;
+    let newPaymentStatus: PaymentStatus =
+      booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
+    let razorpayRefundId: string | null = null;
+
+    if (booking.paymentStatus === 'SUCCESS' && booking.razorpayPaymentId) {
+      refundAmount = booking.depositAmount;
+
+      const keySecret =
+        this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+      const isMockMode =
+        keySecret === 'your_razorpay_key_secret' || keySecret === '';
+
+      if (isMockMode) {
+        razorpayRefundId = `rfnd_mock_${crypto.randomBytes(6).toString('hex')}`;
+        newPaymentStatus = 'REFUNDED' as PaymentStatus;
+      } else {
+        try {
+          const refund = await this.razorpay.payments.refund(
+            booking.razorpayPaymentId,
+            {
+              amount: refundAmount * 100, // paise
+              notes: {
+                bookingId,
+                reason: 'Booking request rejected by owner',
+              },
+            },
+          );
+          razorpayRefundId = refund.id;
+          newPaymentStatus = 'REFUNDED' as PaymentStatus;
+        } catch (refundError) {
+          this.logger.error(
+            `[REFUND FAILED] bookingId=${bookingId}`,
+            refundError?.stack || refundError,
+          );
+          this.paymentLogger.alert('Refund API call failed', {
+            bookingId,
+            userId: booking.userId,
+            error: String(refundError),
+          });
+          this.metrics.refundTotal.inc({ status: 'failed' });
+          newPaymentStatus = booking.paymentStatus;
+          refundAmount = 0;
+        }
+      }
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        bookingStatus: 'REJECTED',
+        paymentStatus: newPaymentStatus,
+        razorpayRefundId,
+        cancelledAt: new Date(),
+        cancelReason: 'Rejected by owner',
+      },
+    });
+
+    // Clean up split if exists
+    await this.prisma.bookingSplit.deleteMany({
+      where: { bookingId },
+    });
+
+    // Release Slot Lock
+    await this.releaseSlotLockForBooking(updated);
+
+    // Secure logging
+    this.paymentLogger.log({
+      userId: booking.userId,
+      bookingId,
+      turfId: booking.turfId,
+      action: refundAmount > 0 ? 'refund' : 'cancel',
+      amount: refundAmount,
+      razorpayOrderId: booking.razorpayOrderId || undefined,
+      razorpayPaymentId: booking.razorpayPaymentId || undefined,
+      result: 'SUCCESS',
+    });
+
+    // Push notification to customer
+    this.triggerPushNotification(
+      booking.userId,
+      'Your Booking Request was Rejected. Refund has been initiated.',
+      `Your booking request for ${booking.turf.name} on ${booking.bookingDate.toISOString().split('T')[0]} at ${booking.startTime} was rejected. Refund has been initiated.`,
+      {
+        type: 'BOOKING_REJECTED',
+        bookingId: booking.id,
+      },
+    );
+
+    return {
+      success: true,
+      message: 'Booking rejected successfully',
+      data: updated,
     };
   }
 

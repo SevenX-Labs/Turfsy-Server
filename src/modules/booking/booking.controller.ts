@@ -213,6 +213,36 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
+  // 5.1 OWNER: APPROVE BOOKING REQUEST
+  // POST /api/v3/booking/owner/bookings/:bookingId/approve
+  // ──────────────────────────────────────────────
+  @Post('owner/bookings/:bookingId/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(HttpStatus.OK)
+  async approveBooking(
+    @Req() req: any,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+  ) {
+    return this.bookingService.approveBooking(req.user.authId, bookingId);
+  }
+
+  // ──────────────────────────────────────────────
+  // 5.2 OWNER: REJECT BOOKING REQUEST
+  // POST /api/v3/booking/owner/bookings/:bookingId/reject
+  // ──────────────────────────────────────────────
+  @Post('owner/bookings/:bookingId/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(HttpStatus.OK)
+  async rejectBooking(
+    @Req() req: any,
+    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+  ) {
+    return this.bookingService.rejectBooking(req.user.authId, bookingId);
+  }
+
+  // ──────────────────────────────────────────────
   // 6.1 OWNER: GET ALL BOOKINGS
   // GET /api/v3/booking/owner/bookings
   // ──────────────────────────────────────────────

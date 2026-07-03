@@ -44,13 +44,14 @@ describe('BookingService - Platform Fee Slabs', () => {
   const mockConfigService = {
     get: jest.fn((key) => {
       if (key === 'RAZORPAY_KEY_ID') return 'key_id';
-      if (key === 'RAZORPAY_KEY_SECRET') return 'key_secret';
+      if (key === 'RAZORPAY_KEY_SECRET') return 'your_razorpay_key_secret';
       return null;
     }),
   };
 
   const mockPaymentLogger = {
     log: jest.fn(),
+    alert: jest.fn(),
   };
 
   const mockRateLimiter = {
@@ -272,6 +273,145 @@ describe('BookingService - Platform Fee Slabs', () => {
       await expect(service.createBooking('user-id', createDto)).rejects.toThrow(
         new BadRequestException('Platform Fee cannot be negative'),
       );
+    });
+  });
+
+  describe('createBooking - 90-Day Booking Window Validation', () => {
+    const dummyTurf = {
+      id: 'turf-1',
+      name: 'Airoli Kickoff Turf',
+      status: 'ACTIVE',
+      paymentPreference: TurfPaymentPreference.FULL_ONLINE,
+      minSlotDurationMins: 60,
+      weekdayDayPrice: 1000,
+      weekdayNightPrice: 1000,
+      weekendDayPrice: 1000,
+      weekendNightPrice: 1000,
+      openTime: '06:00',
+      closeTime: '23:00',
+      owner: { authId: 'owner-auth-id' },
+    };
+
+    const defaultSlabs = [
+      { minAmount: 0, maxAmount: 1000, platformFee: 50, isActive: true },
+    ];
+
+    beforeEach(() => {
+      mockPrisma.turf.findUnique.mockResolvedValue(dummyTurf);
+      mockPrisma.platformFeeSlab.findMany.mockResolvedValue(defaultSlabs);
+      mockPrisma.slotLock.create.mockResolvedValue({ id: 'lock-id' });
+      mockPrisma.slotLock.findFirst.mockResolvedValue(null);
+      mockPrisma.slotLock.update.mockResolvedValue({ id: 'lock-id' });
+    });
+
+    it('should throw BadRequestException if the booking date is beyond 90 days from today', async () => {
+      const farDate = new Date();
+      farDate.setDate(farDate.getDate() + 95);
+      const bookingDateStr = farDate.toISOString().split('T')[0];
+
+      await expect(
+        service.createBooking('user-id', {
+          turfId: 'turf-1',
+          bookingDate: bookingDateStr,
+          startTime: '10:00',
+          endTime: '11:00',
+          durationMins: 60,
+          paymentType: PaymentType.FULL_ONLINE,
+        }),
+      ).rejects.toThrow(
+        new BadRequestException('Cannot book slots beyond the 90-day window'),
+      );
+    });
+
+    it('should allow booking within the 90-day window', async () => {
+      const allowedDate = new Date();
+      allowedDate.setDate(allowedDate.getDate() + 45);
+      const bookingDateStr = allowedDate.toISOString().split('T')[0];
+
+      mockPrisma.booking.create.mockResolvedValue({
+        id: 'booking-id',
+        bookingDate: bookingDateStr,
+        startTime: '10:00',
+        endTime: '11:00',
+        paymentType: PaymentType.FULL_ONLINE,
+        amount: 1050,
+        groundCharge: 1000,
+        platformFee: 50,
+        depositAmount: 1050,
+      });
+
+      const response = await service.createBooking('user-id', {
+        turfId: 'turf-1',
+        bookingDate: bookingDateStr,
+        startTime: '10:00',
+        endTime: '11:00',
+        durationMins: 60,
+        paymentType: PaymentType.FULL_ONLINE,
+      });
+
+      expect(response.success).toBe(true);
+    });
+  });
+
+  describe('Manual Approval vs Instant Flow & Owner Action APIs', () => {
+    let mockBooking: any;
+
+    beforeEach(() => {
+      mockBooking = {
+        id: 'booking-uuid',
+        userId: 'user-id',
+        turfId: 'turf-1',
+        bookingDate: new Date(),
+        startTime: '10:00',
+        endTime: '11:00',
+        bookingStatus: 'PENDING_APPROVAL',
+        paymentStatus: 'SUCCESS',
+        paymentType: 'FULL_ONLINE',
+        depositAmount: 1000,
+        razorpayPaymentId: 'pay_123',
+        turf: {
+          id: 'turf-1',
+          name: 'Airoli Kickoff Turf',
+          bookingApprovalType: 'MANUAL',
+          owner: {
+            authId: 'owner-auth-id',
+          },
+        },
+      };
+
+      // Mock Prisma methods
+      mockPrisma.booking = {
+        ...mockPrisma.booking,
+        findUnique: jest.fn().mockResolvedValue(mockBooking),
+        update: jest.fn().mockImplementation(({ data }) => ({
+          ...mockBooking,
+          ...data,
+        })),
+        deleteMany: jest.fn(),
+      };
+      // We also mock bookingSplit
+      (mockPrisma as any).bookingSplit = {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      };
+    });
+
+    it('should successfully approve a PENDING_APPROVAL booking', async () => {
+      const response = await service.approveBooking('owner-auth-id', 'booking-uuid');
+      expect(response.success).toBe(true);
+      expect(response.data.bookingStatus).toBe('CONFIRMED');
+    });
+
+    it('should throw ForbiddenException if ownerAuthId does not match turf owner', async () => {
+      await expect(
+        service.approveBooking('wrong-owner', 'booking-uuid'),
+      ).rejects.toThrow();
+    });
+
+    it('should reject a PENDING_APPROVAL booking and trigger refund', async () => {
+      const response = await service.rejectBooking('owner-auth-id', 'booking-uuid');
+      expect(response.success).toBe(true);
+      expect(response.data.bookingStatus).toBe('REJECTED');
+      expect(response.data.paymentStatus).toBe('REFUNDED');
     });
   });
 });
