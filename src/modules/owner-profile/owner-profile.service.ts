@@ -8,7 +8,6 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOwnerProfileDto } from './dto/create-owner-profile.dto';
 import { UpdateOwnerProfileDto } from './dto/update-owner-profile.dto';
-import { OwnerPaymentDetailsDto } from './dto/owner-payment-details.dto';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -146,11 +145,6 @@ export class OwnerProfileService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.email !== undefined && { email: dto.email }),
-        ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl }),
-        ...(dto.aadharNumber !== undefined && {
-          aadharNumber: dto.aadharNumber,
-        }),
-        ...(dto.aadharUrl !== undefined && { aadharUrl: dto.aadharUrl }),
         // Always mirror the verified auth phone in owner profile.
         contactNumber: auth.phone,
       },
@@ -161,8 +155,7 @@ export class OwnerProfileService {
       dto.bankHolderName !== undefined ||
       dto.bankName !== undefined ||
       dto.accountNumber !== undefined ||
-      dto.ifscCode !== undefined ||
-      dto.upiId !== undefined;
+      dto.ifscCode !== undefined;
 
     if (hasPaymentDetails) {
       if (updated.payment) {
@@ -177,7 +170,6 @@ export class OwnerProfileService {
               accountNumber: dto.accountNumber,
             }),
             ...(dto.ifscCode !== undefined && { ifscCode: dto.ifscCode }),
-            ...(dto.upiId !== undefined && { upiId: dto.upiId }),
           },
         });
       } else {
@@ -190,7 +182,6 @@ export class OwnerProfileService {
             bankName: dto.bankName,
             accountNumber: dto.accountNumber,
             ifscCode: dto.ifscCode,
-            upiId: dto.upiId,
           },
         });
       }
@@ -208,55 +199,5 @@ export class OwnerProfileService {
     };
   }
 
-  // ─────────────────────────────────────────
-  // Upload Owner Avatar (local disk)
-  // ─────────────────────────────────────────
 
-  async updateAvatar(authId: string, avatarUrl: string) {
-    const profile = await this.prisma.ownerProfile.findUnique({
-      where: { authId },
-    });
-
-    if (!profile) throw new NotFoundException('Profile not found');
-
-    const updated = await this.prisma.ownerProfile.update({
-      where: { authId },
-      data: { avatarUrl },
-    });
-
-    return {
-      success: true,
-      message: 'Avatar updated successfully',
-      data: { avatarUrl: updated.avatarUrl },
-    };
-  }
-
-  // ─────────────────────────────────────────
-  // Save Payment Details (UPI)
-  // ─────────────────────────────────────────
-
-  async savePaymentDetails(authId: string, dto: OwnerPaymentDetailsDto) {
-    const profile = await this.prisma.ownerProfile.findUnique({
-      where: { authId },
-    });
-
-    if (!profile) throw new NotFoundException('Owner profile not found');
-
-    const payment = await this.prisma.payment.upsert({
-      where: { authId },
-      update: { upiId: dto.upiId },
-      create: {
-        authId,
-        role: Role.OWNER,
-        upiId: dto.upiId,
-        ownerProfileId: profile.id,
-      },
-    });
-
-    return {
-      success: true,
-      message: 'Payment details saved successfully',
-      data: { upiId: payment.upiId },
-    };
-  }
 }

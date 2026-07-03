@@ -7,7 +7,6 @@ const mockOwnerProfileService = {
   createProfile: jest.fn(),
   getProfile: jest.fn(),
   updateProfile: jest.fn(),
-  savePaymentDetails: jest.fn(),
 };
 
 describe('OwnerProfileController', () => {

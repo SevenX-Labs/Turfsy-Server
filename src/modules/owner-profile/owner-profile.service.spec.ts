@@ -265,35 +265,4 @@ describe('OwnerProfileService', () => {
     });
   });
 
-  describe('savePaymentDetails()', () => {
-    it('saves owner payment details', async () => {
-      mockPrisma.ownerProfile.findUnique.mockResolvedValue({ id: 'profile-1' });
-      mockPrisma.payment.upsert.mockResolvedValue({ upiId: 'owner@upi' });
-
-      const result = await service.savePaymentDetails('auth-1', {
-        upiId: 'owner@upi',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data.upiId).toBe('owner@upi');
-      expect(mockPrisma.payment.upsert).toHaveBeenCalledWith({
-        where: { authId: 'auth-1' },
-        update: { upiId: 'owner@upi' },
-        create: {
-          authId: 'auth-1',
-          role: Role.OWNER,
-          upiId: 'owner@upi',
-          ownerProfileId: 'profile-1',
-        },
-      });
-    });
-
-    it('throws if owner profile does not exist', async () => {
-      mockPrisma.ownerProfile.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.savePaymentDetails('auth-1', { upiId: 'owner@upi' }),
-      ).rejects.toThrow(NotFoundException);
-    });
-  });
 });

@@ -12,7 +12,6 @@ import {
 import { OwnerProfileService } from './owner-profile.service';
 import { CreateOwnerProfileDto } from './dto/create-owner-profile.dto';
 import { UpdateOwnerProfileDto } from './dto/update-owner-profile.dto';
-import { OwnerPaymentDetailsDto } from './dto/owner-payment-details.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -48,17 +47,5 @@ export class OwnerProfileController {
   @HttpCode(HttpStatus.OK)
   async updateProfile(@Req() req: any, @Body() dto: UpdateOwnerProfileDto) {
     return this.ownerProfileService.updateProfile(req.user.authId, dto);
-  }
-
-  // ─────────────────────────────────────────
-  // POST /api/v3/ownerProfile/payment-details  — Save UPI
-  // ─────────────────────────────────────────
-  @Post('payment-details')
-  @HttpCode(HttpStatus.OK)
-  async savePaymentDetails(
-    @Req() req: any,
-    @Body() dto: OwnerPaymentDetailsDto,
-  ) {
-    return this.ownerProfileService.savePaymentDetails(req.user.authId, dto);
   }
 }

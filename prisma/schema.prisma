@@ -60,6 +60,11 @@ enum PayoutMethod {
   BANK
 }
 
+enum AccountType {
+  SAVINGS
+  CURRENT
+}
+
 enum AdminRole {
   SUPER_ADMIN
   ADMIN
@@ -376,10 +381,6 @@ model OwnerProfile {
   name          String?
   email         String?  @unique
   contactNumber String?
-  avatarUrl     String?
-  aadharNumber  String?
-  aadharUrl     String?
-  isKycVerified Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   auth          Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
@@ -473,6 +474,7 @@ model Payment {
   bankName        String?       @map("bank_name")
   accountNumber   String?       @map("account_number")
   ifscCode        String?       @map("ifsc_code")
+  accountType     AccountType?  @map("account_type")
   payoutMethod    PayoutMethod? @default(UPI) @map("payout_method")
   payoutFrequency String?       @default("MANUAL") @map("payout_frequency")
   isActive        Boolean       @default(true) @map("is_active")
@@ -653,13 +655,13 @@ model UserSettings {
 model OwnerSettings {
   id                 String       @id @default(uuid())
   authId             String       @unique @map("auth_id")
-  upiId              String?      @map("upi_id")
-  bankAccount        String?      @map("bank_account")
+  bankHolderName     String?      @map("bank_holder_name")
+  bankName           String?      @map("bank_name")
+  accountNumber      String?      @map("account_number")
+  ifscCode           String?      @map("ifsc_code")
+  accountType        AccountType? @map("account_type")
   bookingAlerts      Boolean      @default(true) @map("booking_alerts")
   cancellationAlerts Boolean      @default(true) @map("cancellation_alerts")
-  payoutMethod       PayoutMethod @default(UPI) @map("payout_method")
-  payoutFrequency    String       @default("MANUAL") @map("payout_frequency")
-  payoutActive       Boolean      @default(true) @map("payout_active")
   createdAt          DateTime     @default(now()) @map("created_at")
   updatedAt          DateTime     @updatedAt @map("updated_at")
   auth               Auth         @relation(fields: [authId], references: [id], onDelete: Cascade)

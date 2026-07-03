@@ -1,3 +1,4 @@
+// Triggering IDE TS Server type cache refresh after schema update
 import {
   BadRequestException,
   ConflictException,
@@ -8,10 +9,10 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateProfileSettingsDto } from './dto/profile-settings.dto';
 import { UpdateTurfSettingsDto } from './dto/turf-settings.dto';
-import { UpdatePaymentSettingsDto } from './dto/payment-settings.dto';
+import { UpdatePaymentSettingsDto, isSequential, isRepeatedPattern } from './dto/payment-settings.dto';
 import { UpdateNotificationSettingsDto } from './dto/notification-settings.dto';
 import { UpdateCancellationPolicyDto } from './dto/cancellation-policy.dto';
-import { PayoutMethod, Role } from '@prisma/client';
+import { AccountType, Role } from '@prisma/client';
 
 @Injectable()
 export class OwnerSettingsService {
@@ -162,27 +163,15 @@ export class OwnerSettingsService {
   async getPaymentSettings(authId: string) {
     await this.ensureOwner(authId);
     const settings = await this.getOrCreateOwnerSettings(authId);
-    const legacyPayment = await this.prisma.payment.findUnique({
-      where: { authId },
-      select: {
-        upiId: true,
-        accountNumber: true,
-        payoutMethod: true,
-        payoutFrequency: true,
-        isActive: true,
-      },
-    });
 
     return {
       success: true,
       data: {
-        upiId: settings.upiId ?? legacyPayment?.upiId ?? null,
-        bankAccount:
-          settings.bankAccount ?? legacyPayment?.accountNumber ?? null,
-        payoutMethod: settings.payoutMethod ?? legacyPayment?.payoutMethod,
-        payoutFrequency:
-          settings.payoutFrequency ?? legacyPayment?.payoutFrequency,
-        isActive: settings.payoutActive ?? legacyPayment?.isActive,
+        bankHolderName: settings.bankHolderName ?? null,
+        bankName: settings.bankName ?? null,
+        accountNumber: settings.accountNumber ?? null,
+        ifscCode: settings.ifscCode ?? null,
+        accountType: settings.accountType ?? null,
       },
     };
   }
@@ -190,74 +179,119 @@ export class OwnerSettingsService {
   async updatePaymentSettings(authId: string, dto: UpdatePaymentSettingsDto) {
     await this.ensureOwner(authId);
 
+    // Reject null, undefined, empty, or whitespace-only inputs
+    const requiredFields: (keyof UpdatePaymentSettingsDto)[] = [
+      'bankHolderName',
+      'bankName',
+      'accountNumber',
+      'confirmAccountNumber',
+      'ifscCode',
+      'accountType',
+    ];
+
+    for (const field of requiredFields) {
+      const val = dto[field];
+      if (val === null || val === undefined) {
+        throw new BadRequestException(`${field} must not be null or undefined`);
+      }
+      if (typeof val === 'string' && val.trim() === '') {
+        throw new BadRequestException(`${field} must not be empty or whitespace-only`);
+      }
+    }
+
+    // Trim all inputs
+    const bankHolderName = dto.bankHolderName.trim();
+    const bankName = dto.bankName.trim();
+    const accountNumber = dto.accountNumber.trim();
+    const confirmAccountNumber = dto.confirmAccountNumber.trim();
+    const ifscCode = dto.ifscCode.trim().toUpperCase();
+    const accountType = dto.accountType;
+
+    // Validate Account Holder Name
+    if (bankHolderName.length < 3 || bankHolderName.length > 100) {
+      throw new BadRequestException('Account holder name must be between 3 and 100 characters');
+    }
+    if (!/^[a-zA-Z\s.]+$/.test(bankHolderName)) {
+      throw new BadRequestException('Account holder name can only contain alphabets, spaces, and dots');
+    }
+
+    // Validate Bank Name
+    if (bankName.length < 3 || bankName.length > 100) {
+      throw new BadRequestException('Bank name must be between 3 and 100 characters');
+    }
+    if (!/^[a-zA-Z\s&]+$/.test(bankName)) {
+      throw new BadRequestException('Bank name can only contain alphabets, spaces, and &');
+    }
+
+    // Validate Account Number
+    if (!/^\d+$/.test(accountNumber)) {
+      throw new BadRequestException('Account number must contain digits only');
+    }
+    if (accountNumber.length < 9 || accountNumber.length > 18) {
+      throw new BadRequestException('Account number must be between 9 and 18 digits');
+    }
+    if (accountNumber.startsWith('0')) {
+      throw new BadRequestException('Account number must not start with 0');
+    }
+    if (new Set(accountNumber).size === 1) {
+      throw new BadRequestException('Account number cannot consist of identical digits');
+    }
+    if (isSequential(accountNumber)) {
+      throw new BadRequestException('Account number cannot be a sequential sequence');
+    }
+    if (isRepeatedPattern(accountNumber)) {
+      throw new BadRequestException('Account number cannot contain repeated patterns');
+    }
+
+    // Validate Confirm Account Number
+    if (accountNumber !== confirmAccountNumber) {
+      throw new BadRequestException('Confirm account number must exactly match account number');
+    }
+
+    // Validate IFSC Code
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) {
+      throw new BadRequestException('IFSC code must match the valid RBI IFSC format (e.g. HDFC0001234)');
+    }
+
+    // Validate Account Type
+    if (accountType !== AccountType.SAVINGS && accountType !== AccountType.CURRENT) {
+      throw new BadRequestException('Account type must be either SAVINGS or CURRENT');
+    }
+
     const ownerSettings = await this.getOrCreateOwnerSettings(authId);
     const ownerProfile = await this.prisma.ownerProfile.findUnique({
       where: { authId },
       select: { id: true },
     });
-    const legacyPayment = await this.prisma.payment.findUnique({
-      where: { authId },
-      select: { upiId: true, accountNumber: true },
-    });
-    const resolvedPayoutMethod =
-      dto.payoutMethod ?? ownerSettings.payoutMethod ?? PayoutMethod.UPI;
-    const resolvedUpiId =
-      dto.upiId ?? ownerSettings.upiId ?? legacyPayment?.upiId ?? '';
-    const resolvedBankAccount =
-      dto.bankAccount ??
-      ownerSettings.bankAccount ??
-      legacyPayment?.accountNumber;
-
-    if (resolvedPayoutMethod === PayoutMethod.UPI && !resolvedUpiId) {
-      throw new BadRequestException(
-        'upiId is required when payoutMethod is UPI',
-      );
-    }
-
-    if (resolvedPayoutMethod === PayoutMethod.BANK && !resolvedBankAccount) {
-      throw new BadRequestException(
-        'bankAccount is required when payoutMethod is BANK',
-      );
-    }
 
     const updatedOwnerSettings = await this.prisma.ownerSettings.update({
       where: { authId },
       data: {
-        ...(dto.upiId !== undefined && { upiId: dto.upiId }),
-        ...(dto.bankAccount !== undefined && { bankAccount: dto.bankAccount }),
-        ...(dto.payoutMethod !== undefined && {
-          payoutMethod: dto.payoutMethod,
-        }),
-        ...(dto.payoutFrequency !== undefined && {
-          payoutFrequency: dto.payoutFrequency,
-        }),
-        ...(dto.isActive !== undefined && { payoutActive: dto.isActive }),
+        bankHolderName,
+        bankName,
+        accountNumber,
+        ifscCode,
+        accountType,
       },
     });
 
     await this.prisma.payment.upsert({
       where: { authId },
       update: {
-        ...(dto.upiId !== undefined && { upiId: dto.upiId }),
-        ...(dto.bankAccount !== undefined && {
-          accountNumber: dto.bankAccount,
-        }),
-        ...(dto.payoutMethod !== undefined && {
-          payoutMethod: dto.payoutMethod,
-        }),
-        ...(dto.payoutFrequency !== undefined && {
-          payoutFrequency: dto.payoutFrequency,
-        }),
-        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+        bankHolderName,
+        bankName,
+        accountNumber,
+        ifscCode,
+        accountType,
       },
       create: {
         authId,
         role: Role.OWNER,
-        upiId: resolvedUpiId,
-        accountNumber: resolvedBankAccount,
-        payoutMethod: dto.payoutMethod ?? ownerSettings.payoutMethod,
-        payoutFrequency: dto.payoutFrequency ?? ownerSettings.payoutFrequency,
-        isActive: dto.isActive ?? ownerSettings.payoutActive,
+        bankHolderName,
+        bankName,
+        accountNumber,
+        ifscCode,
+        accountType,
         ownerProfileId: ownerProfile?.id,
       },
     });
@@ -266,11 +300,11 @@ export class OwnerSettingsService {
       success: true,
       message: 'Payment settings updated successfully',
       data: {
-        upiId: updatedOwnerSettings.upiId,
-        bankAccount: updatedOwnerSettings.bankAccount,
-        payoutMethod: updatedOwnerSettings.payoutMethod,
-        payoutFrequency: updatedOwnerSettings.payoutFrequency,
-        isActive: updatedOwnerSettings.payoutActive,
+        bankHolderName: updatedOwnerSettings.bankHolderName,
+        bankName: updatedOwnerSettings.bankName,
+        accountNumber: updatedOwnerSettings.accountNumber,
+        ifscCode: updatedOwnerSettings.ifscCode,
+        accountType: updatedOwnerSettings.accountType,
       },
     };
   }
