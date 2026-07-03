@@ -72,7 +72,7 @@ export class UploadController {
     @Req() req: any,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    this.rateLimiter.check(
+    await this.rateLimiter.check(
       `user:${req.user.authId}:upload-avatar`,
       RATE_LIMITS.UPLOAD_AVATAR,
     );

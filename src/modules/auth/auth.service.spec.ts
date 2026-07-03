@@ -15,6 +15,7 @@ import * as bcrypt from 'bcrypt';
 
 import { CacheService } from '../../common/services/cache.service';
 import { MetricsService } from '../../common/metrics/metrics.service';
+import axios from 'axios';
 
 jest.mock('axios');
 jest.mock('bcrypt');
@@ -73,6 +74,15 @@ describe('AuthService', () => {
   let service: AuthService;
 
   beforeEach(async () => {
+    mockCache.get.mockReset();
+    mockCache.set.mockReset();
+    mockCache.invalidate.mockReset();
+
+    mockCache.get.mockResolvedValue(undefined);
+    mockCache.set.mockResolvedValue(undefined);
+    mockCache.invalidate.mockResolvedValue(undefined);
+
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
     mockJwt.sign.mockReturnValue('mocked.jwt.token');
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -91,7 +101,7 @@ describe('AuthService', () => {
   afterEach(() => jest.clearAllMocks());
 
   describe('login()', () => {
-    it('should create OTP entry and return success payload', async () => {
+    it('should create OTP entry in cache and return success payload', async () => {
       mockPrisma.auth.findUnique.mockResolvedValue(null);
       mockPrisma.auth.create.mockResolvedValue({
         id: 'auth-1',
@@ -99,9 +109,8 @@ describe('AuthService', () => {
         isActive: true,
         role: Role.USER,
       });
-      mockPrisma.otpEntry.deleteMany.mockResolvedValue({ count: 0 });
+      mockCache.set.mockResolvedValue(undefined);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');
-      mockPrisma.otpEntry.create.mockResolvedValue({ id: 'otp-1' });
 
       const result = await service.login(
         { phone: '9876543210' },
@@ -113,7 +122,7 @@ describe('AuthService', () => {
       expect(result.success).toBe(true);
       expect(result.expiresIn).toBe(60);
       expect(mockPrisma.auth.create).toHaveBeenCalled();
-      expect(mockPrisma.otpEntry.create).toHaveBeenCalled();
+      expect(mockCache.set).toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException if account is deactivated', async () => {
@@ -130,15 +139,6 @@ describe('AuthService', () => {
   });
 
   describe('verifyOtp()', () => {
-    const mockOtpEntry = {
-      id: 'otp-1',
-      authId: 'auth-1',
-      code: 'hashed',
-      expiresAt: new Date(Date.now() + 60000),
-      verifiedAt: null,
-      auth: { id: 'auth-1', role: Role.USER, phone: '9876543210' },
-    };
-
     it('should verify OTP, select role, and return JWT', async () => {
       mockPrisma.auth.findUnique.mockResolvedValueOnce({
         id: 'auth-1',
@@ -146,9 +146,14 @@ describe('AuthService', () => {
         userProfile: null,
         ownerProfile: null,
       });
-      mockPrisma.otpEntry.findFirst.mockResolvedValue(mockOtpEntry);
+      mockCache.get.mockResolvedValueOnce({
+        code: 'hashed',
+        attempts: 0,
+        sessionToken: 'token',
+      });
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockPrisma.otpEntry.update.mockResolvedValue({});
+      mockCache.invalidate.mockResolvedValue(undefined);
+      mockCache.set.mockResolvedValue(undefined);
       mockPrisma.session.create.mockResolvedValue({ id: 'session-1' });
       mockPrisma.auth.update.mockResolvedValue({});
 
@@ -170,34 +175,16 @@ describe('AuthService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw ConflictException if OTP already used', async () => {
+    it('should throw NotFoundException if OTP not found in cache', async () => {
       mockPrisma.auth.findUnique.mockResolvedValue({
         id: 'auth-1',
         phone: '9876543210',
       });
-      mockPrisma.otpEntry.findFirst.mockResolvedValue({
-        ...mockOtpEntry,
-        verifiedAt: new Date(),
-      });
+      mockCache.get.mockResolvedValueOnce(null);
 
       await expect(
         service.verifyOtp({ phone: '9876543210', otp: '123456' }, Role.USER),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('should throw BadRequestException if OTP expired', async () => {
-      mockPrisma.auth.findUnique.mockResolvedValue({
-        id: 'auth-1',
-        phone: '9876543210',
-      });
-      mockPrisma.otpEntry.findFirst.mockResolvedValue({
-        ...mockOtpEntry,
-        expiresAt: new Date(Date.now() - 1000),
-      });
-
-      await expect(
-        service.verifyOtp({ phone: '9876543210', otp: '123456' }, Role.USER),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw UnauthorizedException if OTP invalid', async () => {
@@ -205,8 +192,13 @@ describe('AuthService', () => {
         id: 'auth-1',
         phone: '9876543210',
       });
-      mockPrisma.otpEntry.findFirst.mockResolvedValue(mockOtpEntry);
+      mockCache.get.mockResolvedValueOnce({
+        code: 'hashed',
+        attempts: 0,
+        sessionToken: 'token',
+      });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      mockCache.set.mockResolvedValue(undefined);
 
       await expect(
         service.verifyOtp({ phone: '9876543210', otp: '999999' }, Role.USER),
@@ -220,15 +212,18 @@ describe('AuthService', () => {
         id: 'auth-1',
         phone: '9876543210',
       });
-      mockPrisma.otpEntry.findFirst.mockResolvedValue({
-        id: 'otp-1',
-        authId: 'auth-1',
-        verifiedAt: null,
-        lastResentAt: null,
-        auth: { phone: '9876543210' },
+      mockCache.get.mockImplementation(async (key: string) => {
+        if (key.startsWith('otp_rate_limit:')) return 0;
+        return {
+          code: 'hashed',
+          attempts: 0,
+          sessionToken: 'token',
+          lastResentAt: Date.now() - 70000,
+          resendCount: 0,
+        };
       });
       (bcrypt.hash as jest.Mock).mockResolvedValue('new-hashed');
-      mockPrisma.otpEntry.update.mockResolvedValue({});
+      mockCache.set.mockResolvedValue(undefined);
 
       const result = await service.resendOtp({ phone: '9876543210' });
       expect(result.success).toBe(true);
@@ -239,11 +234,15 @@ describe('AuthService', () => {
         id: 'auth-1',
         phone: '9876543210',
       });
-      mockPrisma.otpEntry.findFirst.mockResolvedValue({
-        id: 'otp-1',
-        verifiedAt: null,
-        lastResentAt: new Date(Date.now() - 10000),
-        auth: { phone: '9876543210' },
+      mockCache.get.mockImplementation(async (key: string) => {
+        if (key.startsWith('otp_rate_limit:')) return 0;
+        return {
+          code: 'hashed',
+          attempts: 0,
+          sessionToken: 'token',
+          lastResentAt: Date.now() - 10000,
+          resendCount: 0,
+        };
       });
 
       await expect(service.resendOtp({ phone: '9876543210' })).rejects.toThrow(
@@ -279,10 +278,8 @@ describe('AuthService', () => {
   describe('deleteAccount()', () => {
     it('should hard delete account and related slot locks', async () => {
       mockPrisma.auth.findUnique.mockResolvedValue({ id: 'auth-1' });
-      mockPrisma.otpEntry.findFirst.mockResolvedValue({
-        id: 'otp-1',
-        verifiedAt: new Date(),
-      });
+      mockCache.get.mockResolvedValueOnce('token');
+      mockCache.invalidate.mockResolvedValue(undefined);
       mockPrisma.ownerProfile.findUnique.mockResolvedValue({ id: 'owner-1' });
       mockPrisma.turf.findMany.mockResolvedValue([{ id: 'turf-1' }]);
       mockPrisma.slotLock.deleteMany.mockResolvedValue({ count: 1 });

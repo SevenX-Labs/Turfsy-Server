@@ -120,7 +120,7 @@ export class MetricsService {
   });
 
   // ═══════════════════════════════════════════════════════
-  // CACHE METRICS (In-Memory LRU)
+  // CACHE METRICS (In-Memory LRU & Redis)
   // ═══════════════════════════════════════════════════════
 
   readonly cacheHitTotal = new Counter({
@@ -131,6 +131,16 @@ export class MetricsService {
   readonly cacheMissTotal = new Counter({
     name: 'cache_miss_total',
     help: 'Total LRU cache misses',
+  });
+
+  readonly redisCacheHitsTotal = new Counter({
+    name: 'redis_cache_hits_total',
+    help: 'Total Redis cache hits',
+  });
+
+  readonly redisCacheMissesTotal = new Counter({
+    name: 'redis_cache_misses_total',
+    help: 'Total Redis cache misses',
   });
 
   // ═══════════════════════════════════════════════════════
@@ -150,6 +160,11 @@ export class MetricsService {
   readonly redisLockTotal = new Counter({
     name: 'redis_lock_total',
     help: 'Total Redis distributed lock acquisitions',
+  });
+
+  readonly redisLocksAcquiredTotal = new Counter({
+    name: 'redis_locks_acquired_total',
+    help: 'Total Redis locks successfully acquired',
   });
 
   // ═══════════════════════════════════════════════════════

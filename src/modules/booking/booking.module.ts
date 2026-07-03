@@ -15,6 +15,6 @@ import { NotificationsModule } from '../../common/notifications/notifications.mo
   imports: [PrismaModule, AuthModule, ConfigModule, UserGamificationModule, EmailModule, NotificationsModule],
   controllers: [BookingController],
   providers: [BookingService, PaymentLoggerService, RateLimiterService],
-  exports: [BookingService],
+  exports: [BookingService, PaymentLoggerService],
 })
 export class BookingModule {}

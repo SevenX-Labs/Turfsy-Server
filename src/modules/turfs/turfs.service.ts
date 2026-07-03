@@ -104,8 +104,8 @@ export class TurfsService {
     });
 
     // Invalidate turf list caches
-    this.cache.invalidate('turfs:all');
-    this.cache.invalidate('home:activeTurfs');
+    await this.cache.invalidate('turfs:all');
+    await this.cache.invalidate('home:activeTurfs');
 
     return {
       success: true,
@@ -248,9 +248,9 @@ export class TurfsService {
     });
 
     // Invalidate turf caches
-    this.cache.invalidate(`turf:${turfId}`);
-    this.cache.invalidate('turfs:all');
-    this.cache.invalidate('home:activeTurfs');
+    await this.cache.invalidate(`turf:${turfId}`);
+    await this.cache.invalidate('turfs:all');
+    await this.cache.invalidate('home:activeTurfs');
 
     return {
       success: true,
@@ -278,9 +278,9 @@ export class TurfsService {
     });
 
     // Invalidate turf caches
-    this.cache.invalidate(`turf:${turfId}`);
-    this.cache.invalidate('turfs:all');
-    this.cache.invalidate('home:activeTurfs');
+    await this.cache.invalidate(`turf:${turfId}`);
+    await this.cache.invalidate('turfs:all');
+    await this.cache.invalidate('home:activeTurfs');
 
     return {
       success: true,
@@ -625,9 +625,9 @@ export class TurfsService {
     });
 
     // Invalidate turf caches
-    this.cache.invalidate(`turf:${turfId}`);
-    this.cache.invalidate('turfs:all');
-    this.cache.invalidate('home:activeTurfs');
+    await this.cache.invalidate(`turf:${turfId}`);
+    await this.cache.invalidate('turfs:all');
+    await this.cache.invalidate('home:activeTurfs');
 
     return {
       success: true,

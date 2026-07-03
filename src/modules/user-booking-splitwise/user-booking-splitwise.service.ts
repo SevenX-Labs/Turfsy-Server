@@ -189,7 +189,7 @@ export class UserBookingSplitwiseService {
   }
 
   async addPlayers(authId: string, bookingId: string, dto: AddPlayersDto, ip: string) {
-    this.rateLimiter.check(`user:${authId}:split:addPlayers`, { limit: 15, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:addPlayers`, { limit: 15, windowMs: 60000 });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
     const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
@@ -261,7 +261,7 @@ export class UserBookingSplitwiseService {
       }
     }
 
-    this.cache.invalidate(`split:${bookingId}`);
+    await this.cache.invalidate(`split:${bookingId}`);
 
     this.paymentLogger.log({
       userId: authId,
@@ -291,7 +291,7 @@ export class UserBookingSplitwiseService {
     }
 
     const bookingId = player.split.bookingId;
-    this.rateLimiter.check(`user:${authId}:split:removePlayer`, { limit: 15, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:removePlayer`, { limit: 15, windowMs: 60000 });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
     const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
@@ -306,7 +306,7 @@ export class UserBookingSplitwiseService {
 
     await this.recalculatePendingPlayers(split.id);
 
-    this.cache.invalidate(`split:${bookingId}`);
+    await this.cache.invalidate(`split:${bookingId}`);
 
     this.paymentLogger.log({
       userId: authId,
@@ -326,7 +326,7 @@ export class UserBookingSplitwiseService {
   }
 
   async triggerSplit(authId: string, bookingId: string, ip: string) {
-    this.rateLimiter.check(`user:${authId}:split:trigger`, { limit: 5, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:trigger`, { limit: 5, windowMs: 60000 });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
     let split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
@@ -365,7 +365,7 @@ export class UserBookingSplitwiseService {
       });
     }
 
-    this.cache.invalidate(`split:${bookingId}`);
+    await this.cache.invalidate(`split:${bookingId}`);
 
     this.paymentLogger.log({
       userId: authId,
@@ -385,7 +385,7 @@ export class UserBookingSplitwiseService {
   }
 
   async setCustomAmounts(authId: string, bookingId: string, dto: SetAmountsDto, ip: string) {
-    this.rateLimiter.check(`user:${authId}:split:setCustom`, { limit: 15, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:setCustom`, { limit: 15, windowMs: 60000 });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
     const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
@@ -417,7 +417,7 @@ export class UserBookingSplitwiseService {
       )
     );
 
-    this.cache.invalidate(`split:${bookingId}`);
+    await this.cache.invalidate(`split:${bookingId}`);
 
     return {
       success: true,
@@ -442,7 +442,7 @@ export class UserBookingSplitwiseService {
     }
 
     const bookingId = player.split.bookingId;
-    this.rateLimiter.check(`user:${authId}:split:updateStatus`, { limit: 15, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:updateStatus`, { limit: 15, windowMs: 60000 });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
     const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
@@ -464,7 +464,7 @@ export class UserBookingSplitwiseService {
       await this.recalculatePendingPlayers(split.id);
     }
 
-    this.cache.invalidate(`split:${bookingId}`);
+    await this.cache.invalidate(`split:${bookingId}`);
 
     this.paymentLogger.log({
       userId: authId,
@@ -484,7 +484,7 @@ export class UserBookingSplitwiseService {
   }
 
   async getSplitDetails(authId: string, bookingId: string) {
-    this.rateLimiter.check(`user:${authId}:split:get`, { limit: 60, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:get`, { limit: 60, windowMs: 60000 });
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
 
     return this.cache.getOrSet(

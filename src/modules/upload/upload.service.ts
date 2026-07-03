@@ -185,8 +185,8 @@ export class UploadService {
       });
 
       // Invalidate caches
-      this.cache.invalidate(`profile:${authId}`);
-      this.cache.invalidate(`auth:getMe:${authId}`);
+      await this.cache.invalidate(`profile:${authId}`);
+      await this.cache.invalidate(`auth:getMe:${authId}`);
 
       return { success: true, avatarUrl };
     } finally {
@@ -215,8 +215,8 @@ export class UploadService {
     });
 
     // Invalidate caches
-    this.cache.invalidate(`profile:${authId}`);
-    this.cache.invalidate(`auth:getMe:${authId}`);
+    await this.cache.invalidate(`profile:${authId}`);
+    await this.cache.invalidate(`auth:getMe:${authId}`);
 
     return { success: true, message: 'Profile image deleted successfully' };
   }
@@ -311,9 +311,9 @@ export class UploadService {
       });
 
       // 8. Invalidate cache
-      this.cache.invalidate(`turf:${turfId}`);
-      this.cache.invalidate('turfs:all');
-      this.cache.invalidate('home:activeTurfs');
+      await this.cache.invalidate(`turf:${turfId}`);
+      await this.cache.invalidate('turfs:all');
+      await this.cache.invalidate('home:activeTurfs');
 
       return { success: true, imageUrl, type: imageType };
     } finally {
@@ -375,9 +375,9 @@ export class UploadService {
     });
 
     // 4. Invalidate cache
-    this.cache.invalidate(`turf:${turfId}`);
-    this.cache.invalidate('turfs:all');
-    this.cache.invalidate('home:activeTurfs');
+    await this.cache.invalidate(`turf:${turfId}`);
+    await this.cache.invalidate('turfs:all');
+    await this.cache.invalidate('home:activeTurfs');
 
     return {
       success: true,
@@ -470,9 +470,9 @@ export class UploadService {
       });
 
       // Invalidate cache
-      this.cache.invalidate(`turf:${turfId}`);
-      this.cache.invalidate('turfs:all');
-      this.cache.invalidate('home:activeTurfs');
+      await this.cache.invalidate(`turf:${turfId}`);
+      await this.cache.invalidate('turfs:all');
+      await this.cache.invalidate('home:activeTurfs');
 
       return { success: true, videoUrl };
     } catch (err: any) {

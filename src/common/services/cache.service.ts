@@ -1,65 +1,52 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { LRUCache } from 'lru-cache';
+import { RedisService } from '../redis/redis.service';
 import { MetricsService } from '../metrics/metrics.service';
+import { CACHE_TTL } from '../redis/redis.constants';
 
 /**
- * In-memory LRU cache service for frequently accessed data.
- * Reduces DB load for hot paths like user profiles, turf details, etc.
+ * Production-ready Cache Service wrapping Redis.
  *
- * Cache keys follow convention: `${entity}:${id}`
- * TTL is per-entry configurable, defaults to 5 minutes.
+ * Uses RedisService for key/value cache storage.
+ * Maintains exact same API signatures, now returns Promises.
  */
 @Injectable()
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
-
-  constructor(private readonly metrics: MetricsService) {}
-
-  private readonly cache = new LRUCache<string, any>({
-    max: 2000,                // Max 2000 entries
-    ttl: 1000 * 60 * 5,       // Default 5-minute TTL
-    allowStale: false,
-    updateAgeOnGet: true,     // Reset TTL on read (sliding window)
-  });
-
   private readonly promiseMap = new Map<string, Promise<any>>();
+
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly metrics: MetricsService,
+  ) {}
 
   /**
    * Get a cached value by key.
-   * Returns undefined if not found or expired.
    */
-  get<T>(key: string): T | undefined {
-    return this.cache.get(key) as T | undefined;
+  async get<T>(key: string): Promise<T | undefined> {
+    const val = await this.redisService.get<T>(key);
+    return val === null ? undefined : val;
   }
 
   /**
    * Set a cached value with optional custom TTL (in ms).
    */
-  set<T>(key: string, value: T, ttlMs?: number): void {
-    if (ttlMs) {
-      this.cache.set(key, value, { ttl: ttlMs });
-    } else {
-      this.cache.set(key, value);
-    }
+  async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+    const ttl = ttlMs !== undefined ? ttlMs : CACHE_TTL.DEFAULT;
+    await this.redisService.set(key, value, ttl);
   }
 
   /**
    * Invalidate a specific cache key.
    */
-  invalidate(key: string): void {
-    this.cache.delete(key);
+  async invalidate(key: string): Promise<void> {
+    await this.redisService.del(key);
   }
 
   /**
    * Invalidate all keys matching a prefix.
-   * Example: invalidatePrefix('user-profile:') clears all user profile caches.
    */
-  invalidatePrefix(prefix: string): void {
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) {
-        this.cache.delete(key);
-      }
-    }
+  async invalidatePrefix(prefix: string): Promise<void> {
+    await this.redisService.invalidatePrefix(prefix);
   }
 
   /**
@@ -71,7 +58,7 @@ export class CacheService {
     factory: () => Promise<T>,
     ttlMs?: number,
   ): Promise<T> {
-    const cached = this.get<T>(key);
+    const cached = await this.get<T>(key);
     if (cached !== undefined) {
       this.metrics.cacheHitTotal.inc();
       return cached;
@@ -83,14 +70,16 @@ export class CacheService {
       return this.promiseMap.get(key);
     }
 
-    const promise = factory().then((value) => {
-      this.set(key, value, ttlMs);
-      this.promiseMap.delete(key);
-      return value;
-    }).catch((err) => {
-      this.promiseMap.delete(key);
-      throw err;
-    });
+    const promise = factory()
+      .then(async (value) => {
+        await this.set(key, value, ttlMs);
+        this.promiseMap.delete(key);
+        return value;
+      })
+      .catch((err) => {
+        this.promiseMap.delete(key);
+        throw err;
+      });
 
     this.promiseMap.set(key, promise);
     return promise;
@@ -99,10 +88,12 @@ export class CacheService {
   /**
    * Get cache statistics for monitoring.
    */
-  getStats() {
+  async getStats() {
+    const info = await this.redisService.getHealthInfo();
     return {
-      size: this.cache.size,
-      maxSize: this.cache.max,
+      size: info.dbSize,
+      maxSize: 'unlimited',
+      connected: info.connected,
     };
   }
 }

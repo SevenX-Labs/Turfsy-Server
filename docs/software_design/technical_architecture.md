@@ -28,8 +28,9 @@ flowchart TD
         NestJSApp["NestJS Application Instances (PM2 / Docker)"]
     end
 
-    subgraph CacheStore["Caching & Session Store"]
-        RedisDB["Redis Server (Session, Rate Limits, Slot Locks)"]
+    subgraph CacheStore["Caching, Broker & Queue Layer"]
+        RedisDB["Redis Server (Session, Rate Limits, Slot Locks, OTPs)"]
+        BullMQ["BullMQ Job Queues (booking, payment-retry, email, notification, cleanup, booking-expiry)"]
     end
 
     subgraph DatabaseStorage["Data & Storage Layer"]
@@ -53,7 +54,9 @@ flowchart TD
 
     %% Backend Dependencies
     NestJSApp -->|Prisma Query| PostgresDB
-    NestJSApp -->|Fast Key-Value Lookups| RedisDB
+    NestJSApp -->|Fast Key-Value Lookups & Broker| RedisDB
+    NestJSApp -->|Enqueue / Process Jobs| BullMQ
+    BullMQ <-->|Redis Protocol| RedisDB
     NestJSApp -->|Presigned URLs / S3 API| SupabaseStore
     
     %% External Integrations
@@ -62,9 +65,18 @@ flowchart TD
     AndroidApp & NestJSApp -->|Geocoding / Distance calculations| GmapsAPI
 ```
 
-### Additional Technology Recommendation (Critical for Production Uptime)
-*   **Redis**: Recommended for inclusion alongside the PostgreSQL database.
-    *   **Why it is necessary**: Real-time slot locking requires sub-millisecond query execution. If database transaction table-locks are used for every slot selection under load, database thread-locks will occur. Redis serves as an in-memory database that handles 5-minute Slot Locks, IP rate-limiting, and temporary OTP sessions without adding read/write strain to the PostgreSQL instance.
+### Redis & Asynchronous Queue Architecture (BullMQ)
+*   **Redis**: Serves as our fast in-memory key-value database, acting as:
+    *   **OTP & Verification Storage**: Holds temporary OTP codes (e.g. `otp:{userId/phone}:{purpose}`) and attempt counters with automatic TTL expiration.
+    *   **Distributed Rate Limiting**: Tracks API request rates to protect authentication, booking, and payment endpoints.
+    *   **Distributed Slot Locking**: Manages real-time booking locks to prevent race conditions during slot checkout.
+    *   **Job Broker**: Backs the BullMQ message queue infrastructure.
+*   **BullMQ (Distributed Queues)**: Decouples long-running or unreliable operations from the API request-response loop:
+    *   `email`: Asynchronously dispatches transaction emails (booking confirmations, cancellations, payment pending notices, no-show notices).
+    *   `payment-retry`: Fault-tolerant payment webhook reconciliation that handles transient gateway issues with exponential backoff (5 retries) and dead-letter alerting.
+    *   `booking-expiry`: Automatically expires pending bookings and releases slot locks after a 5-minute checkout window.
+    *   `notification`: Processes push notification alerts asynchronously.
+    *   `cleanup`: Periodic cron-like cleanup jobs (e.g. session pruning).
 
 ---
 
@@ -81,9 +93,11 @@ src/
 │   ├── filters/            # Global Exception Filters (SecurityExceptionFilter)
 │   ├── guards/             # JwtAuthGuard, RolesGuard
 │   ├── interceptors/       # ResponseSanitizerInterceptor
-│   └── services/           # RateLimiterService, PaymentLoggerService
+│   ├── services/           # RateLimiterService, PaymentLoggerService
+│   ├── redis/              # Redis client configurations, slot locking, caching logic
+│   └── bullmq/             # BullMQ queues & background workers (booking, email, payment-retry, expiry)
 ├── modules/
-│   ├── auth/               # OTP login, session validation, JWT rotation
+│   ├── auth/               # OTP login, session validation, JWT rotation (fully Redis backed)
 │   ├── booking/            # Reservation logic, slot-locks, transactional payments
 │   ├── owner-analytics/    # Owner KPI aggregations & exports
 │   ├── owner-home/         # Owner main calendar feeds & stats
@@ -233,10 +247,12 @@ sequenceDiagram
 
 ---
 
-### B. Background Crons & Event-Driven Tasks
+### B. Background Crons & Event-Driven Tasks (Asynchronous Queue Architecture)
 *   **No-Show Cron**: Runs every 15 minutes. It queries `CONFIRMED` bookings where the start time was more than 15 minutes ago, check-in validation was not completed, and payment was cash or half-cash. The status is updated to `NO_SHOW`.
 *   **Auto-Complete Cron**: Runs every 30 minutes. It queries fully online bookings and marks them as `COMPLETED` 2 hours after their scheduled end times.
-*   **Redis Expire Webhooks**: Listens for expired slot locks to trigger cleanup operations in the database if necessary.
+*   **Booking Expiry Queue**: Replaces database polling for checkout windows. When a booking is created in `PENDING` state, a delayed job is added to the `booking-expiry` queue with a 5-minute timeout. When processed, if the booking remains unpaid, the system marks the booking as cancelled/expired in the database and releases all slot locks.
+*   **Payment Retry Queue**: Offloads transient payment webhook failures. If a payment signature check passes but DB updates or order verifications fail, a retry job with 5-attempt exponential backoff is scheduled. Dead-lettered jobs alert the `PaymentLoggerService` for manual admin resolution.
+*   **Email Queue**: Handles transaction email generation asynchronously to prevent API latency during checkout.
 
 ---
 

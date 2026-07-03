@@ -25,6 +25,8 @@ import { UserSettingsModule } from './modules/user-settings/user-settings.module
 import { UserBookingSplitwiseModule } from './modules/user-booking-splitwise/user-booking-splitwise.module';
 import { NotificationsModule } from './common/notifications/notifications.module';
 import { EmailModule } from './common/email/email.module';
+import { RedisModule } from './common/redis/redis.module';
+import { BullMqModule } from './common/bullmq/bullmq.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
@@ -98,6 +100,8 @@ import { SentryModule } from '@sentry/nestjs/setup';
     UserBookingSplitwiseModule,
     NotificationsModule,
     EmailModule,
+    RedisModule,
+    BullMqModule,
   ],
   controllers: [AppController],
   providers: [

@@ -114,8 +114,8 @@ export class UserProfileService {
     });
 
     // Invalidate profile cache after create/update
-    this.cache.invalidate(`profile:${authId}`);
-    this.cache.invalidate(`auth:getMe:${authId}`);
+    await this.cache.invalidate(`profile:${authId}`);
+    await this.cache.invalidate(`auth:getMe:${authId}`);
 
     return { success: true, message: 'Profile created', data: profile };
   }
@@ -156,8 +156,8 @@ export class UserProfileService {
     });
 
     // Invalidate caches on address update
-    this.cache.invalidate(`profile:${authId}`);
-    this.cache.invalidate(`auth:getMe:${authId}`);
+    await this.cache.invalidate(`profile:${authId}`);
+    await this.cache.invalidate(`auth:getMe:${authId}`);
 
     return {
       success: true,
@@ -203,8 +203,8 @@ export class UserProfileService {
     });
 
     // Invalidate caches on profile update
-    this.cache.invalidate(`profile:${authId}`);
-    this.cache.invalidate(`auth:getMe:${authId}`);
+    await this.cache.invalidate(`profile:${authId}`);
+    await this.cache.invalidate(`auth:getMe:${authId}`);
 
     return { success: true, message: 'Profile updated', data: updated };
   }

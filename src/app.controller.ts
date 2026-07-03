@@ -3,6 +3,7 @@ import * as express from 'express';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
 import { MetricsService } from './common/metrics/metrics.service';
+import { RedisService } from './common/redis/redis.service';
 import * as os from 'os';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -13,6 +14,7 @@ export class AppController {
     private readonly appService: AppService,
     private readonly prisma: PrismaService,
     private readonly metrics: MetricsService,
+    private readonly redisService: RedisService,
   ) {}
 
   @Get()
@@ -41,25 +43,17 @@ export class AppController {
     // 2. Check Redis connection (critical)
     let redisStatus: 'healthy' | 'unhealthy' = 'healthy';
     let redisMessage = 'Connected successfully';
-    if (process.env.REDIS_URL) {
-      const { createClient } = require('redis');
-      const client = createClient({
-        url: process.env.REDIS_URL,
-        socket: {
-          connectTimeout: 2000,
-        },
-      });
-      try {
-        await client.connect();
-        await client.ping();
-        await client.disconnect();
-      } catch (err: any) {
+    try {
+      const redisHealth = await this.redisService.getHealthInfo();
+      if (!redisHealth.connected) {
         redisStatus = 'unhealthy';
-        redisMessage = err.message || String(err);
+        redisMessage = 'Redis connection is down';
+      } else {
+        redisMessage = `Connected (Latency: ${redisHealth.latencyMs}ms, Size: ${redisHealth.dbSize})`;
       }
-    } else {
+    } catch (err: any) {
       redisStatus = 'unhealthy';
-      redisMessage = 'REDIS_URL is not configured';
+      redisMessage = err.message || String(err);
     }
 
     // 3. Overall status verification

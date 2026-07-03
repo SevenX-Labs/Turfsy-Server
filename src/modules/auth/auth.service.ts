@@ -20,12 +20,7 @@ import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import axios from 'axios';
-import { LRUCache } from 'lru-cache';
-
-const otpRateLimitCache = new LRUCache<string, number>({
-  max: 5000,
-  ttl: 1000 * 60 * 60, // 1 hour window
-});
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -108,7 +103,8 @@ export class AuthService {
     const { phone } = dto;
 
     // ── Layer 1: Phone-based OTP Rate Limiting ──
-    const attempts = otpRateLimitCache.get(phone) || 0;
+    const cacheKeyOtp = `otp_rate_limit:${phone}`;
+    const attempts = (await this.cacheService.get<number>(cacheKeyOtp)) || 0;
     if (attempts >= 5) {
       throw new HttpException(
         {
@@ -119,7 +115,7 @@ export class AuthService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    otpRateLimitCache.set(phone, attempts + 1);
+    await this.cacheService.set(cacheKeyOtp, attempts + 1, 1000 * 60 * 60);
 
     let auth = await this.prisma.auth.findUnique({ where: { phone } });
     if (!auth) {
@@ -139,18 +135,18 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
-    // Invalidate all previous unverified OTPs
-    await this.prisma.otpEntry.deleteMany({
-      where: { authId: auth.id, verifiedAt: null },
-    });
-
     const otp = this.generateOtp();
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
+    const sessionToken = crypto.randomUUID();
 
-    await this.prisma.otpEntry.create({
-      data: { authId: auth.id, code: hashedOtp, expiresAt },
-    });
+    await this.cacheService.set(`otp:${phone}:login`, {
+      code: hashedOtp,
+      attempts: 0,
+      sessionToken,
+      lastResentAt: Date.now(),
+      resendCount: 0,
+    }, this.OTP_EXPIRY_SECONDS * 1000);
 
     await this.sendOtpViaSms(phone, otp);
     this.logger.log({ event: 'otp_generated', phone, expiresAt, role });
@@ -183,35 +179,36 @@ export class AuthService {
       throw new NotFoundException('Account not found');
     }
 
-    const otpEntry = await this.prisma.otpEntry.findFirst({
-      where: { authId: auth.id, verifiedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
+    const otpPayload = await this.cacheService.get<{
+      code: string;
+      attempts: number;
+      sessionToken: string;
+    }>(`otp:${phone}:login`);
 
-    if (!otpEntry) {
+    if (!otpPayload) {
       throw new NotFoundException(
         'Invalid or expired OTP request. Please login again',
       );
     }
 
-    if (otpEntry.verifiedAt) {
-      throw new ConflictException('OTP already used');
-    }
+    otpPayload.attempts++;
 
-    if (new Date() > otpEntry.expiresAt) {
-      throw new BadRequestException('OTP expired. Please request a new one');
-    }
-
-    const isValid = await bcrypt.compare(otp, otpEntry.code);
+    const isValid = await bcrypt.compare(otp, otpPayload.code);
     if (!isValid) {
+      if (otpPayload.attempts >= 5) {
+        await this.cacheService.invalidate(`otp:${phone}:login`);
+        throw new UnauthorizedException('Too many failed attempts. Please login again');
+      } else {
+        await this.cacheService.set(`otp:${phone}:login`, otpPayload, this.OTP_EXPIRY_SECONDS * 1000);
+      }
       throw new UnauthorizedException('Invalid OTP');
     }
 
-    // Mark OTP as verified
-    await this.prisma.otpEntry.update({
-      where: { id: otpEntry.id },
-      data: { verifiedAt: new Date() },
-    });
+    // Clean up OTP on success
+    await this.cacheService.invalidate(`otp:${phone}:login`);
+
+    // Store verified session token in Redis for deleteAccount check
+    await this.cacheService.set(`otp:verified:${auth.id}`, otpPayload.sessionToken, 1000 * 60 * 60 * 24); // 24 hours
 
     this.logger.log({ event: 'otp_verified', phone, role });
     this.metrics.otpVerifiedTotal.inc({ role });
@@ -274,7 +271,8 @@ export class AuthService {
     }
 
     // ── Layer 1: Phone-based OTP Rate Limiting Bypass Check ──
-    const attempts = otpRateLimitCache.get(phone) || 0;
+    const cacheKeyOtp = `otp_rate_limit:${phone}`;
+    const attempts = (await this.cacheService.get<number>(cacheKeyOtp)) || 0;
     if (attempts >= 5) {
       throw new HttpException(
         {
@@ -285,49 +283,43 @@ export class AuthService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    otpRateLimitCache.set(phone, attempts + 1);
+    await this.cacheService.set(cacheKeyOtp, attempts + 1, 1000 * 60 * 60);
 
-    const otpEntry = await this.prisma.otpEntry.findFirst({
-      where: { authId: auth.id, verifiedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
+    const otpPayload = await this.cacheService.get<{
+      code: string;
+      attempts: number;
+      sessionToken: string;
+      lastResentAt: number;
+      resendCount: number;
+    }>(`otp:${phone}:login`);
 
-    if (!otpEntry) {
+    if (!otpPayload) {
       throw new NotFoundException('Invalid OTP request');
     }
 
-    if (otpEntry.verifiedAt) {
-      throw new ConflictException('OTP already verified');
-    }
-
-    if (otpEntry.lastResentAt) {
-      const diff = (Date.now() - otpEntry.lastResentAt.getTime()) / 1000;
-      if (diff < this.RESEND_LIMIT_SECONDS) {
-        const waitSeconds = Math.ceil(this.RESEND_LIMIT_SECONDS - diff);
-        throw new HttpException(
-          {
-            success: false,
-            message: `Please wait ${waitSeconds}s before resending`,
-            retryAfter: waitSeconds,
-          },
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
+    const diff = (Date.now() - otpPayload.lastResentAt) / 1000;
+    if (diff < this.RESEND_LIMIT_SECONDS) {
+      const waitSeconds = Math.ceil(this.RESEND_LIMIT_SECONDS - diff);
+      throw new HttpException(
+        {
+          success: false,
+          message: `Please wait ${waitSeconds}s before resending`,
+          retryAfter: waitSeconds,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     const otp = this.generateOtp();
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
 
-    await this.prisma.otpEntry.update({
-      where: { id: otpEntry.id },
-      data: {
-        code: hashedOtp,
-        expiresAt,
-        lastResentAt: new Date(),
-        resendCount: { increment: 1 },
-      },
-    });
+    otpPayload.code = hashedOtp;
+    otpPayload.attempts = 0;
+    otpPayload.lastResentAt = Date.now();
+    otpPayload.resendCount++;
+
+    await this.cacheService.set(`otp:${phone}:login`, otpPayload, this.OTP_EXPIRY_SECONDS * 1000);
 
     await this.sendOtpViaSms(auth.phone, otp);
     this.logger.log({ event: 'otp_regenerated', phone: auth.phone, expiresAt, role: auth.role });
@@ -364,7 +356,7 @@ export class AuthService {
     this.metrics.activeUsersGauge.dec();
 
     // Invalidate cached user data on logout
-    this.cacheService.invalidate(`auth:getMe:${session.authId}`);
+    await this.cacheService.invalidate(`auth:getMe:${session.authId}`);
 
     return {
       success: true,
@@ -385,16 +377,15 @@ export class AuthService {
       throw new NotFoundException('Account not found');
     }
 
-    const otpEntry = await this.prisma.otpEntry.findFirst({
-      where: { authId, verifiedAt: { not: null } },
-      orderBy: { verifiedAt: 'desc' },
-    });
-
-    if (!otpEntry) {
+    const verifiedToken = await this.cacheService.get<string>(`otp:verified:${authId}`);
+    if (!verifiedToken || verifiedToken !== dto.sessionToken) {
       throw new UnauthorizedException(
         'Please verify OTP before deleting account',
       );
     }
+
+    // Invalidate the verified token from cache
+    await this.cacheService.invalidate(`otp:verified:${authId}`);
 
     // Hard-delete account from DB.
     // Most related records are removed via FK onDelete: Cascade from Auth.
@@ -444,7 +435,7 @@ export class AuthService {
 
   async getMe(authId: string) {
     const cacheKey = `auth:getMe:${authId}`;
-    const cached = this.cacheService.get<any>(cacheKey);
+    const cached = await this.cacheService.get<any>(cacheKey);
     if (cached) return cached;
 
     const auth = await this.prisma.auth.findUnique({
@@ -493,7 +484,7 @@ export class AuthService {
     };
 
     // Cache for 2 minutes
-    this.cacheService.set(cacheKey, result, 1000 * 60 * 2);
+    await this.cacheService.set(cacheKey, result, 1000 * 60 * 2);
     return result;
   }
 
@@ -519,7 +510,8 @@ export class AuthService {
     }
 
     // ── Layer 1: Phone-based OTP Rate Limiting Bypass Check ──
-    const attempts = otpRateLimitCache.get(newPhone) || 0;
+    const cacheKeyOtp = `otp_rate_limit:${newPhone}`;
+    const attempts = (await this.cacheService.get<number>(cacheKeyOtp)) || 0;
     if (attempts >= 5) {
       throw new HttpException(
         {
@@ -530,27 +522,28 @@ export class AuthService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    otpRateLimitCache.set(newPhone, attempts + 1);
-
-    // Invalidate any pending OTPs
-    await this.prisma.otpEntry.deleteMany({
-      where: { authId, verifiedAt: null },
-    });
+    await this.cacheService.set(cacheKeyOtp, attempts + 1, 1000 * 60 * 60);
 
     const otp = this.generateOtp();
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
+    const sessionToken = crypto.randomUUID();
 
-    const otpEntry = await this.prisma.otpEntry.create({
-      data: { authId, code: hashedOtp, expiresAt },
-    });
+    const otpPayload = {
+      code: hashedOtp,
+      attempts: 0,
+      sessionToken,
+      newPhone,
+    };
+
+    await this.cacheService.set(`otp:${authId}:phone-change`, otpPayload, this.OTP_EXPIRY_SECONDS * 1000);
 
     await this.sendOtpViaSms(newPhone, otp);
 
     return {
       success: true,
       message: `OTP sent to ${newPhone}`,
-      sessionToken: otpEntry.sessionToken,
+      sessionToken,
       newPhone,
       expiresIn: this.OTP_EXPIRY_SECONDS,
     };
@@ -570,19 +563,29 @@ export class AuthService {
     const auth = await this.prisma.auth.findUnique({ where: { id: authId } });
     if (!auth) throw new NotFoundException('Account not found');
 
-    const otpEntry = await this.prisma.otpEntry.findUnique({
-      where: { sessionToken },
-    });
+    const otpPayload = await this.cacheService.get<{
+      code: string;
+      attempts: number;
+      sessionToken: string;
+      newPhone: string;
+    }>(`otp:${authId}:phone-change`);
 
-    if (!otpEntry || otpEntry.authId !== authId) {
+    if (!otpPayload || otpPayload.sessionToken !== sessionToken) {
       throw new NotFoundException('Invalid session token');
     }
-    if (otpEntry.verifiedAt) throw new ConflictException('OTP already used');
-    if (new Date() > otpEntry.expiresAt)
-      throw new BadRequestException('OTP expired');
 
-    const isValid = await bcrypt.compare(otp, otpEntry.code);
-    if (!isValid) throw new UnauthorizedException('Invalid OTP');
+    otpPayload.attempts++;
+
+    const isValid = await bcrypt.compare(otp, otpPayload.code);
+    if (!isValid) {
+      if (otpPayload.attempts >= 5) {
+        await this.cacheService.invalidate(`otp:${authId}:phone-change`);
+        throw new UnauthorizedException('Too many failed attempts. Please request again');
+      } else {
+        await this.cacheService.set(`otp:${authId}:phone-change`, otpPayload, this.OTP_EXPIRY_SECONDS * 1000);
+      }
+      throw new UnauthorizedException('Invalid OTP');
+    }
 
     // Double-check new phone is still available
     const taken = await this.prisma.auth.findUnique({
@@ -594,17 +597,17 @@ export class AuthService {
       );
     }
 
-    // Mark OTP verified + update phone atomically
-    await this.prisma.$transaction([
-      this.prisma.otpEntry.update({
-        where: { id: otpEntry.id },
-        data: { verifiedAt: new Date() },
-      }),
-      this.prisma.auth.update({
-        where: { id: authId },
-        data: { phone: newPhone },
-      }),
-    ]);
+    // Clean up OTP on success
+    await this.cacheService.invalidate(`otp:${authId}:phone-change`);
+
+    // Store verified session token in Redis for deleteAccount check
+    await this.cacheService.set(`otp:verified:${authId}`, sessionToken, 1000 * 60 * 60 * 24); // 24 hours
+
+    // Update phone atomically
+    await this.prisma.auth.update({
+      where: { id: authId },
+      data: { phone: newPhone },
+    });
 
     return {
       success: true,

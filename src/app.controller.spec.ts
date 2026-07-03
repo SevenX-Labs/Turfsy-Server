@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
 import { MetricsService } from './common/metrics/metrics.service';
+import { RedisService } from './common/redis/redis.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -25,6 +26,17 @@ describe('AppController', () => {
             httpRequestTotal: {
               get: jest.fn().mockResolvedValue({ values: [] }),
             },
+          },
+        },
+        {
+          provide: RedisService,
+          useValue: {
+            getHealthInfo: jest.fn().mockResolvedValue({
+              connected: true,
+              latencyMs: 5,
+              dbSize: 10,
+              usedMemory: '5MB',
+            }),
           },
         },
       ],

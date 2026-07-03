@@ -1,9 +1,5 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-
-interface RateLimitEntry {
-  count: number;
-  resetAt: number; // Unix timestamp ms
-}
+import { RedisService } from '../redis/redis.service';
 
 interface RateLimitConfig {
   limit: number;
@@ -11,41 +7,36 @@ interface RateLimitConfig {
 }
 
 /**
- * In-memory sliding window rate limiter.
- * In production, replace with Redis-backed implementation.
- * Keys are formatted as: `${identifier}:${endpoint}`
+ * Production-ready Redis-backed sliding window rate limiter.
+ * Keys are formatted as: `rate_limit:${identifier}:${endpoint}`
  */
 @Injectable()
 export class RateLimiterService {
-  private store = new Map<string, RateLimitEntry>();
-
-  // Cleanup interval — remove expired entries every 60s
-  constructor() {
-    setInterval(() => this.cleanup(), 60_000);
-  }
+  constructor(private readonly redisService: RedisService) {}
 
   /**
    * Check rate limit. Throws 429 if exceeded.
    * @param key - unique identifier (userId:endpoint or ip:endpoint or bookingId:endpoint)
    * @param config - { limit, windowMs }
    */
-  check(key: string, config: RateLimitConfig): void {
-    const now = Date.now();
-    const entry = this.store.get(key);
+  async check(key: string, config: RateLimitConfig): Promise<void> {
+    const redisKey = `rate_limit:${key}`;
+    const count = await this.redisService.incrementRateLimit(redisKey, config.windowMs);
 
-    if (!entry || now > entry.resetAt) {
-      // Start new window
-      this.store.set(key, {
-        count: 1,
-        resetAt: now + config.windowMs,
-      });
-      return;
-    }
+    if (count > config.limit) {
+      // Get remaining TTL to compute Retry-After header
+      // Note: pTtl gets time in ms.
+      let retryAfterSeconds = Math.ceil(config.windowMs / 1000);
+      try {
+        // Access raw client to get precise TTL if needed
+        const ttlMs = await (this.redisService as any).client.pTtl(redisKey);
+        if (ttlMs > 0) {
+          retryAfterSeconds = Math.ceil(ttlMs / 1000);
+        }
+      } catch {
+        // Fallback to full window duration
+      }
 
-    entry.count++;
-
-    if (entry.count > config.limit) {
-      const retryAfterSeconds = Math.ceil((entry.resetAt - now) / 1000);
       throw new HttpException(
         {
           success: false,
@@ -60,19 +51,9 @@ export class RateLimiterService {
   /**
    * Get remaining attempts for a key (useful for PIN lockout tracking)
    */
-  getCount(key: string): number {
-    const entry = this.store.get(key);
-    if (!entry || Date.now() > entry.resetAt) return 0;
-    return entry.count;
-  }
-
-  private cleanup(): void {
-    const now = Date.now();
-    for (const [key, entry] of this.store.entries()) {
-      if (now > entry.resetAt) {
-        this.store.delete(key);
-      }
-    }
+  async getCount(key: string): Promise<number> {
+    const redisKey = `rate_limit:${key}`;
+    return this.redisService.getRateLimitCount(redisKey);
   }
 }
 

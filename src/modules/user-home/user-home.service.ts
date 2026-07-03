@@ -126,7 +126,7 @@ export class UserHomeService {
   ): Promise<UserHomeResponseDto> {
     try {
       if (options.refresh) {
-        this.cache.invalidate('home:activeTurfs');
+        await this.cache.invalidate('home:activeTurfs');
       }
       const location = await this.resolveLocation(options);
       // Fetch all active turfs once with aggregates
@@ -225,7 +225,7 @@ export class UserHomeService {
     options: UserHomeQueryOptions = {},
   ): Promise<UserHomeSectionResponseDto> {
     if (options.refresh) {
-      this.cache.invalidate('home:activeTurfs');
+      await this.cache.invalidate('home:activeTurfs');
     }
     const location = await this.resolveLocation(options);
     const allTurfs = await this.fetchAllActiveTurfs(options.refresh);
@@ -319,7 +319,7 @@ export class UserHomeService {
     // Cache active turfs for 3 minutes to reduce DB load on home page
     const cacheKey = 'home:activeTurfs';
     if (forceRefresh) {
-      this.cache.invalidate(cacheKey);
+      await this.cache.invalidate(cacheKey);
     }
 
     return this.cache.getOrSet(
