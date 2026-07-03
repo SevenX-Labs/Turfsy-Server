@@ -26,7 +26,10 @@ export class AppController {
   @Get('turfzy/health')
   @ApiOperation({ summary: 'Get system and database health diagnostics' })
   @ApiResponse({ status: 200, description: 'All services are healthy' })
-  @ApiResponse({ status: 503, description: 'One or more critical services are unhealthy' })
+  @ApiResponse({
+    status: 503,
+    description: 'One or more critical services are unhealthy',
+  })
   async checkHealth(@Res() res: express.Response) {
     const startTime = performance.now();
 
@@ -57,7 +60,8 @@ export class AppController {
     }
 
     // 3. Overall status verification
-    const isCriticalHealthy = dbStatus === 'healthy' && redisStatus === 'healthy';
+    const isCriticalHealthy =
+      dbStatus === 'healthy' && redisStatus === 'healthy';
     const overallStatus = isCriticalHealthy ? 'healthy' : 'unhealthy';
 
     // 4. Calculate process uptime
@@ -87,7 +91,10 @@ export class AppController {
     try {
       const metric = await this.metrics.httpRequestTotal.get();
       if (metric && metric.values) {
-        totalRequestsHandled = metric.values.reduce((sum, v) => sum + v.value, 0);
+        totalRequestsHandled = metric.values.reduce(
+          (sum, v) => sum + v.value,
+          0,
+        );
       }
     } catch {
       // Metric reading fallback
@@ -96,7 +103,8 @@ export class AppController {
     const poolStats = this.prisma.getPoolStats();
 
     // 7. Calculate response time
-    const responseTimeMs = Math.round((performance.now() - startTime) * 100) / 100;
+    const responseTimeMs =
+      Math.round((performance.now() - startTime) * 100) / 100;
 
     const healthResponse = {
       status: overallStatus,
@@ -144,7 +152,8 @@ export class AppController {
       },
       deployment: {
         buildVersion: '0.0.1',
-        commitSha: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown',
+        commitSha:
+          process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown',
         timestamp: new Date().toISOString(), // Fallback deployment timestamp
       },
       responseTimeMs,
@@ -155,5 +164,3 @@ export class AppController {
     return res.status(httpStatusCode).json(healthResponse);
   }
 }
-
-

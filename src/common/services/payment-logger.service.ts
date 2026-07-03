@@ -64,7 +64,10 @@ export class PaymentLoggerService {
     if (entry.result === 'SUCCESS') {
       this.logger.log({ message: 'Payment event successful', ...logData });
     } else {
-      this.logger.warn({ message: `Payment event ${entry.result}`, ...logData });
+      this.logger.warn({
+        message: `Payment event ${entry.result}`,
+        ...logData,
+      });
     }
   }
 

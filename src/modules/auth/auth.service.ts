@@ -7,6 +7,7 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +18,10 @@ import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { CreateMpinDto } from './dto/create-mpin.dto';
+import { VerifyMpinDto } from './dto/verify-mpin.dto';
+import { ChangeMpinDto } from './dto/change-mpin.dto';
+import { ResetMpinDto } from './dto/reset-mpin.dto';
 import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import axios from 'axios';
@@ -49,8 +54,13 @@ export class AuthService {
   }
 
   private async sendOtpViaSms(phone: string, otp: string): Promise<void> {
-    const displayOtp = process.env.NODE_ENV === 'production' ? '[REDACTED]' : otp;
-    this.logger.log({ message: `Sending OTP to ${phone}`, phone, otp: displayOtp });
+    const displayOtp =
+      process.env.NODE_ENV === 'production' ? '[REDACTED]' : otp;
+    this.logger.log({
+      message: `Sending OTP to ${phone}`,
+      phone,
+      otp: displayOtp,
+    });
     try {
       const response = await axios.post(
         'https://www.fast2sms.com/dev/bulkV2',
@@ -66,12 +76,15 @@ export class AuthService {
           },
         },
       );
-      this.logger.log({ message: 'Fast2SMS response received', response: response.data });
+      this.logger.log({
+        message: 'Fast2SMS response received',
+        response: response.data,
+      });
     } catch (err) {
       this.logger.error(
         `Fast2SMS OTP transmission error: ${err.message}`,
         err.stack,
-        { errorDetails: err?.response?.data || err.message }
+        { errorDetails: err?.response?.data || err.message },
       );
     }
   }
@@ -140,13 +153,17 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
     const sessionToken = crypto.randomUUID();
 
-    await this.cacheService.set(`otp:${phone}:login`, {
-      code: hashedOtp,
-      attempts: 0,
-      sessionToken,
-      lastResentAt: Date.now(),
-      resendCount: 0,
-    }, this.OTP_EXPIRY_SECONDS * 1000);
+    await this.cacheService.set(
+      `otp:${phone}:login`,
+      {
+        code: hashedOtp,
+        attempts: 0,
+        sessionToken,
+        lastResentAt: Date.now(),
+        resendCount: 0,
+      },
+      this.OTP_EXPIRY_SECONDS * 1000,
+    );
 
     await this.sendOtpViaSms(phone, otp);
     this.logger.log({ event: 'otp_generated', phone, expiresAt, role });
@@ -197,9 +214,15 @@ export class AuthService {
     if (!isValid) {
       if (otpPayload.attempts >= 5) {
         await this.cacheService.invalidate(`otp:${phone}:login`);
-        throw new UnauthorizedException('Too many failed attempts. Please login again');
+        throw new UnauthorizedException(
+          'Too many failed attempts. Please login again',
+        );
       } else {
-        await this.cacheService.set(`otp:${phone}:login`, otpPayload, this.OTP_EXPIRY_SECONDS * 1000);
+        await this.cacheService.set(
+          `otp:${phone}:login`,
+          otpPayload,
+          this.OTP_EXPIRY_SECONDS * 1000,
+        );
       }
       throw new UnauthorizedException('Invalid OTP');
     }
@@ -208,7 +231,18 @@ export class AuthService {
     await this.cacheService.invalidate(`otp:${phone}:login`);
 
     // Store verified session token in Redis for deleteAccount check
-    await this.cacheService.set(`otp:verified:${auth.id}`, otpPayload.sessionToken, 1000 * 60 * 60 * 24); // 24 hours
+    await this.cacheService.set(
+      `otp:verified:${auth.id}`,
+      otpPayload.sessionToken,
+      1000 * 60 * 60 * 24,
+    ); // 24 hours
+
+    // Authorize MPIN reset for 15 minutes
+    await this.cacheService.set(
+      `mpin_reset_authorized:${auth.id}`,
+      true,
+      1000 * 60 * 15,
+    );
 
     this.logger.log({ event: 'otp_verified', phone, role });
     this.metrics.otpVerifiedTotal.inc({ role });
@@ -319,10 +353,19 @@ export class AuthService {
     otpPayload.lastResentAt = Date.now();
     otpPayload.resendCount++;
 
-    await this.cacheService.set(`otp:${phone}:login`, otpPayload, this.OTP_EXPIRY_SECONDS * 1000);
+    await this.cacheService.set(
+      `otp:${phone}:login`,
+      otpPayload,
+      this.OTP_EXPIRY_SECONDS * 1000,
+    );
 
     await this.sendOtpViaSms(auth.phone, otp);
-    this.logger.log({ event: 'otp_regenerated', phone: auth.phone, expiresAt, role: auth.role });
+    this.logger.log({
+      event: 'otp_regenerated',
+      phone: auth.phone,
+      expiresAt,
+      role: auth.role,
+    });
 
     return {
       success: true,
@@ -377,7 +420,9 @@ export class AuthService {
       throw new NotFoundException('Account not found');
     }
 
-    const verifiedToken = await this.cacheService.get<string>(`otp:verified:${authId}`);
+    const verifiedToken = await this.cacheService.get<string>(
+      `otp:verified:${authId}`,
+    );
     if (!verifiedToken || verifiedToken !== dto.sessionToken) {
       throw new UnauthorizedException(
         'Please verify OTP before deleting account',
@@ -536,7 +581,11 @@ export class AuthService {
       newPhone,
     };
 
-    await this.cacheService.set(`otp:${authId}:phone-change`, otpPayload, this.OTP_EXPIRY_SECONDS * 1000);
+    await this.cacheService.set(
+      `otp:${authId}:phone-change`,
+      otpPayload,
+      this.OTP_EXPIRY_SECONDS * 1000,
+    );
 
     await this.sendOtpViaSms(newPhone, otp);
 
@@ -580,9 +629,15 @@ export class AuthService {
     if (!isValid) {
       if (otpPayload.attempts >= 5) {
         await this.cacheService.invalidate(`otp:${authId}:phone-change`);
-        throw new UnauthorizedException('Too many failed attempts. Please request again');
+        throw new UnauthorizedException(
+          'Too many failed attempts. Please request again',
+        );
       } else {
-        await this.cacheService.set(`otp:${authId}:phone-change`, otpPayload, this.OTP_EXPIRY_SECONDS * 1000);
+        await this.cacheService.set(
+          `otp:${authId}:phone-change`,
+          otpPayload,
+          this.OTP_EXPIRY_SECONDS * 1000,
+        );
       }
       throw new UnauthorizedException('Invalid OTP');
     }
@@ -601,7 +656,11 @@ export class AuthService {
     await this.cacheService.invalidate(`otp:${authId}:phone-change`);
 
     // Store verified session token in Redis for deleteAccount check
-    await this.cacheService.set(`otp:verified:${authId}`, sessionToken, 1000 * 60 * 60 * 24); // 24 hours
+    await this.cacheService.set(
+      `otp:verified:${authId}`,
+      sessionToken,
+      1000 * 60 * 60 * 24,
+    ); // 24 hours
 
     // Update phone atomically
     await this.prisma.auth.update({
@@ -613,6 +672,212 @@ export class AuthService {
       success: true,
       message: 'Phone number updated successfully',
       data: { phone: newPhone },
+    };
+  }
+
+  // ─────────────────────────────────────────
+  // MPIN methods
+  // ─────────────────────────────────────────
+
+  async createMpin(authId: string, dto: CreateMpinDto) {
+    const auth = await this.prisma.auth.findUnique({
+      where: { id: authId },
+    });
+    if (!auth) throw new NotFoundException('Account not found');
+
+    if (auth.mpinHash) {
+      throw new ConflictException(
+        'MPIN is already set up. Use change-mpin to update it.',
+      );
+    }
+
+    const hashedMpin = await bcrypt.hash(dto.mpin, 10);
+    await this.prisma.auth.update({
+      where: { id: authId },
+      data: {
+        mpinHash: hashedMpin,
+        mpinCreatedAt: new Date(),
+        mpinUpdatedAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      message: 'MPIN created successfully',
+    };
+  }
+
+  async verifyMpin(authId: string, dto: VerifyMpinDto) {
+    const auth = await this.prisma.auth.findUnique({
+      where: { id: authId },
+    });
+    if (!auth) throw new NotFoundException('Account not found');
+
+    if (!auth.mpinHash) {
+      throw new BadRequestException('MPIN is not set up');
+    }
+
+    const now = new Date();
+    if (auth.mpinLockedUntil && auth.mpinLockedUntil > now) {
+      const remainingMs = auth.mpinLockedUntil.getTime() - now.getTime();
+      const remainingMins = Math.ceil(remainingMs / (60 * 1000));
+      throw new BadRequestException(
+        `MPIN verification is locked. Please try again after ${remainingMins} minutes.`,
+      );
+    }
+
+    const isValid = await bcrypt.compare(dto.mpin, auth.mpinHash);
+    if (!isValid) {
+      const attempts = auth.failedMpinAttempts + 1;
+      let lockedUntil: Date | null = null;
+      let message = 'Invalid MPIN';
+
+      if (attempts >= 5) {
+        lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+        message =
+          'MPIN locked due to too many failed attempts. Try again in 15 minutes.';
+      }
+
+      await this.prisma.auth.update({
+        where: { id: authId },
+        data: {
+          failedMpinAttempts: attempts >= 5 ? 5 : attempts,
+          mpinLockedUntil: lockedUntil,
+        },
+      });
+
+      this.logger.warn({
+        message: `Failed MPIN attempt for user ${authId}`,
+        userId: authId,
+        attempts,
+        locked: !!lockedUntil,
+      });
+
+      throw new UnauthorizedException(message);
+    }
+
+    // Reset failed attempts on success
+    if (auth.failedMpinAttempts > 0 || auth.mpinLockedUntil) {
+      await this.prisma.auth.update({
+        where: { id: authId },
+        data: {
+          failedMpinAttempts: 0,
+          mpinLockedUntil: null,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: 'MPIN verified successfully',
+    };
+  }
+
+  async changeMpin(authId: string, dto: ChangeMpinDto) {
+    const auth = await this.prisma.auth.findUnique({
+      where: { id: authId },
+    });
+    if (!auth) throw new NotFoundException('Account not found');
+
+    if (!auth.mpinHash) {
+      throw new BadRequestException(
+        'MPIN is not set up. Please create one first.',
+      );
+    }
+
+    // First check if locked
+    const now = new Date();
+    if (auth.mpinLockedUntil && auth.mpinLockedUntil > now) {
+      const remainingMs = auth.mpinLockedUntil.getTime() - now.getTime();
+      const remainingMins = Math.ceil(remainingMs / (60 * 1000));
+      throw new BadRequestException(
+        `MPIN verification is locked. Please try again after ${remainingMins} minutes.`,
+      );
+    }
+
+    // Verify current MPIN
+    const isValid = await bcrypt.compare(dto.currentMpin, auth.mpinHash);
+    if (!isValid) {
+      const attempts = auth.failedMpinAttempts + 1;
+      let lockedUntil: Date | null = null;
+      let message = 'Invalid current MPIN';
+
+      if (attempts >= 5) {
+        lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+        message =
+          'MPIN locked due to too many failed attempts. Try again in 15 minutes.';
+      }
+
+      await this.prisma.auth.update({
+        where: { id: authId },
+        data: {
+          failedMpinAttempts: attempts >= 5 ? 5 : attempts,
+          mpinLockedUntil: lockedUntil,
+        },
+      });
+
+      this.logger.warn({
+        message: `Failed current MPIN verification during change-mpin for user ${authId}`,
+        userId: authId,
+        attempts,
+        locked: !!lockedUntil,
+      });
+
+      throw new UnauthorizedException(message);
+    }
+
+    // Hash and store the new MPIN
+    const hashedNewMpin = await bcrypt.hash(dto.newMpin, 10);
+    await this.prisma.auth.update({
+      where: { id: authId },
+      data: {
+        mpinHash: hashedNewMpin,
+        mpinUpdatedAt: new Date(),
+        failedMpinAttempts: 0,
+        mpinLockedUntil: null,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'MPIN changed successfully',
+    };
+  }
+
+  async resetMpin(authId: string, dto: ResetMpinDto) {
+    const auth = await this.prisma.auth.findUnique({
+      where: { id: authId },
+    });
+    if (!auth) throw new NotFoundException('Account not found');
+
+    // Check if user has successfully verified OTP recently (within 15 minutes)
+    const authorized = await this.cacheService.get<boolean>(
+      `mpin_reset_authorized:${authId}`,
+    );
+    if (!authorized) {
+      throw new ForbiddenException(
+        'OTP verification is required before resetting MPIN',
+      );
+    }
+
+    // Hash and store the new MPIN
+    const hashedNewMpin = await bcrypt.hash(dto.newMpin, 10);
+    await this.prisma.auth.update({
+      where: { id: authId },
+      data: {
+        mpinHash: hashedNewMpin,
+        mpinUpdatedAt: new Date(),
+        failedMpinAttempts: 0,
+        mpinLockedUntil: null,
+      },
+    });
+
+    // Clean up the authorization flag on success
+    await this.cacheService.invalidate(`mpin_reset_authorized:${authId}`);
+
+    return {
+      success: true,
+      message: 'MPIN reset successfully',
     };
   }
 }

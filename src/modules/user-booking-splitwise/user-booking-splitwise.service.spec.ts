@@ -47,7 +47,9 @@ describe('UserBookingSplitwiseService', () => {
       ],
     }).compile();
 
-    service = module.get<UserBookingSplitwiseService>(UserBookingSplitwiseService);
+    service = module.get<UserBookingSplitwiseService>(
+      UserBookingSplitwiseService,
+    );
   });
 
   it('should be defined', () => {

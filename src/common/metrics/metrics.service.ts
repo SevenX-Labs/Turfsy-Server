@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  Counter,
-  Histogram,
-  Gauge,
-} from 'prom-client';
+import { Counter, Histogram, Gauge } from 'prom-client';
 
 /**
  * Centralized Prometheus metrics service.
@@ -229,4 +225,3 @@ export class MetricsService {
     labelNames: ['status_class'] as const,
   });
 }
-

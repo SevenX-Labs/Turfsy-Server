@@ -7,15 +7,13 @@ import { EmailService } from '../../email/email.service';
 export class EmailWorker extends WorkerHost {
   private readonly logger = new Logger(EmailWorker.name);
 
-  constructor(
-    private readonly emailService: EmailService,
-  ) {
+  constructor(private readonly emailService: EmailService) {
     super();
   }
 
   async process(job: Job<any, any, string>): Promise<any> {
     this.logger.log(`Processing email job ${job.id} of type ${job.name}`);
-    
+
     switch (job.name) {
       case 'send-booking-confirmation': {
         const { email, bookingData } = job.data;
@@ -40,7 +38,7 @@ export class EmailWorker extends WorkerHost {
       default:
         this.logger.warn(`Unknown email job name: ${job.name}`);
     }
-    
+
     return { success: true };
   }
 }

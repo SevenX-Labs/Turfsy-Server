@@ -69,7 +69,6 @@ export class UploadService {
     }
   }
 
-
   private sanitizeNameForFile(name: string): string {
     const sanitized = name
       .toLowerCase()
@@ -391,7 +390,11 @@ export class UploadService {
   // ─────────────────────────────────────────
   // Upload turf video (using Cloudinary)
   // ─────────────────────────────────────────
-  async uploadTurfVideo(authId: string, turfId: string, file: Express.Multer.File) {
+  async uploadTurfVideo(
+    authId: string,
+    turfId: string,
+    file: Express.Multer.File,
+  ) {
     let inputPath = file.path;
     let createdInputPath = false;
 

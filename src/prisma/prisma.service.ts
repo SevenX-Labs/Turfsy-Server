@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -19,13 +24,13 @@ export class PrismaService
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       // ── Optimized Connection Pooling ──
-      max: 20,                       // Increased from 15 for higher concurrency
-      min: 5,                        // Keep minimum warm connections
-      idleTimeoutMillis: 30000,      // Release idle connections after 30s
+      max: 20, // Increased from 15 for higher concurrency
+      min: 5, // Keep minimum warm connections
+      idleTimeoutMillis: 30000, // Release idle connections after 30s
       connectionTimeoutMillis: 5000, // Reduced from 10s — fail fast if DB is down
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000,
-      statement_timeout: 30000,      // Kill queries running > 30s
+      statement_timeout: 30000, // Kill queries running > 30s
     });
     const adapter = new PrismaPg(pool as any);
     super({
@@ -78,11 +83,16 @@ export class PrismaService
         }
 
         this.metrics.prismaQueryTotal.inc({ model, action });
-        this.metrics.prismaQueryDuration.observe({ model, action }, e.duration / 1000);
+        this.metrics.prismaQueryDuration.observe(
+          { model, action },
+          e.duration / 1000,
+        );
       }
 
       if (process.env.NODE_ENV !== 'production') {
-        this.logger.debug(`Query: ${e.query} | Params: ${e.params} | Duration: ${e.duration}ms`);
+        this.logger.debug(
+          `Query: ${e.query} | Params: ${e.params} | Duration: ${e.duration}ms`,
+        );
       }
     });
 
@@ -98,7 +108,10 @@ export class PrismaService
   trackQuery(model: string, action: string, durationMs: number): void {
     if (this.metrics) {
       this.metrics.prismaQueryTotal.inc({ model, action });
-      this.metrics.prismaQueryDuration.observe({ model, action }, durationMs / 1000);
+      this.metrics.prismaQueryDuration.observe(
+        { model, action },
+        durationMs / 1000,
+      );
     }
   }
 
@@ -119,5 +132,3 @@ export class PrismaService
     this.logger.log('Database connections closed');
   }
 }
-
-

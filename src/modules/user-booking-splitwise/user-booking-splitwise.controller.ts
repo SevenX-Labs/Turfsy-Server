@@ -30,9 +30,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 @Roles('USER')
 @UseInterceptors(ResponseSanitizerInterceptor)
 export class UserBookingSplitwiseController {
-  constructor(
-    private readonly splitwiseService: UserBookingSplitwiseService,
-  ) {}
+  constructor(private readonly splitwiseService: UserBookingSplitwiseService) {}
 
   @Post(':bookingId/split/players')
   @HttpCode(HttpStatus.OK)
@@ -42,7 +40,12 @@ export class UserBookingSplitwiseController {
     @Body() dto: AddPlayersDto,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.splitwiseService.addPlayers(req.user.authId, bookingId, dto, ip);
+    return this.splitwiseService.addPlayers(
+      req.user.authId,
+      bookingId,
+      dto,
+      ip,
+    );
   }
 
   @Delete('split/players/:playerId')

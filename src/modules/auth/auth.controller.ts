@@ -9,6 +9,7 @@ import {
   HttpStatus,
   UseGuards,
   Req,
+  Patch,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -16,6 +17,10 @@ import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { CreateMpinDto } from './dto/create-mpin.dto';
+import { VerifyMpinDto } from './dto/verify-mpin.dto';
+import { ChangeMpinDto } from './dto/change-mpin.dto';
+import { ResetMpinDto } from './dto/reset-mpin.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Role } from '@prisma/client';
 import {
@@ -54,7 +59,10 @@ export class AuthController {
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify OTP and return session token for user' })
-  @ApiResponse({ status: 200, description: 'OTP verified, session token generated' })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified, session token generated',
+  })
   @ApiResponse({ status: 401, description: 'Invalid or expired OTP' })
   async userVerifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto, Role.USER);
@@ -90,7 +98,10 @@ export class AuthController {
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify OTP and return session token for owner' })
-  @ApiResponse({ status: 200, description: 'OTP verified, session token generated' })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified, session token generated',
+  })
   async ownerVerifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto, Role.OWNER);
   }
@@ -135,7 +146,10 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get current authenticated identity profile' })
-  @ApiResponse({ status: 200, description: 'Identity info fetched successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Identity info fetched successfully',
+  })
   async getMe(@Req() req: any) {
     return this.authService.getMe(req.user.authId);
   }
@@ -145,7 +159,9 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @Throttle({ strict: { limit: 3, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request phone change and send OTP to new phone number' })
+  @ApiOperation({
+    summary: 'Request phone change and send OTP to new phone number',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -183,7 +199,10 @@ export class AuthController {
       required: ['sessionToken', 'newPhone', 'otp'],
     },
   })
-  @ApiResponse({ status: 200, description: 'Phone number updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Phone number updated successfully',
+  })
   async verifyPhoneChange(
     @Req() req: any,
     @Body() body: { sessionToken: string; newPhone: string; otp: string },
@@ -194,5 +213,59 @@ export class AuthController {
       body.newPhone,
       body.otp,
     );
+  }
+
+  // ═══════════════════════════════════════════
+  //  MPIN ENDPOINTS (authenticated via JWT)
+  // ═══════════════════════════════════════════
+
+  @Post('create-mpin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create a new MPIN for the authenticated user' })
+  @ApiResponse({ status: 200, description: 'MPIN created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid MPIN format' })
+  @ApiResponse({ status: 409, description: 'MPIN already exists' })
+  async createMpin(@Req() req: any, @Body() dto: CreateMpinDto) {
+    return this.authService.createMpin(req.user.authId, dto);
+  }
+
+  @Post('verify-mpin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify user MPIN' })
+  @ApiResponse({ status: 200, description: 'MPIN verified successfully' })
+  @ApiResponse({ status: 400, description: 'MPIN is locked or not set up' })
+  @ApiResponse({ status: 401, description: 'Invalid MPIN' })
+  async verifyMpin(@Req() req: any, @Body() dto: VerifyMpinDto) {
+    return this.authService.verifyMpin(req.user.authId, dto);
+  }
+
+  @Patch('change-mpin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change current MPIN' })
+  @ApiResponse({ status: 200, description: 'MPIN changed successfully' })
+  @ApiResponse({ status: 400, description: 'MPIN is locked or not set up' })
+  @ApiResponse({ status: 401, description: 'Invalid current MPIN' })
+  async changeMpin(@Req() req: any, @Body() dto: ChangeMpinDto) {
+    return this.authService.changeMpin(req.user.authId, dto);
+  }
+
+  @Post('reset-mpin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset MPIN after successful OTP verification' })
+  @ApiResponse({ status: 200, description: 'MPIN reset successfully' })
+  @ApiResponse({
+    status: 403,
+    description: 'OTP verification is required before resetting MPIN',
+  })
+  async resetMpin(@Req() req: any, @Body() dto: ResetMpinDto) {
+    return this.authService.resetMpin(req.user.authId, dto);
   }
 }

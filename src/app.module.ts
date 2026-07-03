@@ -68,18 +68,18 @@ import { SentryModule } from '@sentry/nestjs/setup';
     ThrottlerModule.forRoot([
       {
         name: 'strict',
-        ttl: 60000,     // 1 minute
-        limit: 5,       // 5 req/min — auth/OTP endpoints
+        ttl: 60000, // 1 minute
+        limit: 5, // 5 req/min — auth/OTP endpoints
       },
       {
         name: 'medium',
-        ttl: 60000,     // 1 minute
-        limit: 20,      // 20 req/min — booking/payment endpoints
+        ttl: 60000, // 1 minute
+        limit: 20, // 20 req/min — booking/payment endpoints
       },
       {
         name: 'default',
-        ttl: 60000,     // 1 minute
-        limit: 60,      // 60 req/min — general endpoints
+        ttl: 60000, // 1 minute
+        limit: 60, // 60 req/min — general endpoints
       },
     ]),
     MetricsModule,

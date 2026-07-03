@@ -92,12 +92,18 @@ export class UserBookingSplitwiseService {
       throw new NotFoundException('Booking not found');
     }
     if (booking.userId !== authId) {
-      throw new ForbiddenException('You are not authorized to manage this split');
+      throw new ForbiddenException(
+        'You are not authorized to manage this split',
+      );
     }
     return booking;
   }
 
-  private async getOrCreateSplit(bookingId: string, authId: string, amount: number) {
+  private async getOrCreateSplit(
+    bookingId: string,
+    authId: string,
+    amount: number,
+  ) {
     let split = await this.prisma.bookingSplit.findUnique({
       where: { bookingId },
       include: { players: true },
@@ -157,8 +163,12 @@ export class UserBookingSplitwiseService {
     if (!split) return;
 
     const players = split.players;
-    const paidPlayers = players.filter((p) => p.status === SplitPlayerStatus.PAID);
-    const pendingPlayers = players.filter((p) => p.status === SplitPlayerStatus.PENDING);
+    const paidPlayers = players.filter(
+      (p) => p.status === SplitPlayerStatus.PAID,
+    );
+    const pendingPlayers = players.filter(
+      (p) => p.status === SplitPlayerStatus.PENDING,
+    );
 
     if (pendingPlayers.length === 0) return;
 
@@ -171,53 +181,70 @@ export class UserBookingSplitwiseService {
 
     const updates: any[] = [];
     for (let i = 0; i < pendingPlayers.length; i++) {
-        const p = pendingPlayers[i];
-        const newAmount = baseAmount + (i === pendingPlayers.length - 1 ? remainder : 0);
-        if (p.amount !== newAmount) {
-            updates.push(
-               this.prisma.bookingSplitPlayer.update({
-                  where: { id: p.id },
-                  data: { amount: newAmount },
-               })
-            );
-        }
+      const p = pendingPlayers[i];
+      const newAmount =
+        baseAmount + (i === pendingPlayers.length - 1 ? remainder : 0);
+      if (p.amount !== newAmount) {
+        updates.push(
+          this.prisma.bookingSplitPlayer.update({
+            where: { id: p.id },
+            data: { amount: newAmount },
+          }),
+        );
+      }
     }
-    
+
     if (updates.length > 0) {
       await this.prisma.$transaction(updates);
     }
   }
 
-  async addPlayers(authId: string, bookingId: string, dto: AddPlayersDto, ip: string) {
-    await this.rateLimiter.check(`user:${authId}:split:addPlayers`, { limit: 15, windowMs: 60000 });
+  async addPlayers(
+    authId: string,
+    bookingId: string,
+    dto: AddPlayersDto,
+    ip: string,
+  ) {
+    await this.rateLimiter.check(`user:${authId}:split:addPlayers`, {
+      limit: 15,
+      windowMs: 60000,
+    });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
-    const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
+    const split = await this.getOrCreateSplit(
+      bookingId,
+      authId,
+      booking.amount,
+    );
 
     if (split.isSplitDone) {
-      throw new BadRequestException('Cannot add players after split is triggered');
+      throw new BadRequestException(
+        'Cannot add players after split is triggered',
+      );
     }
 
     const usernames = Array.from(new Set(dto.usernames));
-    const existingUsernames = new Set(split.players.map(p => p.username));
-    const newUsernames = usernames.filter(u => !existingUsernames.has(u));
+    const existingUsernames = new Set(split.players.map((p) => p.username));
+    const newUsernames = usernames.filter((u) => !existingUsernames.has(u));
 
     if (newUsernames.length > 0) {
       // 1. Fetch user profiles in one single query (Fixes N+1 issue)
       const userProfiles = await this.prisma.userProfile.findMany({
         where: { username: { in: newUsernames } },
-        select: { username: true, authId: true }
+        select: { username: true, authId: true },
       });
-      const profileMap = new Map(userProfiles.map(p => [p.username, p.authId]));
+      const profileMap = new Map(
+        userProfiles.map((p) => [p.username, p.authId]),
+      );
 
       // 2. Bulk insert new players
       await this.prisma.bookingSplitPlayer.createMany({
-        data: newUsernames.map(username => ({
+        data: newUsernames.map((username) => ({
           splitId: split.id,
           username,
           userId: profileMap.get(username) || null,
           amount: 0,
-        }))
+        })),
       });
 
       // 3. Recalculate based on newly added array securely
@@ -291,13 +318,22 @@ export class UserBookingSplitwiseService {
     }
 
     const bookingId = player.split.bookingId;
-    await this.rateLimiter.check(`user:${authId}:split:removePlayer`, { limit: 15, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:removePlayer`, {
+      limit: 15,
+      windowMs: 60000,
+    });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
-    const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
+    const split = await this.getOrCreateSplit(
+      bookingId,
+      authId,
+      booking.amount,
+    );
 
     if (player.status === SplitPlayerStatus.PAID) {
-      throw new BadRequestException('Cannot remove a player who has already paid');
+      throw new BadRequestException(
+        'Cannot remove a player who has already paid',
+      );
     }
 
     await this.prisma.bookingSplitPlayer.delete({
@@ -326,7 +362,10 @@ export class UserBookingSplitwiseService {
   }
 
   async triggerSplit(authId: string, bookingId: string, ip: string) {
-    await this.rateLimiter.check(`user:${authId}:split:trigger`, { limit: 5, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:trigger`, {
+      limit: 5,
+      windowMs: 60000,
+    });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
     let split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
@@ -384,37 +423,55 @@ export class UserBookingSplitwiseService {
     };
   }
 
-  async setCustomAmounts(authId: string, bookingId: string, dto: SetAmountsDto, ip: string) {
-    await this.rateLimiter.check(`user:${authId}:split:setCustom`, { limit: 15, windowMs: 60000 });
+  async setCustomAmounts(
+    authId: string,
+    bookingId: string,
+    dto: SetAmountsDto,
+    ip: string,
+  ) {
+    await this.rateLimiter.check(`user:${authId}:split:setCustom`, {
+      limit: 15,
+      windowMs: 60000,
+    });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
-    const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
+    const split = await this.getOrCreateSplit(
+      bookingId,
+      authId,
+      booking.amount,
+    );
 
     if (split.isSplitDone) {
-      throw new BadRequestException('Cannot set custom amounts after split is confirmed');
+      throw new BadRequestException(
+        'Cannot set custom amounts after split is confirmed',
+      );
     }
 
     const proposedSum = dto.amounts.reduce((sum, a) => sum + a.amount, 0);
     if (proposedSum !== split.totalAmount) {
-      throw new BadRequestException(`Total split amount (${proposedSum}) must equal booking amount (${split.totalAmount})`);
+      throw new BadRequestException(
+        `Total split amount (${proposedSum}) must equal booking amount (${split.totalAmount})`,
+      );
     }
 
     // Verify all player IDs exist in this split
-    const splitPlayerIds = split.players.map(p => p.id);
+    const splitPlayerIds = split.players.map((p) => p.id);
     for (const item of dto.amounts) {
       if (!splitPlayerIds.includes(item.playerId)) {
-         throw new BadRequestException(`Player ${item.playerId} is not part of this split`);
+        throw new BadRequestException(
+          `Player ${item.playerId} is not part of this split`,
+        );
       }
     }
 
     // Update amounts
     await this.prisma.$transaction(
-      dto.amounts.map(item =>
+      dto.amounts.map((item) =>
         this.prisma.bookingSplitPlayer.update({
           where: { id: item.playerId },
-          data: { amount: item.amount }
-        })
-      )
+          data: { amount: item.amount },
+        }),
+      ),
     );
 
     await this.cache.invalidate(`split:${bookingId}`);
@@ -430,7 +487,7 @@ export class UserBookingSplitwiseService {
     authId: string,
     playerId: string,
     status: SplitPlayerStatus,
-    ip: string
+    ip: string,
   ) {
     const player = await this.prisma.bookingSplitPlayer.findUnique({
       where: { id: playerId },
@@ -442,10 +499,17 @@ export class UserBookingSplitwiseService {
     }
 
     const bookingId = player.split.bookingId;
-    await this.rateLimiter.check(`user:${authId}:split:updateStatus`, { limit: 15, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:updateStatus`, {
+      limit: 15,
+      windowMs: 60000,
+    });
 
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
-    const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
+    const split = await this.getOrCreateSplit(
+      bookingId,
+      authId,
+      booking.amount,
+    );
 
     await this.prisma.bookingSplitPlayer.update({
       where: { id: playerId },
@@ -454,10 +518,15 @@ export class UserBookingSplitwiseService {
 
     // ── Push Notification (Payment Marked Paid) ──
     if (status === SplitPlayerStatus.PAID && player.userId) {
-      this.triggerPushNotification(player.userId, 'You are settled! ✅', 'Your split payment has been marked as paid. All set!', {
-        type: 'SPLIT_PAID',
-        bookingId,
-      });
+      this.triggerPushNotification(
+        player.userId,
+        'You are settled! ✅',
+        'Your split payment has been marked as paid. All set!',
+        {
+          type: 'SPLIT_PAID',
+          bookingId,
+        },
+      );
     }
 
     if (split.isSplitDone) {
@@ -484,15 +553,22 @@ export class UserBookingSplitwiseService {
   }
 
   async getSplitDetails(authId: string, bookingId: string) {
-    await this.rateLimiter.check(`user:${authId}:split:get`, { limit: 60, windowMs: 60000 });
+    await this.rateLimiter.check(`user:${authId}:split:get`, {
+      limit: 60,
+      windowMs: 60000,
+    });
     const booking = await this.verifyOwnershipAndGetBooking(authId, bookingId);
 
     return this.cache.getOrSet(
       `split:${bookingId}`,
       async () => {
-        const split = await this.getOrCreateSplit(bookingId, authId, booking.amount);
-        
-        const players = split.players.map(p => {
+        const split = await this.getOrCreateSplit(
+          bookingId,
+          authId,
+          booking.amount,
+        );
+
+        const players = split.players.map((p) => {
           const { userId, ...playerData } = p;
           return {
             ...playerData,
@@ -514,9 +590,16 @@ export class UserBookingSplitwiseService {
     );
   }
 
-  private async triggerPushNotification(userId: string, title: string, body: string, data: any) {
+  private async triggerPushNotification(
+    userId: string,
+    title: string,
+    body: string,
+    data: any,
+  ) {
     try {
-      this.notificationsService.sendNotification(userId, title, body, data).catch(() => {});
+      this.notificationsService
+        .sendNotification(userId, title, body, data)
+        .catch(() => {});
     } catch (error) {
       this.logger.error(`[NOTIFICATION_TRIGGER_ERROR] ${error.message}`);
     }

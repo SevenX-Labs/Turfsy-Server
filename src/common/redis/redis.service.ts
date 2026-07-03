@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Inject,
-  Logger,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { Injectable, Inject, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { RedisClientType } from 'redis';
 import * as crypto from 'crypto';
 import { REDIS_CLIENT, CACHE_TTL } from './redis.constants';
@@ -105,7 +100,11 @@ export class RedisService implements OnModuleDestroy {
   /**
    * Set a cache value with optional TTL in milliseconds.
    */
-  async set<T>(key: string, value: T, ttlMs: number = CACHE_TTL.DEFAULT): Promise<void> {
+  async set<T>(
+    key: string,
+    value: T,
+    ttlMs: number = CACHE_TTL.DEFAULT,
+  ): Promise<void> {
     if (!this.isConnected) return;
     try {
       const serialized = JSON.stringify(value);

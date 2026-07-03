@@ -21,7 +21,10 @@ export class RateLimiterService {
    */
   async check(key: string, config: RateLimitConfig): Promise<void> {
     const redisKey = `rate_limit:${key}`;
-    const count = await this.redisService.incrementRateLimit(redisKey, config.windowMs);
+    const count = await this.redisService.incrementRateLimit(
+      redisKey,
+      config.windowMs,
+    );
 
     if (count > config.limit) {
       // Get remaining TTL to compute Retry-After header

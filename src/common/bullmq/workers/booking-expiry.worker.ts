@@ -7,15 +7,15 @@ import { BookingService } from '../../../modules/booking/booking.service';
 export class BookingExpiryWorker extends WorkerHost {
   private readonly logger = new Logger(BookingExpiryWorker.name);
 
-  constructor(
-    private readonly bookingService: BookingService,
-  ) {
+  constructor(private readonly bookingService: BookingService) {
     super();
   }
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { bookingId } = job.data;
-    this.logger.log(`Processing booking-expiry job ${job.id} for bookingId ${bookingId}`);
+    this.logger.log(
+      `Processing booking-expiry job ${job.id} for bookingId ${bookingId}`,
+    );
 
     if (job.name === 'expire-booking') {
       await this.bookingService.handleBookingExpiration(bookingId);

@@ -81,10 +81,7 @@ describe('UserProfileController', () => {
       city: 'Pune',
     };
     const result = await controller.updateAddress(req, dto as any);
-    expect(mockService.updateHomeAddress).toHaveBeenCalledWith(
-      'auth-1',
-      dto,
-    );
+    expect(mockService.updateHomeAddress).toHaveBeenCalledWith('auth-1', dto);
     expect(result.success).toBe(true);
   });
 });

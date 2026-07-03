@@ -166,7 +166,13 @@ export class TurfsController {
     const pageNumber = reqPage ? parseInt(reqPage, 10) : 1;
     const limitNumber = reqLimit ? parseInt(reqLimit, 10) : 50;
 
-    return this.turfsService.getNearbyTurfs(parsedLat, parsedLng, radius, pageNumber, limitNumber);
+    return this.turfsService.getNearbyTurfs(
+      parsedLat,
+      parsedLng,
+      radius,
+      pageNumber,
+      limitNumber,
+    );
   }
 
   // 3. Get All My Turfs (for Owners)
@@ -330,8 +336,18 @@ export class TurfsController {
     @Body() body: { status: TurfStatus },
   ) {
     if (!body.status) throw new BadRequestException('status is required');
-    if (!([TurfStatus.ACTIVE, TurfStatus.INACTIVE, TurfStatus.MAINTENANCE] as TurfStatus[]).includes(body.status)) {
-      throw new BadRequestException('status must be ACTIVE, INACTIVE, or MAINTENANCE');
+    if (
+      !(
+        [
+          TurfStatus.ACTIVE,
+          TurfStatus.INACTIVE,
+          TurfStatus.MAINTENANCE,
+        ] as TurfStatus[]
+      ).includes(body.status)
+    ) {
+      throw new BadRequestException(
+        'status must be ACTIVE, INACTIVE, or MAINTENANCE',
+      );
     }
     return this.turfsService.updateTurfStatus(
       req.user.authId,

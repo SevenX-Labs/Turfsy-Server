@@ -34,13 +34,13 @@ export class NotificationsController {
     const { expoPushToken } = body;
 
     if (!expoPushToken) {
-        return { success: false, message: 'Token is required' };
+      return { success: false, message: 'Token is required' };
     }
 
     // Expo tokens usually look like ExponentPushToken[xxx] or expo.v2:xxx
     const expoTokenRegex = /^(ExponentPushToken\[.+\]|expo\.v2:.+)$/;
     if (!expoTokenRegex.test(expoPushToken)) {
-        return { success: false, message: 'Invalid Expo push token format' };
+      return { success: false, message: 'Invalid Expo push token format' };
     }
 
     await this.prisma.auth.update({
@@ -96,7 +96,10 @@ export class NotificationsController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async markAsRead(@Req() req: any, @Param('id') notificationId: string) {
-    return this.notificationsService.markAsRead(req.user.authId, notificationId);
+    return this.notificationsService.markAsRead(
+      req.user.authId,
+      notificationId,
+    );
   }
 
   @Patch('read-all')
@@ -116,8 +119,13 @@ export class NotificationsController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async deleteNotification(@Req() req: any, @Param('id') notificationId: string) {
-    return this.notificationsService.deleteNotification(req.user.authId, notificationId);
+  async deleteNotification(
+    @Req() req: any,
+    @Param('id') notificationId: string,
+  ) {
+    return this.notificationsService.deleteNotification(
+      req.user.authId,
+      notificationId,
+    );
   }
 }
-

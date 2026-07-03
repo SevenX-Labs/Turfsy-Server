@@ -370,7 +370,6 @@ export class BookingController {
     return this.bookingService.handleUpcomingCheckInNotifications(ip);
   }
 
-
   // ──────────────────────────────────────────────
   // 10. RATE TURF (User)
   // POST /api/v3/booking/my-bookings/:bookingId/rateTurf

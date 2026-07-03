@@ -56,7 +56,10 @@ export class SecurityExceptionFilter implements ExceptionFilter {
 
     if (!isExpected4xx) {
       Sentry.withScope((scope) => {
-        scope.setTag('requestId', request.id || request.headers['x-request-id'] || 'unknown');
+        scope.setTag(
+          'requestId',
+          request.id || request.headers['x-request-id'] || 'unknown',
+        );
         scope.setTag('method', request.method);
         scope.setTag('url', request.url);
 

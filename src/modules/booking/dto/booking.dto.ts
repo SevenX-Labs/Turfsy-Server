@@ -131,5 +131,3 @@ export class RebookBookingDto {
   })
   paymentType?: 'FULL_ONLINE' | 'HALF_ONLINE_HALF_CASH' | 'FULL_CASH';
 }
-
-

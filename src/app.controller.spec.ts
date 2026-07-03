@@ -17,7 +17,9 @@ describe('AppController', () => {
           provide: PrismaService,
           useValue: {
             $queryRaw: jest.fn(),
-            getPoolStats: jest.fn().mockReturnValue({ total: 0, idle: 0, waiting: 0 }),
+            getPoolStats: jest
+              .fn()
+              .mockReturnValue({ total: 0, idle: 0, waiting: 0 }),
           },
         },
         {

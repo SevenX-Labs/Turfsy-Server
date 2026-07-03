@@ -307,32 +307,37 @@ model NotificationLog {
 // ─── USER / OWNER MODELS ────────────────────────────────────────────────────
 
 model Auth {
-  id            String            @id @default(uuid())
-  phone         String            @unique
-  role          Role              @default(USER)
-  isVerified    Boolean           @default(false)
-  isActive      Boolean           @default(true)
-  isBanned      Boolean           @default(false)
-  banReason     String?
-  bannedAt      DateTime?
-  bannedBy      String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  expoPushToken String?
-  deletedAt     DateTime?
-  otpEntries    OtpEntry[]
-  ownerProfile  OwnerProfile?
-  payment       Payment?
-  sessions      Session[]
-  userProfile   UserProfile?
-  bookings      Booking[]
-  savedTurfs    SavedTurf[]
-  ratings       TurfRating[]
-  gamification  UserGamification?
-  userSettings  UserSettings?
-  ownerSettings OwnerSettings?
-  recentViews   RecentView[]
-  notifications Notification[]
+  id                 String            @id @default(uuid())
+  phone              String            @unique
+  role               Role              @default(USER)
+  isVerified         Boolean           @default(false)
+  isActive           Boolean           @default(true)
+  isBanned           Boolean           @default(false)
+  banReason          String?
+  bannedAt           DateTime?
+  bannedBy           String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  expoPushToken      String?
+  deletedAt          DateTime?
+  mpinHash           String?
+  mpinCreatedAt      DateTime?
+  mpinUpdatedAt      DateTime?
+  failedMpinAttempts Int               @default(0)
+  mpinLockedUntil    DateTime?
+  otpEntries         OtpEntry[]
+  ownerProfile       OwnerProfile?
+  payment            Payment?
+  sessions           Session[]
+  userProfile        UserProfile?
+  bookings           Booking[]
+  savedTurfs         SavedTurf[]
+  ratings            TurfRating[]
+  gamification       UserGamification?
+  userSettings       UserSettings?
+  ownerSettings      OwnerSettings?
+  recentViews        RecentView[]
+  notifications      Notification[]
 
   @@index([phone])
   @@index([role])

@@ -17,7 +17,9 @@ export class PaymentRetryWorker extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { bookingId, paymentId, orderId } = job.data;
-    this.logger.log(`Processing payment-retry job ${job.id} for booking ${bookingId}`);
+    this.logger.log(
+      `Processing payment-retry job ${job.id} for booking ${bookingId}`,
+    );
 
     // Delegate reconciliation to BookingService
     await this.bookingService.reconcilePayment(bookingId, paymentId, orderId);
@@ -33,7 +35,7 @@ export class PaymentRetryWorker extends WorkerHost {
       this.logger.error(
         `[DEAD-LETTER] Payment reconciliation permanently failed for booking ${bookingId} after ${job.attemptsMade} attempts. Error: ${error.message}. Requires manual admin intervention.`,
       );
-      
+
       // Log to secure payment logger alert system
       this.paymentLogger.alert('Payment retry exhausted - DEAD LETTER', {
         bookingId,

@@ -31,7 +31,9 @@ describe('UserBookingSplitwiseController', () => {
       ],
     }).compile();
 
-    controller = module.get<UserBookingSplitwiseController>(UserBookingSplitwiseController);
+    controller = module.get<UserBookingSplitwiseController>(
+      UserBookingSplitwiseController,
+    );
   });
 
   it('should be defined', () => {

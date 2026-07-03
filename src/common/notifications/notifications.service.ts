@@ -20,7 +20,12 @@ export class NotificationsService {
    * @param body Body content
    * @param data Optional data payload
    */
-  async sendNotification(authId: string, title: string, body: string, data?: any) {
+  async sendNotification(
+    authId: string,
+    title: string,
+    body: string,
+    data?: any,
+  ) {
     if (!authId) {
       this.logger.warn('AuthID is null, skipping notification');
       return;
@@ -79,7 +84,9 @@ export class NotificationsService {
       if (Array.isArray(dataResponse)) {
         const ticket = dataResponse[0];
         if (ticket.status === 'error') {
-          this.logger.error(`Expo push error for token ${token}: ${ticket.message}`);
+          this.logger.error(
+            `Expo push error for token ${token}: ${ticket.message}`,
+          );
           if (ticket.details?.error === 'DeviceNotRegistered') {
             await this.handleInvalidToken(token);
           }
@@ -87,14 +94,19 @@ export class NotificationsService {
           this.logger.log(`Push notification sent successfully to ${token}`);
         }
       } else if (response.data.errors) {
-        this.logger.error(`Expo global errors: ${JSON.stringify(response.data.errors)}`);
+        this.logger.error(
+          `Expo global errors: ${JSON.stringify(response.data.errors)}`,
+        );
       }
     } catch (error) {
       this.logger.error(`Failed to send push notification: ${error.message}`);
       if (error.response?.data?.errors) {
         const errors = error.response.data.errors;
         for (const err of errors) {
-          if (err.code === 'PUSH_TOKEN_INVALID' || err.message?.includes('DeviceNotRegistered')) {
+          if (
+            err.code === 'PUSH_TOKEN_INVALID' ||
+            err.message?.includes('DeviceNotRegistered')
+          ) {
             await this.handleInvalidToken(token);
           }
         }
@@ -107,14 +119,18 @@ export class NotificationsService {
    * @param token The invalid ExponentPushToken
    */
   private async handleInvalidToken(token: string) {
-    this.logger.warn(`DeviceNotRegistered for token: ${token}. Removing from DB.`);
+    this.logger.warn(
+      `DeviceNotRegistered for token: ${token}. Removing from DB.`,
+    );
     try {
       await this.prisma.auth.updateMany({
         where: { expoPushToken: token },
         data: { expoPushToken: null },
       });
     } catch (dbError) {
-      this.logger.error(`Failed to remove invalid token from DB: ${dbError.message}`);
+      this.logger.error(
+        `Failed to remove invalid token from DB: ${dbError.message}`,
+      );
     }
   }
 
@@ -196,4 +212,3 @@ export class NotificationsService {
     }
   }
 }
-

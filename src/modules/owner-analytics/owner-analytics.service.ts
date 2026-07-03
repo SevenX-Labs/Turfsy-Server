@@ -221,7 +221,10 @@ export class OwnerAnalyticsService {
     // If specifically asked for one turf, filter to just that turf (if the owner owns it)
     if (turfId) {
       const ownsTurf = turfIds.includes(turfId);
-      if (!ownsTurf) throw new NotFoundException('Turf not found or does not belong to owner');
+      if (!ownsTurf)
+        throw new NotFoundException(
+          'Turf not found or does not belong to owner',
+        );
       turfIds = [turfId];
     }
 

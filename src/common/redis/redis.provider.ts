@@ -23,7 +23,9 @@ export const RedisProvider: Provider = {
     const redisUrl = config.get<string>('REDIS_URL');
 
     if (!redisUrl) {
-      logger.warn('REDIS_URL is not configured — Redis features will be unavailable');
+      logger.warn(
+        'REDIS_URL is not configured — Redis features will be unavailable',
+      );
       return null as any;
     }
 

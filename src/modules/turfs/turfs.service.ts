@@ -115,7 +115,13 @@ export class TurfsService {
   }
 
   // 2. Get Nearby Turfs (Haversine distance calculation)
-  async getNearbyTurfs(userLat: number, userLng: number, radiusKm: number, page: number = 1, limit: number = 50) {
+  async getNearbyTurfs(
+    userLat: number,
+    userLng: number,
+    radiusKm: number,
+    page: number = 1,
+    limit: number = 50,
+  ) {
     const offset = (page - 1) * limit;
     const rawIds = await this.prisma.$queryRaw<
       { id: string; distanceKm: number }[]
@@ -401,14 +407,16 @@ export class TurfsService {
               status: 'ACTIVE',
               deletedAt: null,
             },
-          })
+          }),
         ]);
 
         const formatted = turfs.map((turf) => ({
           ...turf,
-          images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
-            Boolean,
-          ),
+          images: [
+            turf.entranceUrl,
+            turf.groundDayUrl,
+            turf.groundNightUrl,
+          ].filter(Boolean),
           rating: 0,
           reviewCount: 0,
         }));
@@ -422,7 +430,7 @@ export class TurfsService {
             page,
             limit,
             totalPages: Math.ceil(total / limit),
-          }
+          },
         };
       },
       1000 * 60 * 3, // 3-minute TTL
@@ -452,7 +460,7 @@ export class TurfsService {
           deletedAt: null,
           name: { contains: q, mode: 'insensitive' },
         },
-      })
+      }),
     ]);
 
     const formatted = turfs.map((turf) => ({
@@ -473,7 +481,7 @@ export class TurfsService {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
-      }
+      },
     };
   }
 
@@ -489,7 +497,8 @@ export class TurfsService {
     page?: number;
     limit?: number;
   }) {
-    const { city, sportsType, minPrice, maxPrice, sortBy, userLat, userLng } = params;
+    const { city, sportsType, minPrice, maxPrice, sortBy, userLat, userLng } =
+      params;
     const page = params.page || 1;
     const limit = params.limit || 50;
     const skip = (page - 1) * limit;
@@ -599,7 +608,7 @@ export class TurfsService {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
-      }
+      },
     };
   }
 

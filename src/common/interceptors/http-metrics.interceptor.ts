@@ -28,11 +28,21 @@ export class HttpMetricsInterceptor implements NestInterceptor {
       tap({
         next: () => {
           const res = context.switchToHttp().getResponse();
-          this.recordMetrics(method, req.route?.path || req.url, res.statusCode, startTime);
+          this.recordMetrics(
+            method,
+            req.route?.path || req.url,
+            res.statusCode,
+            startTime,
+          );
         },
         error: (err) => {
           const statusCode = err?.status || err?.getStatus?.() || 500;
-          this.recordMetrics(method, req.route?.path || req.url, statusCode, startTime);
+          this.recordMetrics(
+            method,
+            req.route?.path || req.url,
+            statusCode,
+            startTime,
+          );
         },
       }),
     );

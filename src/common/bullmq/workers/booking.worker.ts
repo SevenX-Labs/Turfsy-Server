@@ -17,12 +17,14 @@ export class BookingWorker extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     this.logger.log(`Processing booking job ${job.id} of type ${job.name}`);
-    
+
     switch (job.name) {
       case 'send-confirmation-email': {
         // For now, we just log that we would send the email asynchronously
         // In a full implementation, we'd move the email sending logic here
-        this.logger.log(`Would send confirmation email for booking: ${job.data.bookingId}`);
+        this.logger.log(
+          `Would send confirmation email for booking: ${job.data.bookingId}`,
+        );
         break;
       }
       case 'mark-no-shows': {
@@ -32,7 +34,7 @@ export class BookingWorker extends WorkerHost {
       default:
         this.logger.warn(`Unknown booking job name: ${job.name}`);
     }
-    
+
     return { success: true };
   }
 }

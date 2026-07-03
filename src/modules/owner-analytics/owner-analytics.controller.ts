@@ -1,10 +1,4 @@
-import {
-    Controller,
-    Get,
-    Req,
-    Query,
-    UseGuards
-} from '@nestjs/common';
+import { Controller, Get, Req, Query, UseGuards } from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -111,7 +105,10 @@ export class OwnerAnalyticsController {
   @Get('venues-ratings-summary')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
-  async getVenuesAndRatingsSummary(@Req() req: any, @Query('turfId') turfId?: string) {
+  async getVenuesAndRatingsSummary(
+    @Req() req: any,
+    @Query('turfId') turfId?: string,
+  ) {
     return this.ownerAnalyticsService.getVenuesAndRatingsSummary(
       req.user.authId,
       turfId,

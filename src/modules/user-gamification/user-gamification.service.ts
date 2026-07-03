@@ -45,11 +45,16 @@ export class UserGamificationService {
       });
 
       // ── Push Notification (New Gamification) ──
-      this.triggerPushNotification(userId, 'Level Up! 🌟', `You earned ${pointsToAdd} pts! Started your streak 🔥`, {
-        type: 'GAMIFICATION_UPDATE',
-        points: pointsToAdd,
-        streak: 1,
-      });
+      this.triggerPushNotification(
+        userId,
+        'Level Up! 🌟',
+        `You earned ${pointsToAdd} pts! Started your streak 🔥`,
+        {
+          type: 'GAMIFICATION_UPDATE',
+          points: pointsToAdd,
+          streak: 1,
+        },
+      );
 
       return gamification;
     }
@@ -100,11 +105,16 @@ export class UserGamificationService {
     });
 
     // ── Push Notification (Gamification Update) ──
-    this.triggerPushNotification(userId, 'Game Completed! 🏆', `You earned ${pointsToAdd} pts! Current streak: ${newStreak} 🔥`, {
-      type: 'GAMIFICATION_UPDATE',
-      points: pointsToAdd,
-      streak: newStreak,
-    });
+    this.triggerPushNotification(
+      userId,
+      'Game Completed! 🏆',
+      `You earned ${pointsToAdd} pts! Current streak: ${newStreak} 🔥`,
+      {
+        type: 'GAMIFICATION_UPDATE',
+        points: pointsToAdd,
+        streak: newStreak,
+      },
+    );
 
     return result;
   }
@@ -243,7 +253,7 @@ export class UserGamificationService {
 
   async handleNoShow(userId: string, bookingId: string) {
     const pointsToDeduct = 30; // 30 pts penalty
-    
+
     const result = await this.prisma.userGamification.upsert({
       where: { authId: userId },
       create: {
@@ -256,23 +266,35 @@ export class UserGamificationService {
       },
       update: {
         streak: 0,
-        points: { decrement: pointsToDeduct }
-      }
+        points: { decrement: pointsToDeduct },
+      },
     });
 
     // ── Push Notification (Penalty) ──
-    this.triggerPushNotification(userId, 'Booking Missed 😞', `Points deducted (-${pointsToDeduct} pts) and streak broken. Don't miss your next game!`, {
-      type: 'GAMIFICATION_PENALTY',
-      pointsDeducted: pointsToDeduct,
-      streak: 0,
-    });
+    this.triggerPushNotification(
+      userId,
+      'Booking Missed 😞',
+      `Points deducted (-${pointsToDeduct} pts) and streak broken. Don't miss your next game!`,
+      {
+        type: 'GAMIFICATION_PENALTY',
+        pointsDeducted: pointsToDeduct,
+        streak: 0,
+      },
+    );
 
     return result;
   }
 
-  private async triggerPushNotification(userId: string, title: string, body: string, data: any) {
+  private async triggerPushNotification(
+    userId: string,
+    title: string,
+    body: string,
+    data: any,
+  ) {
     try {
-      this.notificationsService.sendNotification(userId, title, body, data).catch(() => {});
+      this.notificationsService
+        .sendNotification(userId, title, body, data)
+        .catch(() => {});
     } catch (error) {
       this.logger.error(`[GAMIFICATION_NOTIFICATION_ERROR] ${error.message}`);
     }

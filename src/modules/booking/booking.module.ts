@@ -12,7 +12,14 @@ import { EmailModule } from '../../common/email/email.module';
 import { NotificationsModule } from '../../common/notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ConfigModule, UserGamificationModule, EmailModule, NotificationsModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    ConfigModule,
+    UserGamificationModule,
+    EmailModule,
+    NotificationsModule,
+  ],
   controllers: [BookingController],
   providers: [BookingService, PaymentLoggerService, RateLimiterService],
   exports: [BookingService, PaymentLoggerService],

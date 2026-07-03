@@ -213,8 +213,17 @@ export class EmailService {
   }
 
   async sendBookingConfirmation(email: string, bookingData: any) {
-    const { id, turfName, date, startTime, endTime, amount, paymentStatus, pin } = bookingData;
-    
+    const {
+      id,
+      turfName,
+      date,
+      startTime,
+      endTime,
+      amount,
+      paymentStatus,
+      pin,
+    } = bookingData;
+
     const content = `
       <div class="hero-text">Your Stadium is Ready! ⚽</div>
       <p style="text-align: center; color: #64748b; font-size: 15px;">Hey champion! Your booking at <strong>${turfName}</strong> is confirmed. It's time to lace up and hit the pitch.</p>
@@ -238,11 +247,16 @@ export class EmailService {
       <a href="#" class="btn">Manage Booking</a>
     `;
 
-    return this.sendMail(email, `Booking Confirmed - ${turfName}`, this.getBaseTemplate(content, 'Booking Summary'));
+    return this.sendMail(
+      email,
+      `Booking Confirmed - ${turfName}`,
+      this.getBaseTemplate(content, 'Booking Summary'),
+    );
   }
 
   async sendBookingCancellation(email: string, bookingData: any) {
-    const { turfName, date, startTime, amount, refundAmount, reason } = bookingData;
+    const { turfName, date, startTime, amount, refundAmount, reason } =
+      bookingData;
 
     const content = `
       <div class="hero-text" style="color: #64748b;">Booking Cancelled</div>
@@ -261,7 +275,11 @@ export class EmailService {
       <a href="#" class="btn" style="background: #64748b;">Book Another Turf</a>
     `;
 
-    return this.sendMail(email, `Cancellation Confirmed - ${turfName}`, this.getBaseTemplate(content, 'Cancellation Details'));
+    return this.sendMail(
+      email,
+      `Cancellation Confirmed - ${turfName}`,
+      this.getBaseTemplate(content, 'Cancellation Details'),
+    );
   }
 
   async sendPaymentPending(email: string, bookingData: any) {
@@ -282,7 +300,11 @@ export class EmailService {
       <a href="#" class="btn">Complete Payment</a>
     `;
 
-    return this.sendMail(email, `Flash Notice: Payment Pending - ${turfName}`, this.getBaseTemplate(content, 'Action Required'));
+    return this.sendMail(
+      email,
+      `Flash Notice: Payment Pending - ${turfName}`,
+      this.getBaseTemplate(content, 'Action Required'),
+    );
   }
 
   async sendNoShowNotice(email: string, bookingData: any) {
@@ -303,7 +325,11 @@ export class EmailService {
       <a href="#" class="btn">Book for Tomorrow</a>
     `;
 
-    return this.sendMail(email, `Missed Booking - ${turfName}`, this.getBaseTemplate(content, 'Attendance Update'));
+    return this.sendMail(
+      email,
+      `Missed Booking - ${turfName}`,
+      this.getBaseTemplate(content, 'Attendance Update'),
+    );
   }
 
   private async sendMail(to: string, subject: string, html: string) {
