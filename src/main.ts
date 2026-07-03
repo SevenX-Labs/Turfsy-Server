@@ -116,7 +116,7 @@ async function bootstrap() {
       .setContact('Turfzy Team', 'https://turfsy.com', 'contact@turfsy.com')
       .setLicense('MIT License', 'https://opensource.org/licenses/MIT')
       .addServer('http://localhost:3000', 'Development Server')
-      .addServer('https://api.turfsy.com', 'Production Server')
+      .addServer('https://turfsy.onrender.com', 'Production Server')
       .addBearerAuth(
         {
           type: 'http',
