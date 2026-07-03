@@ -74,6 +74,7 @@ describe('BookingService - Platform Fee Slabs', () => {
 
   const mockNotifications = {
     sendPush: jest.fn(),
+    sendNotification: jest.fn().mockResolvedValue(true),
   };
 
   const mockMetrics = {
