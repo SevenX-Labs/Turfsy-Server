@@ -77,6 +77,12 @@ export class VerifyPinDto {
   pin: string;
 }
 
+export class VerifyQrDto {
+  @IsString()
+  @IsNotEmpty({ message: 'QR data is required' })
+  qrData: string;
+}
+
 export class RateTurfDto {
   @IsInt({ message: 'Rating must be an integer' })
   @Min(1, { message: 'Rating minimum is 1' })

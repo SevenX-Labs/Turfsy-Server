@@ -25,6 +25,7 @@ import {
 } from '@prisma/client';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
+import * as QRCode from 'qrcode';
 import { Parser } from 'json2csv';
 import * as PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
@@ -497,7 +498,7 @@ export class BookingService {
         this.triggerPushNotification(
           booking.userId,
           'Booking Confirmed ✅',
-          'Your turf is booked successfully',
+          'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
           {
             type: 'BOOKING_CONFIRMED',
             bookingId: booking.id,
@@ -1176,8 +1177,8 @@ export class BookingService {
         updated.userId,
         isPartial ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
         isPartial
-          ? 'Your advance payment is successful. Pay remaining at venue.'
-          : 'Your turf is booked successfully',
+          ? 'Your advance payment is successful. Pay remaining at venue. Your QR will become available 10 minutes before your slot.'
+          : 'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
         {
           type: isPartial ? 'PAYMENT_PARTIAL' : 'BOOKING_CONFIRMED',
           bookingId: updated.id,
@@ -1199,8 +1200,8 @@ export class BookingService {
         success: true,
         message:
           booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH
-            ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - booking.depositAmount} at turf. Your Check-In PIN is ${booking.checkInPin}.`
-            : `Payment successful. Booking confirmed! Your Check-In PIN is ${booking.checkInPin}.`,
+            ? `Deposit paid. Booking confirmed! Pay remaining ₹${booking.amount - booking.depositAmount} at turf. Your QR will become available 10 minutes before your slot.`
+            : `Payment successful. Booking confirmed! Your QR will become available 10 minutes before your slot.`,
         data: { ...updated, displayId: this.formatBookingId(updated.id) },
       };
     } finally {
@@ -1305,8 +1306,8 @@ export class BookingService {
       updated.userId,
       isPartial ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
       isPartial
-        ? 'Your advance payment is successful. Pay remaining at venue.'
-        : 'Your turf is booked successfully',
+        ? 'Your advance payment is successful. Pay remaining at venue. Your QR will become available 10 minutes before your slot.'
+        : 'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
       {
         type: isPartial ? 'PAYMENT_PARTIAL' : 'BOOKING_CONFIRMED',
         bookingId: updated.id,
@@ -1649,8 +1650,8 @@ export class BookingService {
           updated.userId,
           isPartialWebhook ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
           isPartialWebhook
-            ? 'Your advance payment is successful. Pay remaining at venue.'
-            : 'Your turf is booked successfully',
+            ? 'Your advance payment is successful. Pay remaining at venue. Your QR will become available 10 minutes before your slot.'
+            : 'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
           {
             type: isPartialWebhook ? 'PAYMENT_PARTIAL' : 'BOOKING_CONFIRMED',
             bookingId: updated.id,
@@ -1764,6 +1765,205 @@ export class BookingService {
   //    Layer 6: Rate Limiting (5/booking/15min)
   //    Layer 8: Constant-time PIN comparison, lockout
   // ═══════════════════════════════════════════════════════
+  // ─── QR Code Check-In Helpers ───
+  async generateCheckInQrCode(booking: any, windowEnd: Date): Promise<string> {
+    const secret = process.env.JWT_SECRET_KEY || 'default-secret-key';
+    const payload = {
+      bookingId: booking.id,
+      customerId: booking.userId,
+      bookingReference: this.formatBookingId(booking.id),
+      issuedAt: new Date().toISOString(),
+      expiresAt: windowEnd.toISOString(),
+      randomNonce: crypto.randomBytes(16).toString('hex'),
+    };
+    const payloadString = JSON.stringify(payload);
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(payloadString)
+      .digest('hex');
+
+    const qrData = JSON.stringify({ payload, signature });
+    return QRCode.toDataURL(qrData);
+  }
+
+  async verifyCheckInQr(ownerAuthId: string, qrData: string, ip?: string) {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(qrData);
+    } catch {
+      throw new BadRequestException('Invalid QR code format');
+    }
+
+    const { payload, signature } = parsed;
+    if (!payload || !signature || !payload.bookingId || !payload.customerId || !payload.expiresAt) {
+      throw new BadRequestException('Invalid QR code structure');
+    }
+
+    const bookingId = payload.bookingId;
+
+    // ── Rate Limiting ──
+    await this.rateLimiter.check(
+      `booking:${bookingId}:verify-qr`,
+      RATE_LIMITS.VERIFY_PIN,
+    );
+
+    const lockKey = `payment:lock:qr:${bookingId}`;
+    const lockValue = await this.redisService.acquireLock(lockKey, 15000);
+    if (!lockValue) {
+      throw new ConflictException(
+        'Check-in is currently being processed. Please try again.',
+      );
+    }
+
+    try {
+      // Validate signature
+      const secret = process.env.JWT_SECRET_KEY || 'default-secret-key';
+      const payloadString = JSON.stringify(payload);
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payloadString)
+        .digest('hex');
+
+      const sigBuf = Buffer.from(signature);
+      const expBuf = Buffer.from(expectedSignature);
+      const isSignatureValid =
+        sigBuf.length === expBuf.length &&
+        crypto.timingSafeEqual(sigBuf, expBuf);
+
+      if (!isSignatureValid) {
+        this.paymentLogger.log({
+          userId: ownerAuthId,
+          bookingId,
+          action: 'verify-qr',
+          ip,
+          result: 'REJECTED',
+          rejectionReason: 'QR Code signature tampering detected',
+        });
+        throw new BadRequestException('Invalid QR signature or tampered QR');
+      }
+
+      // Check expiration time inside the QR payload
+      const now = new Date();
+      const qrExpiry = new Date(payload.expiresAt);
+      if (now > qrExpiry) {
+        throw new BadRequestException('QR Expired');
+      }
+
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { turf: { include: { owner: true } } },
+      });
+
+      if (!booking) throw new NotFoundException('Booking not found');
+
+      // Verify booking belongs to scanned Turf owner
+      if (booking.turf.owner.authId !== ownerAuthId) {
+        throw new ForbiddenException('Access denied. Scanned turf owner mismatch.');
+      }
+
+      // Verify booking status is CONFIRMED
+      if (booking.bookingStatus === 'COMPLETED') {
+        return {
+          success: true,
+          message: 'Booking already completed.',
+          data: { ...booking, displayId: this.formatBookingId(booking.id) },
+        };
+      }
+      if (booking.bookingStatus !== 'CONFIRMED') {
+        throw new BadRequestException('Invalid booking state');
+      }
+
+      // Verify time window validation (reusing same logic)
+      const datePart = booking.bookingDate.toISOString().split('T')[0];
+      const isOvernight = booking.startTime > booking.endTime;
+      const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
+      const slotEnd = this.buildSlotDateTime(
+        datePart,
+        booking.endTime,
+        isOvernight ? 1 : 0,
+      );
+
+      const windowStart = new Date(
+        slotStart.getTime() - PIN_WINDOW_MINUTES * 60 * 1000,
+      );
+      const windowEnd = new Date(
+        slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000,
+      );
+
+      if (now < windowStart) {
+        throw new BadRequestException(
+          `Check-in window opens at ${windowStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
+        );
+      }
+      if (now > windowEnd) {
+        throw new BadRequestException('Check-in window expired');
+      }
+
+      const atomicUpdate = await this.prisma.booking.updateMany({
+        where: { id: bookingId, bookingStatus: 'CONFIRMED' },
+        data: {
+          paymentStatus: 'SUCCESS',
+          bookingStatus: 'COMPLETED',
+          visitedAt: now,
+          checkInPin: null,
+        },
+      });
+
+      if (atomicUpdate.count === 0) {
+        throw new ConflictException('Booking has already been processed.');
+      }
+
+      const updated = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+      });
+
+      // ── Trigger notifications ──
+      // Customer: Checked in successfully.
+      this.triggerPushNotification(
+        booking.userId,
+        'Checked in successfully 🎉',
+        `Checked in successfully.`,
+        {
+          type: 'CHECK_IN_SUCCESS',
+          bookingId,
+        },
+      ).catch((err) =>
+        this.logger.error(`[NOTIFICATION] Failed to send customer check-in notification: ${err.message}`),
+      );
+
+      // Owner: Customer checked in.
+      this.triggerPushNotification(
+        ownerAuthId,
+        'Customer checked in ✅',
+        `Customer checked in.`,
+        {
+          type: 'CHECK_IN_OWNER',
+          bookingId,
+        },
+      ).catch((err) =>
+        this.logger.error(`[NOTIFICATION] Failed to send owner check-in notification: ${err.message}`),
+      );
+
+      // Security log
+      this.paymentLogger.log({
+        userId: ownerAuthId,
+        bookingId,
+        turfId: booking.turfId,
+        action: 'verify-qr',
+        ip,
+        result: 'SUCCESS',
+      });
+
+      return {
+        success: true,
+        message: 'Check-in successful',
+        data: updated,
+      };
+    } finally {
+      await this.redisService.releaseLock(lockKey, lockValue);
+    }
+  }
+
   async verifyCheckInPin(
     ownerAuthId: string,
     bookingId: string,
@@ -2667,13 +2867,15 @@ export class BookingService {
     let updatedCount = 0;
 
     for (const booking of confirmedBookings) {
-      const slotStart = this.buildSlotDateTime(
+      const isOvernight = booking.startTime > booking.endTime;
+      const slotEnd = this.buildSlotDateTime(
         booking.bookingDate.toISOString().split('T')[0],
-        booking.startTime,
+        booking.endTime,
+        isOvernight ? 1 : 0,
       );
 
-      // No-show if 15 minutes past start time
-      const noShowThreshold = new Date(slotStart.getTime() + 15 * 60 * 1000);
+      // No-show if 20 minutes past slot end time
+      const noShowThreshold = new Date(slotEnd.getTime() + 20 * 60 * 1000);
 
       if (now > noShowThreshold) {
         await this.prisma.booking.update({
@@ -2697,16 +2899,31 @@ export class BookingService {
           ),
         );
 
+        // ── Notify Customer ──
+        this.triggerPushNotification(
+          booking.userId,
+          'Booking marked as No Show ⚠️',
+          'Booking marked as No Show.',
+          {
+            type: 'NO_SHOW_CUSTOMER',
+            bookingId: booking.id,
+          },
+        ).catch((err) =>
+          this.logger.error(`[NOTIFICATION] Failed to notify customer about no-show: ${err.message}`),
+        );
+
         // ── Notify Owner ──
         if (booking.turf?.owner?.authId) {
           this.triggerPushNotification(
             booking.turf.owner.authId,
-            'No-Show Recorded ⚠️',
-            `Customer didn't arrive for ${booking.turf.name} at ${booking.startTime}`,
+            'Customer did not check in ⚠️',
+            'Customer did not check in.',
             {
               type: 'NO_SHOW_OWNER',
               bookingId: booking.id,
             },
+          ).catch((err) =>
+            this.logger.error(`[NOTIFICATION] Failed to notify owner about no-show: ${err.message}`),
           );
         }
       }
@@ -2922,13 +3139,66 @@ export class BookingService {
     if (booking.userId !== authId)
       throw new ForbiddenException('Access denied.');
 
+    const now = new Date();
+    const datePart = booking.bookingDate.toISOString().split('T')[0];
+    const isOvernight = booking.startTime > booking.endTime;
+    const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
+    const slotEnd = this.buildSlotDateTime(
+      datePart,
+      booking.endTime,
+      isOvernight ? 1 : 0,
+    );
+
+    const windowStart = new Date(
+      slotStart.getTime() - PIN_WINDOW_MINUTES * 60 * 1000,
+    );
+    const windowEnd = new Date(
+      slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000,
+    );
+
+    let qrStatus = 'INACTIVE';
+    let qrMessage = '';
+    let qrCode: string | null = null;
+
+    if (booking.bookingStatus === 'COMPLETED') {
+      qrStatus = 'COMPLETED';
+      qrMessage = 'Checked in successfully.';
+    } else if (booking.bookingStatus === 'CONFIRMED') {
+      if (now < windowStart) {
+        qrStatus = 'UPCOMING';
+        qrMessage = 'QR will be available 10 minutes before your booking.';
+      } else if (now > windowEnd) {
+        qrStatus = 'EXPIRED';
+        qrMessage = 'QR Expired';
+      } else {
+        qrStatus = 'ACTIVE';
+        qrMessage = 'Show this QR at the turf to check in.';
+        try {
+          qrCode = await this.generateCheckInQrCode(booking, windowEnd);
+        } catch (err) {
+          this.logger.error(`Failed to generate QR code: ${err.message}`);
+        }
+      }
+    } else if (booking.bookingStatus === 'CANCELLED' || booking.bookingStatus === 'REJECTED') {
+      qrStatus = 'CANCELLED';
+      qrMessage = 'Booking cancelled/rejected.';
+    } else if (booking.bookingStatus === 'NO_SHOW') {
+      qrStatus = 'NO_SHOW';
+      qrMessage = 'Booking marked as No Show.';
+    } else {
+      qrStatus = 'PENDING';
+      qrMessage = 'Waiting for confirmation/approval.';
+    }
+
     return {
       success: true,
       data: {
         ...booking,
         bookingStatus: this.mapBookingStatus(booking),
         displayId: this.formatBookingId(booking.id),
-        // PIN visible for single booking detail
+        qrStatus,
+        qrMessage,
+        qrCode,
         pinAttempts: undefined,
         pinLocked: undefined,
       },
@@ -3727,7 +3997,7 @@ export class BookingService {
     this.triggerPushNotification(
       booking.userId,
       'Your Booking has been Confirmed',
-      `Your booking for ${booking.turf.name} on ${booking.bookingDate.toISOString().split('T')[0]} at ${booking.startTime} has been confirmed.`,
+      'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
       {
         type: 'BOOKING_CONFIRMED',
         bookingId: booking.id,

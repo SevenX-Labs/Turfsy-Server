@@ -28,6 +28,7 @@ import {
   CreateBookingDto,
   ConfirmPaymentDto,
   VerifyPinDto,
+  VerifyQrDto,
   RateTurfDto,
   CancelBookingDto,
   RebookBookingDto,
@@ -172,25 +173,23 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
-  // 5. VERIFY CASH PIN (Owner only)
-  // POST /api/v3/booking/:bookingId/verify-pin
-  // Layer 1: JWT + OWNER role | Layer 8: PIN security
+  // 5. VERIFY QR CODE (Owner only)
+  // POST /api/v3/booking/verify-qr
+  // Layer 1: JWT + OWNER role
   // ──────────────────────────────────────────────
-  @Post(':bookingId/verify-pin')
+  @Post('verify-qr')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
-  @Throttle({ strict: { limit: 5, ttl: 60000 } })
+  @Throttle({ strict: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
-  async verifyPin(
+  async verifyQr(
     @Req() req: any,
-    @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
-    @Body() dto: VerifyPinDto,
+    @Body() dto: VerifyQrDto,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.verifyCheckInPin(
+    return this.bookingService.verifyCheckInQr(
       req.user.authId,
-      bookingId,
-      dto.pin,
+      dto.qrData,
       ip,
     );
   }

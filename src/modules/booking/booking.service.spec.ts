@@ -10,8 +10,9 @@ import { NotificationsService } from '../../common/notifications/notifications.s
 import { MetricsService } from '../../common/metrics/metrics.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { getQueueToken } from '@nestjs/bullmq';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PaymentType, TurfPaymentPreference } from '@prisma/client';
+import * as crypto from 'crypto';
 
 describe('BookingService - Platform Fee Slabs', () => {
   let service: BookingService;
@@ -63,6 +64,7 @@ describe('BookingService - Platform Fee Slabs', () => {
 
   const mockUserGamification = {
     incrementBookings: jest.fn(),
+    handleNoShow: jest.fn().mockResolvedValue({}),
   };
 
   const mockEmailService = {
@@ -507,6 +509,168 @@ describe('BookingService - Platform Fee Slabs', () => {
         endTime: '23:00',
         isExpired: true,
       });
+    });
+  });
+
+  describe('QR Check-in Flow & Verification', () => {
+    const dummyBooking = {
+      id: 'booking-id-123',
+      userId: 'customer-123',
+      bookingStatus: 'CONFIRMED',
+      startTime: '10:00',
+      endTime: '11:00',
+      bookingDate: new Date(),
+      turfId: 'turf-1',
+      turf: {
+        name: 'Turf Alpha',
+        owner: { authId: 'owner-auth-id' },
+      },
+    };
+
+    const secret = process.env.JWT_SECRET_KEY || 'default-secret-key';
+
+    const generateTestQrData = (payloadOverrides = {}) => {
+      const payload = {
+        bookingId: 'booking-id-123',
+        customerId: 'customer-123',
+        bookingReference: 'BK-123',
+        issuedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 600000).toISOString(),
+        randomNonce: 'nonce-123',
+        ...payloadOverrides,
+      };
+      const payloadString = JSON.stringify(payload);
+      const signature = crypto
+        .createHmac('sha256', secret)
+        .update(payloadString)
+        .digest('hex');
+
+      return JSON.stringify({ payload, signature });
+    };
+
+    beforeEach(() => {
+      mockPrisma.booking.updateMany = jest.fn().mockResolvedValue({ count: 1 });
+      // mock update for no-show cron
+      mockPrisma.booking.update = jest.fn().mockResolvedValue({});
+    });
+
+    it('QR Generation - should successfully generate a base64 QR code image', async () => {
+      const windowEnd = new Date(Date.now() + 600000);
+      const qrCode = await service.generateCheckInQrCode(dummyBooking, windowEnd);
+      expect(qrCode).toContain('data:image/png;base64,');
+    });
+
+    it('Successful check-in - should verify a valid QR and complete the booking', async () => {
+      jest.useFakeTimers({ legacyFakeTimers: false });
+      const now = new Date('2026-07-03T04:25:00.000Z'); // 09:55 AM IST
+      jest.setSystemTime(now);
+
+      const qrData = generateTestQrData({
+        expiresAt: new Date('2026-07-03T05:40:00.000Z').toISOString(), // 11:10 AM IST
+      });
+      mockPrisma.booking.findUnique = jest.fn().mockResolvedValue({
+        ...dummyBooking,
+        bookingDate: new Date('2026-07-03T00:00:00.000Z'),
+      });
+
+      const result = await service.verifyCheckInQr('owner-auth-id', qrData);
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Check-in successful');
+      expect(mockPrisma.booking.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'booking-id-123', bookingStatus: 'CONFIRMED' },
+        }),
+      );
+    });
+
+    it('Expired QR - should reject expired QR codes', async () => {
+      const qrData = generateTestQrData({
+        expiresAt: new Date(Date.now() - 1000).toISOString(), // expired 1s ago
+      });
+
+      await expect(
+        service.verifyCheckInQr('owner-auth-id', qrData),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('Invalid/Modified QR - should reject if signature is modified or tampered', async () => {
+      const qrDataRaw = JSON.parse(generateTestQrData());
+      qrDataRaw.payload.bookingId = 'different-booking-id'; // modify
+      const tamperedQrData = JSON.stringify(qrDataRaw);
+
+      await expect(
+        service.verifyCheckInQr('owner-auth-id', tamperedQrData),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('Wrong Turf - should reject if booking belongs to a different owner/turf', async () => {
+      const qrData = generateTestQrData();
+      mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(dummyBooking);
+
+      await expect(
+        service.verifyCheckInQr('wrong-owner-id', qrData),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('Outside time window - should reject if booking is outside the check-in window', async () => {
+      jest.useFakeTimers({ legacyFakeTimers: false });
+      const now = new Date('2026-07-03T00:30:00.000Z'); // 06:00 AM IST
+      jest.setSystemTime(now);
+
+      const qrData = generateTestQrData({
+        expiresAt: new Date('2026-07-03T05:40:00.000Z').toISOString(), // 11:10 AM IST
+      });
+      mockPrisma.booking.findUnique = jest.fn().mockResolvedValue({
+        ...dummyBooking,
+        bookingDate: new Date('2026-07-03T00:00:00.000Z'),
+      });
+
+      await expect(
+        service.verifyCheckInQr('owner-auth-id', qrData),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('Duplicate scan - should handle completed bookings idempotently', async () => {
+      const qrData = generateTestQrData();
+      mockPrisma.booking.findUnique = jest.fn().mockResolvedValue({
+        ...dummyBooking,
+        bookingStatus: 'COMPLETED',
+      });
+
+      const result = await service.verifyCheckInQr('owner-auth-id', qrData);
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Booking already completed.');
+    });
+
+    it('Automatic No Show - markNoShows should transition confirmed bookings after slot end + 20 mins', async () => {
+      jest.useFakeTimers({ legacyFakeTimers: false });
+      const now = new Date('2026-07-03T05:55:00.000Z'); // 11:25 AM IST (ended at 11:00 AM IST, no-show threshold was 11:20 AM IST)
+      jest.setSystemTime(now);
+
+      mockPrisma.booking.findMany = jest.fn().mockResolvedValue([
+        {
+          id: 'b-no-show',
+          userId: 'user-1',
+          bookingStatus: 'CONFIRMED',
+          startTime: '10:00',
+          endTime: '11:00',
+          bookingDate: new Date('2026-07-03T00:00:00.000Z'),
+          turf: {
+            name: 'Turf Alpha',
+            owner: { authId: 'owner-auth-id' },
+          },
+        },
+      ]);
+
+      const result = await service.markNoShows();
+      expect(result.success).toBe(true);
+      expect(result.count).toBe(1);
+      expect(mockPrisma.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'b-no-show' },
+          data: { bookingStatus: 'NO_SHOW' },
+        }),
+      );
     });
   });
 });

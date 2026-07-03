@@ -11,6 +11,7 @@ export interface PaymentLogEntry {
     | 'cancel'
     | 'refund'
     | 'verify-pin'
+    | 'verify-qr'
     | 'create-booking'
     | 'complete'
     | 'rate'
