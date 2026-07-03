@@ -250,7 +250,105 @@ Success response:
 }
 ```
 
+## 12. Create MPIN
+
+`POST /api/v3/auth/create-mpin`
+
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
+
+Request:
+```json
+{
+  "mpin": "1234"
+}
+```
+
+Success response:
+```json
+{
+  "success": true,
+  "message": "MPIN created successfully"
+}
+```
+
+## 13. Verify MPIN
+
+`POST /api/v3/auth/verify-mpin`
+
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
+
+Request:
+```json
+{
+  "mpin": "1234"
+}
+```
+
+Success response:
+```json
+{
+  "success": true,
+  "message": "MPIN verified successfully"
+}
+```
+
+*Note: There is a rate limit protection of maximum 5 failed attempts, after which the MPIN verification is locked for 15 minutes.*
+
+## 14. Change MPIN
+
+`PATCH /api/v3/auth/change-mpin`
+
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
+
+Request:
+```json
+{
+  "currentMpin": "1234",
+  "newMpin": "5678"
+}
+```
+
+Success response:
+```json
+{
+  "success": true,
+  "message": "MPIN changed successfully"
+}
+```
+
+## 15. Reset MPIN (Forgot MPIN)
+
+`POST /api/v3/auth/reset-mpin`
+
+*Note: Can only be called after successful OTP login / verify-otp verification, which authorizes the reset window for 15 minutes.*
+
+Headers:
+- `Authorization: Bearer <accessToken>`
+- `Content-Type: application/json`
+
+Request:
+```json
+{
+  "newMpin": "9999"
+}
+```
+
+Success response:
+```json
+{
+  "success": true,
+  "message": "MPIN reset successfully"
+}
+```
+
 ## Validation Notes
 
 - `phone` must be a valid Indian mobile number (`en-IN`).
 - `otp` must be exactly 6 characters.
+- `mpin` must be a 4-digit or 6-digit numeric string.
