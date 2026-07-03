@@ -13,6 +13,15 @@ describe('OwnerSettingsService', () => {
     ownerSettings: { upsert: jest.fn(), update: jest.fn() },
     ownerProfile: { findUnique: jest.fn() },
     payment: { upsert: jest.fn() },
+    turf: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    turfMaintenance: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
+    booking: { findFirst: jest.fn() },
   };
 
   beforeEach(async () => {
@@ -229,6 +238,98 @@ describe('OwnerSettingsService', () => {
       const result = await service.getPaymentSettings('owner-auth-id');
       expect(result.success).toBe(true);
       expect(result.data.accountNumber).toBe('**********7890');
+    });
+  });
+
+  describe('Turf Maintenance Blocks Management', () => {
+    const dummyTurf = { id: 'turf-1', name: 'Super Turf', ownerProfileId: 'owner-id' };
+    const mockAuthOwner = { id: 'owner-auth-id', role: Role.OWNER, isActive: true };
+
+    beforeEach(() => {
+      mockPrisma.auth.findUnique.mockResolvedValue(mockAuthOwner);
+      mockPrisma.turf.findFirst.mockResolvedValue(dummyTurf);
+      mockPrisma.booking.findFirst.mockResolvedValue(null);
+    });
+
+    it('should successfully create single date maintenance', async () => {
+      mockPrisma.turfMaintenance.create.mockResolvedValue({ id: 'm-1' });
+
+      const response = await service.createMaintenanceBlock('owner-auth-id', {
+        turfId: 'turf-1',
+        date: '2026-08-15',
+        reason: 'Electrical Work',
+      });
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.turfMaintenance.create).toHaveBeenCalled();
+    });
+
+    it('should successfully create multiple dates maintenance', async () => {
+      mockPrisma.turfMaintenance.create.mockResolvedValue({ id: 'm-x' });
+
+      const response = await service.createMaintenanceBlock('owner-auth-id', {
+        turfId: 'turf-1',
+        dates: ['2026-08-15', '2026-08-18', '2026-08-22'],
+        reason: 'Ground Renovation',
+      });
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.turfMaintenance.create).toHaveBeenCalledTimes(3);
+    });
+
+    it('should successfully create date range maintenance', async () => {
+      mockPrisma.turfMaintenance.create.mockResolvedValue({ id: 'm-range' });
+
+      const response = await service.createMaintenanceBlock('owner-auth-id', {
+        turfId: 'turf-1',
+        startDate: '2026-08-15',
+        endDate: '2026-08-20',
+        reason: 'Festival Holiday',
+      });
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.turfMaintenance.create).toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException if conflict with existing confirmed bookings exists', async () => {
+      mockPrisma.booking.findFirst.mockResolvedValue({ id: 'booking-id' });
+
+      await expect(
+        service.createMaintenanceBlock('owner-auth-id', {
+          turfId: 'turf-1',
+          date: '2026-08-15',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should successfully update maintenance block', async () => {
+      mockPrisma.turfMaintenance.findUnique.mockResolvedValue({
+        id: 'm-1',
+        turfId: 'turf-1',
+        turf: { owner: { authId: 'owner-auth-id' } },
+      });
+      mockPrisma.turfMaintenance.update.mockResolvedValue({ id: 'm-1', reason: 'Updated Reason' });
+
+      const response = await service.updateMaintenanceBlock('owner-auth-id', 'm-1', {
+        startDate: '2026-08-15',
+        endDate: '2026-08-20',
+        reason: 'Updated Reason',
+      });
+
+      expect(response.success).toBe(true);
+      expect(response.data.reason).toBe('Updated Reason');
+    });
+
+    it('should successfully delete maintenance block', async () => {
+      mockPrisma.turfMaintenance.findUnique.mockResolvedValue({
+        id: 'm-1',
+        turfId: 'turf-1',
+        turf: { owner: { authId: 'owner-auth-id' } },
+      });
+      mockPrisma.turfMaintenance.delete.mockResolvedValue({});
+
+      const response = await service.deleteMaintenanceBlock('owner-auth-id', 'm-1');
+      expect(response.success).toBe(true);
     });
   });
 });

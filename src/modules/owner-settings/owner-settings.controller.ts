@@ -3,6 +3,7 @@ import {
   Get,
   Patch,
   Post,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -17,8 +18,9 @@ import { UpdateTurfSettingsDto } from './dto/turf-settings.dto';
 import { UpdatePaymentSettingsDto } from './dto/payment-settings.dto';
 import { UpdateNotificationSettingsDto } from './dto/notification-settings.dto';
 import { UpdateCancellationPolicyDto } from './dto/cancellation-policy.dto';
+import { CreateMaintenanceDto, UpdateMaintenanceDto } from './dto/maintenance.dto';
 import { AuthService } from '../auth/auth.service';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
 @ApiTags('Owners')
 @ApiBearerAuth('JWT-auth')
@@ -147,6 +149,46 @@ export class OwnerSettingsController {
   @Get('support')
   getSupport(@Req() req: any) {
     return this.ownerSettingsService.getSupportInfo(req.user.authId);
+  }
+
+  // --- Maintenance ---
+  @Get('maintenance/:turfId')
+  @ApiOperation({ summary: 'View all maintenance blocks for a Turf' })
+  getMaintenanceBlocks(@Req() req: any, @Param('turfId') turfId: string) {
+    return this.ownerSettingsService.getMaintenanceBlocks(req.user.authId, turfId);
+  }
+
+  @Post('maintenance')
+  @ApiOperation({ summary: 'Create maintenance block(s) for a Turf' })
+  @HttpCode(HttpStatus.CREATED)
+  createMaintenanceBlock(@Req() req: any, @Body() dto: CreateMaintenanceDto) {
+    return this.ownerSettingsService.createMaintenanceBlock(req.user.authId, dto);
+  }
+
+  @Patch('maintenance/:maintenanceId')
+  @ApiOperation({ summary: 'Update a maintenance block' })
+  updateMaintenanceBlock(
+    @Req() req: any,
+    @Param('maintenanceId') maintenanceId: string,
+    @Body() dto: UpdateMaintenanceDto,
+  ) {
+    return this.ownerSettingsService.updateMaintenanceBlock(
+      req.user.authId,
+      maintenanceId,
+      dto,
+    );
+  }
+
+  @Delete('maintenance/:maintenanceId')
+  @ApiOperation({ summary: 'Delete a maintenance block' })
+  deleteMaintenanceBlock(
+    @Req() req: any,
+    @Param('maintenanceId') maintenanceId: string,
+  ) {
+    return this.ownerSettingsService.deleteMaintenanceBlock(
+      req.user.authId,
+      maintenanceId,
+    );
   }
 
   // --- Logout ---

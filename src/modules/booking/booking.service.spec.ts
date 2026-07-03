@@ -37,6 +37,9 @@ describe('BookingService - Platform Fee Slabs', () => {
     booking: {
       create: jest.fn(),
     },
+    turfMaintenance: {
+      findFirst: jest.fn(),
+    },
     $transaction: jest.fn((cb) => cb(mockPrisma)),
     $queryRawUnsafe: jest.fn().mockResolvedValue([]),
   };
@@ -412,6 +415,98 @@ describe('BookingService - Platform Fee Slabs', () => {
       expect(response.success).toBe(true);
       expect(response.data.bookingStatus).toBe('REJECTED');
       expect(response.data.paymentStatus).toBe('REFUNDED');
+    });
+  });
+
+  describe('createBooking & getBookedSlots under Maintenance Blocks', () => {
+    const dummyTurf = {
+      id: 'turf-1',
+      name: 'Airoli Kickoff Turf',
+      status: 'ACTIVE',
+      paymentPreference: TurfPaymentPreference.FULL_ONLINE,
+      minSlotDurationMins: 60,
+      weekdayDayPrice: 1000,
+      weekdayNightPrice: 1000,
+      weekendDayPrice: 1000,
+      weekendNightPrice: 1000,
+      openTime: '06:00',
+      closeTime: '23:00',
+      owner: { authId: 'owner-auth-id' },
+    };
+
+    const defaultSlabs = [
+      { minAmount: 0, maxAmount: 1000, platformFee: 50, isActive: true },
+    ];
+
+    beforeEach(() => {
+      mockPrisma.turf.findUnique.mockResolvedValue(dummyTurf);
+      mockPrisma.platformFeeSlab.findMany.mockResolvedValue(defaultSlabs);
+      mockPrisma.slotLock.create.mockResolvedValue({ id: 'lock-id' });
+      mockPrisma.slotLock.findFirst.mockResolvedValue(null);
+      mockPrisma.slotLock.update.mockResolvedValue({ id: 'lock-id' });
+    });
+
+    it('Booking During Maintenance - should reject booking request with BadRequestException', async () => {
+      mockPrisma.turfMaintenance.findFirst.mockResolvedValue({
+        id: 'm-1',
+        reason: 'Ground Renovation',
+      });
+
+      await expect(
+        service.createBooking('user-id', {
+          turfId: 'turf-1',
+          bookingDate: '2026-08-15',
+          startTime: '10:00',
+          endTime: '11:00',
+          durationMins: 60,
+          paymentType: PaymentType.FULL_ONLINE,
+        }),
+      ).rejects.toThrow(
+        new BadRequestException('Turf is unavailable due to maintenance.'),
+      );
+    });
+
+    it('Booking Outside Maintenance - should allow booking request to proceed', async () => {
+      mockPrisma.turfMaintenance.findFirst.mockResolvedValue(null);
+      mockPrisma.booking.create.mockResolvedValue({
+        id: 'booking-id',
+        bookingDate: '2026-08-15',
+        startTime: '10:00',
+        endTime: '11:00',
+        paymentType: PaymentType.FULL_ONLINE,
+        amount: 1050,
+        groundCharge: 1000,
+        platformFee: 50,
+        depositAmount: 1050,
+      });
+
+      const response = await service.createBooking('user-id', {
+        turfId: 'turf-1',
+        bookingDate: '2026-08-15',
+        startTime: '10:00',
+        endTime: '11:00',
+        durationMins: 60,
+        paymentType: PaymentType.FULL_ONLINE,
+      });
+
+      expect(response.success).toBe(true);
+    });
+
+    it('Availability API - should hide maintenance dates by marking the day as booked/expired', async () => {
+      mockPrisma.turfMaintenance.findFirst.mockResolvedValue({
+        id: 'm-1',
+        reason: 'Ground Renovation',
+      });
+
+      const result = await service.getBookedSlots('turf-1', '2026-08-15');
+      expect(result.success).toBe(true);
+      expect(result.data.underMaintenance).toBe(true);
+      expect(result.data.maintenanceReason).toBe('Ground Renovation');
+      expect(result.data.bookedSlots[0]).toEqual({
+        startTime: '06:00',
+        endTime: '23:00',
+        isExpired: true,
+      });
     });
   });
 });

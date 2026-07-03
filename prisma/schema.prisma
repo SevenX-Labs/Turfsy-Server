@@ -456,6 +456,7 @@ model Turf {
   reviews                        Review[]
   priceHistory                   PriceHistory[]
   adminBookings                  AdminBooking[] @relation("AdminBookingToTurf")
+  maintenanceRecords             TurfMaintenance[]
 
   @@index([ownerProfileId])
   @@index([city])
@@ -760,4 +761,21 @@ model PlatformFeeSlab {
   @@index([isActive])
   @@index([minAmount, maxAmount])
   @@map("platform_fee_slabs")
+}
+
+model TurfMaintenance {
+  id        String   @id @default(uuid())
+  turfId    String   @map("turf_id")
+  startDate DateTime @map("start_date")
+  endDate   DateTime @map("end_date")
+  reason    String?
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
+
+  @@index([turfId])
+  @@index([startDate, endDate])
+  @@map("turf_maintenances")
 }

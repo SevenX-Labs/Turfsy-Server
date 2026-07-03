@@ -12,6 +12,7 @@ import { UpdateTurfSettingsDto } from './dto/turf-settings.dto';
 import { UpdatePaymentSettingsDto, isSequential, isRepeatedPattern } from './dto/payment-settings.dto';
 import { UpdateNotificationSettingsDto } from './dto/notification-settings.dto';
 import { UpdateCancellationPolicyDto } from './dto/cancellation-policy.dto';
+import { CreateMaintenanceDto, UpdateMaintenanceDto } from './dto/maintenance.dto';
 import { AccountType, Role } from '@prisma/client';
 
 export function maskAccountNumber(accNum: string | null | undefined): string | null {
@@ -446,6 +447,207 @@ export class OwnerSettingsService {
         whatsapp: '+91 9999999999',
         helpCenterUrl: 'https://help.turfsy.com',
       },
+    };
+  }
+
+  async getMaintenanceBlocks(ownerAuthId: string, turfId: string) {
+    await this.ensureOwner(ownerAuthId);
+
+    const turf = await this.prisma.turf.findFirst({
+      where: { id: turfId, owner: { authId: ownerAuthId } },
+    });
+    if (!turf) {
+      throw new ForbiddenException('You do not own this turf');
+    }
+
+    const records = await this.prisma.turfMaintenance.findMany({
+      where: { turfId },
+      orderBy: { startDate: 'asc' },
+    });
+
+    return {
+      success: true,
+      data: records,
+    };
+  }
+
+  async createMaintenanceBlock(ownerAuthId: string, dto: CreateMaintenanceDto) {
+    await this.ensureOwner(ownerAuthId);
+
+    const turf = await this.prisma.turf.findFirst({
+      where: { id: dto.turfId, owner: { authId: ownerAuthId } },
+    });
+    if (!turf) {
+      throw new ForbiddenException('You do not own this turf');
+    }
+
+    const blocksToCreate: { startDate: Date; endDate: Date; reason?: string; createdBy: string; turfId: string }[] = [];
+
+    if (dto.date) {
+      const start = new Date(dto.date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(dto.date);
+      end.setHours(23, 59, 59, 999);
+      blocksToCreate.push({
+        turfId: dto.turfId,
+        startDate: start,
+        endDate: end,
+        reason: dto.reason,
+        createdBy: ownerAuthId,
+      });
+    } else if (dto.dates && dto.dates.length > 0) {
+      for (const d of dto.dates) {
+        const start = new Date(d);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(d);
+        end.setHours(23, 59, 59, 999);
+        blocksToCreate.push({
+          turfId: dto.turfId,
+          startDate: start,
+          endDate: end,
+          reason: dto.reason,
+          createdBy: ownerAuthId,
+        });
+      }
+    } else if (dto.startDate && dto.endDate) {
+      const start = new Date(dto.startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(dto.endDate);
+      end.setHours(23, 59, 59, 999);
+
+      if (start > end) {
+        throw new BadRequestException('Start date cannot be after end date');
+      }
+
+      blocksToCreate.push({
+        turfId: dto.turfId,
+        startDate: start,
+        endDate: end,
+        reason: dto.reason,
+        createdBy: ownerAuthId,
+      });
+    } else {
+      throw new BadRequestException('Please provide either date, dates, or a startDate and endDate range');
+    }
+
+    // Overlap validation with existing bookings
+    for (const block of blocksToCreate) {
+      const conflicts = await this.prisma.booking.findFirst({
+        where: {
+          turfId: dto.turfId,
+          bookingStatus: { in: ['CONFIRMED', 'PENDING_APPROVAL'] },
+          bookingDate: {
+            gte: block.startDate,
+            lte: block.endDate,
+          },
+        },
+      });
+
+      if (conflicts) {
+        throw new BadRequestException('Confirmed bookings already exist.');
+      }
+    }
+
+    const createdRecords: any[] = [];
+    for (const block of blocksToCreate) {
+      const record = await this.prisma.turfMaintenance.create({
+        data: {
+          turfId: block.turfId,
+          startDate: block.startDate,
+          endDate: block.endDate,
+          reason: block.reason,
+          createdBy: block.createdBy,
+        },
+      });
+      createdRecords.push(record);
+    }
+
+    return {
+      success: true,
+      message: 'Maintenance block created successfully',
+      data: createdRecords,
+    };
+  }
+
+  async updateMaintenanceBlock(ownerAuthId: string, maintenanceId: string, dto: UpdateMaintenanceDto) {
+    await this.ensureOwner(ownerAuthId);
+
+    const record = await this.prisma.turfMaintenance.findUnique({
+      where: { id: maintenanceId },
+      include: { turf: { include: { owner: { select: { authId: true } } } } },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Maintenance record not found');
+    }
+
+    if (record.turf.owner.authId !== ownerAuthId) {
+      throw new ForbiddenException('You do not own this turf');
+    }
+
+    const start = new Date(dto.startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(dto.endDate);
+    end.setHours(23, 59, 59, 999);
+
+    if (start > end) {
+      throw new BadRequestException('Start date cannot be after end date');
+    }
+
+    const conflicts = await this.prisma.booking.findFirst({
+      where: {
+        turfId: record.turfId,
+        bookingStatus: { in: ['CONFIRMED', 'PENDING_APPROVAL'] },
+        bookingDate: {
+          gte: start,
+          lte: end,
+        },
+      },
+    });
+
+    if (conflicts) {
+      throw new BadRequestException('Confirmed bookings already exist.');
+    }
+
+    const updated = await this.prisma.turfMaintenance.update({
+      where: { id: maintenanceId },
+      data: {
+        startDate: start,
+        endDate: end,
+        reason: dto.reason,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Maintenance block updated successfully',
+      data: updated,
+    };
+  }
+
+  async deleteMaintenanceBlock(ownerAuthId: string, maintenanceId: string) {
+    await this.ensureOwner(ownerAuthId);
+
+    const record = await this.prisma.turfMaintenance.findUnique({
+      where: { id: maintenanceId },
+      include: { turf: { include: { owner: { select: { authId: true } } } } },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Maintenance record not found');
+    }
+
+    if (record.turf.owner.authId !== ownerAuthId) {
+      throw new ForbiddenException('You do not own this turf');
+    }
+
+    await this.prisma.turfMaintenance.delete({
+      where: { id: maintenanceId },
+    });
+
+    return {
+      success: true,
+      message: 'Maintenance block deleted successfully',
     };
   }
 }

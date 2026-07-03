@@ -206,6 +206,20 @@ export class BookingService {
 
       const bookingDate = new Date(dto.bookingDate);
 
+      // ── Check if Turf is in Maintenance for the bookingDate ──
+      const checkDate = new Date(dto.bookingDate);
+      checkDate.setHours(12, 0, 0, 0);
+      const maintenanceBlock = await this.prisma.turfMaintenance.findFirst({
+        where: {
+          turfId: dto.turfId,
+          startDate: { lte: checkDate },
+          endDate: { gte: checkDate },
+        },
+      });
+      if (maintenanceBlock) {
+        throw new BadRequestException('Turf is unavailable due to maintenance.');
+      }
+
       // ── Prevent past-date bookings ──
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -647,6 +661,45 @@ export class BookingService {
 
     if (bookingDate < today || bookingDate > maxBookingDate) {
       throw new BadRequestException('Requested date is outside the 90-day booking window');
+    }
+
+    const checkDate = new Date(bookingDate);
+    checkDate.setHours(12, 0, 0, 0);
+    const maintenanceBlock = await this.prisma.turfMaintenance.findFirst({
+      where: {
+        turfId,
+        startDate: { lte: checkDate },
+        endDate: { gte: checkDate },
+      },
+    });
+
+    if (maintenanceBlock) {
+      const isWeekend = this.isWeekend(bookingDate);
+      return {
+        success: true,
+        data: {
+          openTime: turf.openTime,
+          closeTime: turf.closeTime,
+          underMaintenance: true,
+          maintenanceReason: maintenanceBlock.reason || 'Routine Maintenance',
+          bookedSlots: [
+            {
+              startTime: turf.openTime,
+              endTime: turf.closeTime,
+              isExpired: true,
+            },
+          ],
+          minBookableTime: '24:00',
+          pricing: {
+            dayPrice: isWeekend ? turf.weekendDayPrice : turf.weekdayDayPrice,
+            nightPrice: isWeekend
+              ? turf.weekendNightPrice
+              : turf.weekdayNightPrice,
+            nightStartsAt: `${NIGHT_START_HOUR}:00`,
+            isWeekend,
+          },
+        },
+      };
     }
 
     const bookings = await this.prisma.booking.findMany({
