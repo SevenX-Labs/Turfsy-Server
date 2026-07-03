@@ -272,19 +272,19 @@ model PlatformConfig {
 }
 
 model SupportTicket {
-  id                 String               @id @default(uuid())
-  userId             String
-  userRole           Role
-  subject            String
-  description        String
-  status             TicketStatus         @default(OPEN)
-  priority           TicketPriority       @default(MEDIUM)
-  assignedTo         String?
-  resolvedAt         DateTime?
-  closedAt           DateTime?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  replies            SupportTicketReply[]
+  id          String               @id @default(uuid())
+  userId      String
+  userRole    Role
+  subject     String
+  description String
+  status      TicketStatus         @default(OPEN)
+  priority    TicketPriority       @default(MEDIUM)
+  assignedTo  String?
+  resolvedAt  DateTime?
+  closedAt    DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  replies     SupportTicketReply[]
 
   @@index([assignedTo])
   @@index([createdAt])
@@ -404,14 +404,14 @@ model OwnerProfile {
 }
 
 model Turf {
-  id                             String         @id @default(uuid())
+  id                             String                @id @default(uuid())
   ownerProfileId                 String
   name                           String
   description                    String?
   sportsType                     SportsType
   turfSize                       String
-  status                         TurfStatus     @default(ACTIVE)
-  isFeatured                     Boolean        @default(false)
+  status                         TurfStatus            @default(ACTIVE)
+  isFeatured                     Boolean               @default(false)
   featuredAt                     DateTime?
   featuredBy                     String?
   suspensionReason               String?
@@ -429,13 +429,13 @@ model Turf {
   groundNightUrl                 String?
   entranceUrl                    String?
   videoUrl                       String?
-  floodLights                    Boolean        @default(false)
-  parking                        Boolean        @default(false)
-  washroom                       Boolean        @default(false)
-  changingRoom                   Boolean        @default(false)
-  drinkingWater                  Boolean        @default(false)
-  seatingArea                    Boolean        @default(false)
-  cafeteria                      Boolean        @default(false)
+  floodLights                    Boolean               @default(false)
+  parking                        Boolean               @default(false)
+  washroom                       Boolean               @default(false)
+  changingRoom                   Boolean               @default(false)
+  drinkingWater                  Boolean               @default(false)
+  seatingArea                    Boolean               @default(false)
+  cafeteria                      Boolean               @default(false)
   weekdayDayPrice                Float
   weekdayNightPrice              Float
   weekendDayPrice                Float
@@ -446,16 +446,16 @@ model Turf {
   paymentPreference              TurfPaymentPreference @default(FULL_ONLINE)
   bookingApprovalType            BookingApprovalType   @default(INSTANT)
   createdAt                      DateTime              @default(now())
-  updatedAt                      DateTime       @updatedAt
+  updatedAt                      DateTime              @updatedAt
   deletedAt                      DateTime?
-  owner                          OwnerProfile   @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+  owner                          OwnerProfile          @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
   bookings                       Booking[]
   savedByUsers                   SavedTurf[]
   ratings                        TurfRating[]
   recentViews                    RecentView[]
   reviews                        Review[]
   priceHistory                   PriceHistory[]
-  adminBookings                  AdminBooking[] @relation("AdminBookingToTurf")
+  adminBookings                  AdminBooking[]        @relation("AdminBookingToTurf")
   maintenanceRecords             TurfMaintenance[]
 
   @@index([ownerProfileId])
@@ -469,8 +469,8 @@ model Turf {
   @@index([status, weekdayDayPrice])
   @@index([status, city, sportsType])
   @@index([status, city, weekdayDayPrice])
-  @@index([status, deletedAt])              // Hot: fetchAllActiveTurfs, listAllTurfs, searchTurfs
-  @@index([ownerProfileId, deletedAt])      // Hot: getMyTurfs
+  @@index([status, deletedAt]) // Hot: fetchAllActiveTurfs, listAllTurfs, searchTurfs
+  @@index([ownerProfileId, deletedAt]) // Hot: getMyTurfs
   @@index([isFeatured])
 }
 
@@ -512,7 +512,7 @@ model Session {
 
   @@index([token])
   @@index([authId])
-  @@index([authId, revokedAt])              // Hot: active session lookups
+  @@index([authId, revokedAt]) // Hot: active session lookups
 }
 
 model OtpEntry {
@@ -549,38 +549,41 @@ model SavedTurf {
 }
 
 model Booking {
-  id                String        @id @default(uuid())
-  userId            String        @map("user_id")
-  turfId            String        @map("turf_id")
-  bookingDate       DateTime      @map("booking_date") @db.Date
-  startTime         String        @map("start_time")
-  endTime           String        @map("end_time")
-  durationMins      Int           @map("duration_mins")
-  bookingStatus     BookingStatus @default(PENDING) @map("booking_status")
-  paymentStatus     PaymentStatus @default(PENDING) @map("payment_status")
-  paymentType       PaymentType   @map("payment_type")
-  amount            Float
-  groundCharge      Float         @default(0) @map("ground_charge")
-  platformFee       Float         @default(0) @map("platform_fee")
-  depositAmount     Float         @default(0) @map("deposit_amount")
-  razorpayOrderId   String?       @map("razorpay_order_id")
-  razorpayPaymentId String?       @map("razorpay_payment_id")
-  checkInPin        String?       @map("check_in_pin")
-  pinAttempts       Int           @default(0) @map("pin_attempts")
-  pinLocked         Boolean       @default(false) @map("pin_locked")
-  pinExpiresAt      DateTime?     @map("pin_expires_at")
-  visitedAt         DateTime?     @map("visited_at")
-  razorpayRefundId  String?       @map("razorpay_refund_id")
-  cancelledAt       DateTime?     @map("cancelled_at")
-  cancelReason      String?       @map("cancel_reason")
-  notes             String?
-  playersCount      Int?          @map("players_count")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
-  turf              Turf          @relation(fields: [turfId], references: [id], onDelete: Cascade)
-  user              Auth          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rating            TurfRating?
-  bookingSplit      BookingSplit?
+  id                 String        @id @default(uuid())
+  userId             String        @map("user_id")
+  turfId             String        @map("turf_id")
+  bookingDate        DateTime      @map("booking_date") @db.Date
+  startTime          String        @map("start_time")
+  endTime            String        @map("end_time")
+  durationMins       Int           @map("duration_mins")
+  bookingStatus      BookingStatus @default(PENDING) @map("booking_status")
+  paymentStatus      PaymentStatus @default(PENDING) @map("payment_status")
+  paymentType        PaymentType   @map("payment_type")
+  amount             Float
+  groundCharge       Float         @default(0) @map("ground_charge")
+  platformFee        Float         @default(0) @map("platform_fee")
+  depositAmount      Float         @default(0) @map("deposit_amount")
+  razorpayOrderId    String?       @map("razorpay_order_id")
+  razorpayPaymentId  String?       @map("razorpay_payment_id")
+  checkInPin         String?       @map("check_in_pin")
+  pinAttempts        Int           @default(0) @map("pin_attempts")
+  pinLocked          Boolean       @default(false) @map("pin_locked")
+  pinExpiresAt       DateTime?     @map("pin_expires_at")
+  visitedAt          DateTime?     @map("visited_at")
+  checkedInByOwnerId String?       @map("checked_in_by_owner_id")
+  scannedDevice      String?       @map("scanned_device")
+  scanIpAddress      String?       @map("scan_ip_address")
+  razorpayRefundId   String?       @map("razorpay_refund_id")
+  cancelledAt        DateTime?     @map("cancelled_at")
+  cancelReason       String?       @map("cancel_reason")
+  notes              String?
+  playersCount       Int?          @map("players_count")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  turf               Turf          @relation(fields: [turfId], references: [id], onDelete: Cascade)
+  user               Auth          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating             TurfRating?
+  bookingSplit       BookingSplit?
 
   @@unique([turfId, bookingDate, startTime])
   @@index([userId])
@@ -591,30 +594,30 @@ model Booking {
   @@index([userId, bookingStatus])
   @@index([userId, bookingDate])
   @@index([turfId, bookingDate])
-  @@index([turfId, bookingStatus])                         // Hot: owner booking lookups
-  @@index([userId, bookingDate, bookingStatus])            // Hot: getActiveBookingToday, getBookingsByStatus
-  @@index([bookingStatus, paymentType, paymentStatus])     // Hot: cron autoCompleteOnlineBookings
-  @@index([bookingStatus, bookingDate])                    // Hot: cron markNoShows, filtered queries
+  @@index([turfId, bookingStatus]) // Hot: owner booking lookups
+  @@index([userId, bookingDate, bookingStatus]) // Hot: getActiveBookingToday, getBookingsByStatus
+  @@index([bookingStatus, paymentType, paymentStatus]) // Hot: cron autoCompleteOnlineBookings
+  @@index([bookingStatus, bookingDate]) // Hot: cron markNoShows, filtered queries
   @@map("bookings")
 }
 
 model SlotLock {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  turfId      String   @map("turf_id")
-  bookingDate DateTime @map("booking_date") @db.Date
-  startTime   String   @map("start_time")
-  endTime     String   @map("end_time")
-  durationMins Int     @map("duration_mins")
-  expiresAt   DateTime @map("expires_at")
-  bookingId   String?  @unique @map("booking_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  turfId       String   @map("turf_id")
+  bookingDate  DateTime @map("booking_date") @db.Date
+  startTime    String   @map("start_time")
+  endTime      String   @map("end_time")
+  durationMins Int      @map("duration_mins")
+  expiresAt    DateTime @map("expires_at")
+  bookingId    String?  @unique @map("booking_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@index([turfId, bookingDate])
   @@index([userId, bookingDate])
   @@index([bookingId])
-  @@index([expiresAt])                      // Hot: expired lock cleanup
+  @@index([expiresAt]) // Hot: expired lock cleanup
   @@map("slot_locks")
 }
 
@@ -648,7 +651,7 @@ model UserGamification {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   auth           Auth      @relation(fields: [authId], references: [id], onDelete: Cascade)
 
-  @@index([points])                         // Hot: leaderboard sorting
+  @@index([points]) // Hot: leaderboard sorting
   @@map("user_gamification")
 }
 
@@ -720,12 +723,12 @@ model BookingSplitPlayer {
 }
 
 model RecentView {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  turfId    String   @map("turf_id")
-  viewedAt  DateTime @default(now()) @map("viewed_at")
-  user      Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
+  id       String   @id @default(uuid())
+  userId   String   @map("user_id")
+  turfId   String   @map("turf_id")
+  viewedAt DateTime @default(now()) @map("viewed_at")
+  user     Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  turf     Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
 
   @@unique([userId, turfId])
   @@index([userId])
@@ -773,7 +776,7 @@ model TurfMaintenance {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  turf      Turf     @relation(fields: [turfId], references: [id], onDelete: Cascade)
+  turf Turf @relation(fields: [turfId], references: [id], onDelete: Cascade)
 
   @@index([turfId])
   @@index([startDate, endDate])

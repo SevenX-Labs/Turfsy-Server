@@ -67,6 +67,10 @@ export class BookingService {
       key_id: this.configService.get<string>('RAZORPAY_KEY_ID') || '',
       key_secret: this.configService.get<string>('RAZORPAY_KEY_SECRET') || '',
     });
+
+    if (!this.configService.get<string>('QR_SECRET_KEY')) {
+      throw new Error('FATAL: QR_SECRET_KEY is missing from environment variables.');
+    }
   }
 
   private normalizeBookingDate(date: string | Date): Date {
@@ -1767,7 +1771,7 @@ export class BookingService {
   // ═══════════════════════════════════════════════════════
   // ─── QR Code Check-In Helpers ───
   async generateCheckInQrCode(booking: any, windowEnd: Date): Promise<string> {
-    const secret = process.env.JWT_SECRET_KEY || 'default-secret-key';
+    const secret = this.configService.get<string>('QR_SECRET_KEY') || 'default-qr-secret-key';
     const payload = {
       bookingId: booking.id,
       customerId: booking.userId,
@@ -1817,7 +1821,7 @@ export class BookingService {
 
     try {
       // Validate signature
-      const secret = process.env.JWT_SECRET_KEY || 'default-secret-key';
+      const secret = this.configService.get<string>('QR_SECRET_KEY') || 'default-qr-secret-key';
       const payloadString = JSON.stringify(payload);
       const expectedSignature = crypto
         .createHmac('sha256', secret)
@@ -1863,11 +1867,7 @@ export class BookingService {
 
       // Verify booking status is CONFIRMED
       if (booking.bookingStatus === 'COMPLETED') {
-        return {
-          success: true,
-          message: 'Booking already completed.',
-          data: { ...booking, displayId: this.formatBookingId(booking.id) },
-        };
+        throw new ConflictException('QR Code has already been used.');
       }
       if (booking.bookingStatus !== 'CONFIRMED') {
         throw new BadRequestException('Invalid booking state');
@@ -1905,6 +1905,8 @@ export class BookingService {
           paymentStatus: 'SUCCESS',
           bookingStatus: 'COMPLETED',
           visitedAt: now,
+          checkedInByOwnerId: ownerAuthId,
+          scanIpAddress: ip || null,
           checkInPin: null,
         },
       });
@@ -1917,12 +1919,14 @@ export class BookingService {
         where: { id: bookingId },
       });
 
+      const checkInTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
       // ── Trigger notifications ──
       // Customer: Checked in successfully.
       this.triggerPushNotification(
         booking.userId,
-        'Checked in successfully 🎉',
-        `Checked in successfully.`,
+        'Check-in successful 🎉',
+        `Check-in successful at ${checkInTime}.`,
         {
           type: 'CHECK_IN_SUCCESS',
           bookingId,
@@ -1935,7 +1939,7 @@ export class BookingService {
       this.triggerPushNotification(
         ownerAuthId,
         'Customer checked in ✅',
-        `Customer checked in.`,
+        `Customer checked in successfully at ${checkInTime}.`,
         {
           type: 'CHECK_IN_OWNER',
           bookingId,

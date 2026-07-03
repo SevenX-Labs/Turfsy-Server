@@ -10,7 +10,7 @@ import { NotificationsService } from '../../common/notifications/notifications.s
 import { MetricsService } from '../../common/metrics/metrics.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { getQueueToken } from '@nestjs/bullmq';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PaymentType, TurfPaymentPreference } from '@prisma/client';
 import * as crypto from 'crypto';
 
@@ -49,6 +49,7 @@ describe('BookingService - Platform Fee Slabs', () => {
     get: jest.fn((key) => {
       if (key === 'RAZORPAY_KEY_ID') return 'key_id';
       if (key === 'RAZORPAY_KEY_SECRET') return 'your_razorpay_key_secret';
+      if (key === 'QR_SECRET_KEY') return 'test-qr-secret-key';
       return null;
     }),
   };
@@ -121,6 +122,34 @@ describe('BookingService - Platform Fee Slabs', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('should fail fast if QR_SECRET_KEY is missing', () => {
+    const originalGet = mockConfigService.get;
+    mockConfigService.get = jest.fn((key) => {
+      if (key === 'QR_SECRET_KEY') return null;
+      return originalGet(key);
+    });
+
+    expect(() => {
+      new BookingService(
+        prisma,
+        mockConfigService as any,
+        mockPaymentLogger as any,
+        mockRateLimiter as any,
+        mockUserGamification as any,
+        mockEmailService as any,
+        mockNotifications as any,
+        mockMetrics as any,
+        mockRedis as any,
+        mockQueue as any,
+        mockQueue as any,
+        mockQueue as any,
+      );
+    }).toThrow('FATAL: QR_SECRET_KEY is missing from environment variables.');
+
+    // Restore
+    mockConfigService.get = originalGet;
   });
 
   describe('createBooking - Platform Fee Slabs & Payment Preferences', () => {
@@ -527,7 +556,7 @@ describe('BookingService - Platform Fee Slabs', () => {
       },
     };
 
-    const secret = process.env.JWT_SECRET_KEY || 'default-secret-key';
+    const secret = 'test-qr-secret-key';
 
     const generateTestQrData = (payloadOverrides = {}) => {
       const payload = {
@@ -573,12 +602,17 @@ describe('BookingService - Platform Fee Slabs', () => {
         bookingDate: new Date('2026-07-03T00:00:00.000Z'),
       });
 
-      const result = await service.verifyCheckInQr('owner-auth-id', qrData);
+      const result = await service.verifyCheckInQr('owner-auth-id', qrData, '127.0.0.1');
       expect(result.success).toBe(true);
       expect(result.message).toBe('Check-in successful');
       expect(mockPrisma.booking.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'booking-id-123', bookingStatus: 'CONFIRMED' },
+          data: expect.objectContaining({
+            bookingStatus: 'COMPLETED',
+            checkedInByOwnerId: 'owner-auth-id',
+            scanIpAddress: '127.0.0.1'
+          })
         }),
       );
     });
@@ -630,16 +664,16 @@ describe('BookingService - Platform Fee Slabs', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('Duplicate scan - should handle completed bookings idempotently', async () => {
+    it('Duplicate scan - should reject with 409 Conflict for completed bookings', async () => {
       const qrData = generateTestQrData();
       mockPrisma.booking.findUnique = jest.fn().mockResolvedValue({
         ...dummyBooking,
         bookingStatus: 'COMPLETED',
       });
 
-      const result = await service.verifyCheckInQr('owner-auth-id', qrData);
-      expect(result.success).toBe(true);
-      expect(result.message).toBe('Booking already completed.');
+      await expect(
+        service.verifyCheckInQr('owner-auth-id', qrData),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('Automatic No Show - markNoShows should transition confirmed bookings after slot end + 20 mins', async () => {
