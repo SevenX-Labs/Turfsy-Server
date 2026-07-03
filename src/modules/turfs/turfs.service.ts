@@ -8,7 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/services/cache.service';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
-import { TurfStatus, SportsType } from '@prisma/client';
+import { TurfStatus, SportsType, TurfPaymentPreference } from '@prisma/client';
 
 @Injectable()
 export class TurfsService {
@@ -100,6 +100,7 @@ export class TurfsService {
         weekdayNightPrice: dto.weekdayNightPrice,
         weekendDayPrice: dto.weekendDayPrice,
         weekendNightPrice: dto.weekendNightPrice,
+        ...(dto.paymentPreference !== undefined && { paymentPreference: dto.paymentPreference }),
       },
     });
 
@@ -249,6 +250,9 @@ export class TurfsService {
         }),
         ...(dto.weekendNightPrice !== undefined && {
           weekendNightPrice: dto.weekendNightPrice,
+        }),
+        ...(dto.paymentPreference !== undefined && {
+          paymentPreference: dto.paymentPreference,
         }),
       },
     });

@@ -277,17 +277,34 @@ export class BookingService {
       }
 
       // ── Layer 4: Server-side price calculation (NEVER from client) ──
-      const amount = this.calculatePrice(
+      const turfPrice = this.calculatePrice(
         turf,
         bookingDate,
         dto.startTime,
         dto.durationMins!,
       );
 
-      // ── Layer 4: Deposit amount (server-calculated) ──
+      // Note: You can change the booking fee here in the future
+      const bookingFee = 0; 
+      const amount = turfPrice + bookingFee; // Total amount
+
+      // Validate payment preference matching
+      if (turf.paymentPreference === 'FULL_ONLINE' && dto.paymentType !== PaymentType.FULL_ONLINE) {
+        throw new BadRequestException('Only full online payment is allowed for this turf');
+      }
+      if (turf.paymentPreference === 'ADVANCE_PAYMENT' && dto.paymentType !== PaymentType.HALF_ONLINE_HALF_CASH) {
+        throw new BadRequestException('Only advance online payment is allowed for this turf');
+      }
+      if (turf.paymentPreference === 'FULL_CASH' && dto.paymentType !== PaymentType.FULL_CASH) {
+        throw new BadRequestException('Only full cash payment is allowed for this turf');
+      }
+
+      const depositPercentage = 0.3; // fixed 30% advance deposit rate
+
+      // ── Layer 4: Deposit amount (calculated as 30% of the total amount) ──
       const depositAmount =
         dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH
-          ? Math.floor(amount * CASH_DEPOSIT_PERCENT)
+          ? Math.floor(amount * depositPercentage)
           : dto.paymentType === PaymentType.FULL_CASH
             ? 0
             : amount;

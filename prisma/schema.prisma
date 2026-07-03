@@ -33,6 +33,12 @@ enum TurfStatus {
   UNDER_REVIEW
 }
 
+enum TurfPaymentPreference {
+  FULL_ONLINE
+  ADVANCE_PAYMENT
+  FULL_CASH
+}
+
 enum BookingStatus {
   PENDING
   CONFIRMED
@@ -428,9 +434,10 @@ model Turf {
   weekendDayPrice                Float
   weekendNightPrice              Float
   // Cancellation Policy
-  cancellationAllowedBeforeHours Int            @default(2)
-  cancellationRefundPercentage   Float          @default(75.0)
-  createdAt                      DateTime       @default(now())
+  cancellationAllowedBeforeHours Int                   @default(2)
+  cancellationRefundPercentage   Float                 @default(75.0)
+  paymentPreference              TurfPaymentPreference @default(FULL_ONLINE)
+  createdAt                      DateTime              @default(now())
   updatedAt                      DateTime       @updatedAt
   deletedAt                      DateTime?
   owner                          OwnerProfile   @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
