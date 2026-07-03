@@ -284,9 +284,49 @@ export class BookingService {
         dto.durationMins!,
       );
 
-      // Note: You can change the booking fee here in the future
-      const bookingFee = 0; 
-      const amount = turfPrice + bookingFee; // Total amount
+      // Query active platform fee slabs
+      const activeSlabs = await this.prisma.platformFeeSlab.findMany({
+        where: { isActive: true },
+      });
+
+      // Validation 1: minAmount > maxAmount or negative platformFee
+      for (const s of activeSlabs) {
+        if (s.minAmount > s.maxAmount) {
+          throw new BadRequestException('minAmount cannot be greater than maxAmount');
+        }
+        if (s.platformFee < 0) {
+          throw new BadRequestException('Platform Fee cannot be negative');
+        }
+      }
+
+      // Validation 2: Slab ranges overlap
+      for (let i = 0; i < activeSlabs.length; i++) {
+        for (let j = i + 1; j < activeSlabs.length; j++) {
+          const s1 = activeSlabs[i];
+          const s2 = activeSlabs[j];
+          if (s1.minAmount <= s2.maxAmount && s1.maxAmount >= s2.minAmount) {
+            throw new BadRequestException('Slab ranges overlap');
+          }
+        }
+      }
+
+      // Validation 3: Find matching slab for booking amount (groundCharge/turfPrice)
+      const matchingSlabs = activeSlabs.filter(
+        (s) => turfPrice >= s.minAmount && turfPrice <= s.maxAmount,
+      );
+
+      // Validation 4: No slab exists
+      if (matchingSlabs.length === 0) {
+        throw new BadRequestException('No slab exists for this booking amount');
+      }
+
+      // Validation 5: Multiple slabs match
+      if (matchingSlabs.length > 1) {
+        throw new BadRequestException('Multiple slabs match this booking amount');
+      }
+
+      const platformFee = matchingSlabs[0].platformFee;
+      const amount = turfPrice + platformFee; // Total amount (Ground Charge + Platform Fee)
 
       // Validate payment preference matching
       if (turf.paymentPreference === 'FULL_ONLINE' && dto.paymentType !== PaymentType.FULL_ONLINE) {
@@ -300,14 +340,25 @@ export class BookingService {
       }
 
       const depositPercentage = 0.3; // fixed 30% advance deposit rate
+      let depositAmount = 0;
+      let groundAdvance = 0;
+      let onlinePayable = 0;
+      let remainingAtTurf = 0;
 
-      // ── Layer 4: Deposit amount (calculated as 30% of the total amount) ──
-      const depositAmount =
-        dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH
-          ? Math.floor(amount * depositPercentage)
-          : dto.paymentType === PaymentType.FULL_CASH
-            ? 0
-            : amount;
+      if (dto.paymentType === PaymentType.FULL_ONLINE) {
+        depositAmount = amount;
+        onlinePayable = amount;
+        remainingAtTurf = 0;
+      } else if (dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH) {
+        groundAdvance = Math.floor(turfPrice * depositPercentage);
+        onlinePayable = groundAdvance + platformFee;
+        remainingAtTurf = turfPrice - groundAdvance;
+        depositAmount = onlinePayable;
+      } else if (dto.paymentType === PaymentType.FULL_CASH) {
+        onlinePayable = platformFee;
+        remainingAtTurf = turfPrice;
+        depositAmount = onlinePayable;
+      }
 
       // ── Layer 8: Secure PIN generation (crypto.randomInt) ──
       const checkInPin = crypto.randomInt(1000, 9999).toString();
@@ -360,6 +411,8 @@ export class BookingService {
               durationMins: dto.durationMins,
               paymentType: dto.paymentType,
               amount,
+              groundCharge: turfPrice,
+              platformFee,
               depositAmount,
               checkInPin,
               pinExpiresAt,
@@ -468,15 +521,23 @@ export class BookingService {
         success: true,
         message:
           dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH
-            ? `Booking created. Pay 50% deposit (₹${depositAmount}) online. Remaining ₹${amount - depositAmount} at turf.`
+            ? `Booking created. Pay deposit (₹${depositAmount}) online. Remaining ₹${remainingAtTurf} at turf.`
             : dto.paymentType === PaymentType.FULL_CASH
-              ? `Booking confirmed! Please pay the full amount (₹${amount}) at the turf upon arrival.`
+              ? `Booking confirmed! Please pay ground charges (₹${remainingAtTurf}) at the turf upon arrival.`
               : `Booking created. Pay full amount (₹${amount}) to confirm.`,
         data: {
           ...booking,
           displayId: this.formatBookingId(booking.id),
           amountToPay: depositAmount,
-          remainingAmount: amount - depositAmount,
+          remainingAmount: remainingAtTurf,
+          groundCharge: turfPrice,
+          platformFee,
+          totalAmount: amount,
+          advanceAmount: groundAdvance,
+          remainingAtTurf,
+          onlinePayable,
+          paymentPreference: turf.paymentPreference,
+          advancePercentage: 30,
         },
       };
     } finally {
