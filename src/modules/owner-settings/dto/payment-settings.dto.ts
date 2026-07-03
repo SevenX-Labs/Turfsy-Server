@@ -110,6 +110,9 @@ export class UpdatePaymentSettingsDto {
   @Matches(/^[a-zA-Z\s.]+$/, {
     message: 'Account holder name can only contain alphabets, spaces, and dots',
   })
+  @Matches(/^[^<>\'";\-]+$/, {
+    message: 'Account holder name cannot contain SQL/XSS special characters',
+  })
   bankHolderName: string;
 
   @ApiProperty({
@@ -123,6 +126,9 @@ export class UpdatePaymentSettingsDto {
   @Length(3, 100, { message: 'Bank name must be between 3 and 100 characters' })
   @Matches(/^[a-zA-Z\s&]+$/, {
     message: 'Bank name can only contain alphabets, spaces, and &',
+  })
+  @Matches(/^[^<>\'";\-]+$/, {
+    message: 'Bank name cannot contain SQL/XSS special characters',
   })
   bankName: string;
 

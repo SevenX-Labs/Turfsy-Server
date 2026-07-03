@@ -190,5 +190,45 @@ describe('OwnerSettingsService', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should reject SQL/XSS characters in Account Holder Name', async () => {
+      await expect(
+        service.updatePaymentSettings('owner-auth-id', {
+          ...validDto,
+          bankHolderName: 'John; DROP TABLE Users;--',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject SQL/XSS characters in Bank Name', async () => {
+      await expect(
+        service.updatePaymentSettings('owner-auth-id', {
+          ...validDto,
+          bankName: 'HDFC <script>alert(1)</script>',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getPaymentSettings', () => {
+    it('should return masked account number', async () => {
+      mockPrisma.auth.findUnique.mockResolvedValue({
+        id: 'owner-auth-id',
+        role: Role.OWNER,
+        isActive: true,
+      });
+      mockPrisma.ownerSettings.upsert.mockResolvedValue({
+        id: 'settings-id',
+        bankHolderName: 'John Doe',
+        bankName: 'HDFC Bank',
+        accountNumber: '50100234567890',
+        ifscCode: 'HDFC0001234',
+        accountType: AccountType.SAVINGS,
+      });
+
+      const result = await service.getPaymentSettings('owner-auth-id');
+      expect(result.success).toBe(true);
+      expect(result.data.accountNumber).toBe('**********7890');
+    });
   });
 });

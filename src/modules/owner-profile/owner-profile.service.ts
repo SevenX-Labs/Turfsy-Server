@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOwnerProfileDto } from './dto/create-owner-profile.dto';
 import { UpdateOwnerProfileDto } from './dto/update-owner-profile.dto';
 import { Role } from '@prisma/client';
+import { maskAccountNumber } from '../owner-settings/owner-settings.service';
 
 @Injectable()
 export class OwnerProfileService {
@@ -101,6 +102,10 @@ export class OwnerProfileService {
       orderBy: { createdAt: 'desc' },
     });
 
+    if (profile && profile.payment) {
+      profile.payment.accountNumber = maskAccountNumber(profile.payment.accountNumber) as any;
+    }
+
     return {
       success: true,
       data: {
@@ -191,6 +196,10 @@ export class OwnerProfileService {
       where: { authId },
       include: { payment: true },
     });
+
+    if (finalProfile && finalProfile.payment) {
+      finalProfile.payment.accountNumber = maskAccountNumber(finalProfile.payment.accountNumber) as any;
+    }
 
     return {
       success: true,

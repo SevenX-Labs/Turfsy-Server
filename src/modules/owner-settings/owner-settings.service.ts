@@ -14,6 +14,13 @@ import { UpdateNotificationSettingsDto } from './dto/notification-settings.dto';
 import { UpdateCancellationPolicyDto } from './dto/cancellation-policy.dto';
 import { AccountType, Role } from '@prisma/client';
 
+export function maskAccountNumber(accNum: string | null | undefined): string | null {
+  if (!accNum) return null;
+  if (accNum.length <= 4) return '*'.repeat(accNum.length);
+  const last4 = accNum.slice(-4);
+  return '*'.repeat(accNum.length - 4) + last4;
+}
+
 @Injectable()
 export class OwnerSettingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -169,7 +176,7 @@ export class OwnerSettingsService {
       data: {
         bankHolderName: settings.bankHolderName ?? null,
         bankName: settings.bankName ?? null,
-        accountNumber: settings.accountNumber ?? null,
+        accountNumber: maskAccountNumber(settings.accountNumber),
         ifscCode: settings.ifscCode ?? null,
         accountType: settings.accountType ?? null,
       },
@@ -214,6 +221,9 @@ export class OwnerSettingsService {
     if (!/^[a-zA-Z\s.]+$/.test(bankHolderName)) {
       throw new BadRequestException('Account holder name can only contain alphabets, spaces, and dots');
     }
+    if (/[<>'";]|--/.test(bankHolderName)) {
+      throw new BadRequestException('Account holder name cannot contain SQL/XSS special characters');
+    }
 
     // Validate Bank Name
     if (bankName.length < 3 || bankName.length > 100) {
@@ -221,6 +231,9 @@ export class OwnerSettingsService {
     }
     if (!/^[a-zA-Z\s&]+$/.test(bankName)) {
       throw new BadRequestException('Bank name can only contain alphabets, spaces, and &');
+    }
+    if (/[<>'";]|--/.test(bankName)) {
+      throw new BadRequestException('Bank name cannot contain SQL/XSS special characters');
     }
 
     // Validate Account Number
