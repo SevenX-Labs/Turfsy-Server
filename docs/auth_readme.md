@@ -261,7 +261,8 @@ Headers:
 Request:
 ```json
 {
-  "mpin": "1234"
+  "mpin": "1234",
+  "confirmMpin": "1234"
 }
 ```
 
@@ -310,7 +311,8 @@ Request:
 ```json
 {
   "currentMpin": "1234",
-  "newMpin": "5678"
+  "newMpin": "5678",
+  "confirmMpin": "5678"
 }
 ```
 
@@ -335,7 +337,8 @@ Headers:
 Request:
 ```json
 {
-  "newMpin": "9999"
+  "newMpin": "9999",
+  "confirmMpin": "9999"
 }
 ```
 
