@@ -148,11 +148,11 @@ export class AuthService {
       );
     }
 
-    // 3. Phone-based Limit: max 5 requests per hour (sliding window)
+    // 3. Phone-based Limit: max 50 requests per hour (sliding window) for testing
     const cacheKeyPhone = `otp_rate_limit:phone:${phone}`;
     const phoneRateLimited = await this.cacheService.checkSlidingWindowLimit(
       cacheKeyPhone,
-      5,
+      50,
       60 * 60 * 1000, // 1 hour
     );
     if (phoneRateLimited) {
