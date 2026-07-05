@@ -54,14 +54,16 @@ export class AuthService {
   }
 
   private async sendOtpViaSms(phone: string, otp: string): Promise<void> {
-    const displayOtp =
-      process.env.NODE_ENV === 'production' ? '[REDACTED]' : otp;
+    // TEMPORARY: Always show OTP in logs (even on Render) to save Fast2SMS balance
     this.logger.log({
       message: `Sending OTP to ${phone}`,
       phone,
-      otp: displayOtp,
+      otp: otp, // <-- Exposing OTP in logs for testing on Render
     });
+    
     try {
+      /* 
+      // Fast2SMS API call commented out to save balance / prevent 400 errors
       const response = await axios.post(
         'https://www.fast2sms.com/dev/bulkV2',
         {
@@ -80,6 +82,7 @@ export class AuthService {
         message: 'Fast2SMS response received',
         response: response.data,
       });
+      */
     } catch (err) {
       this.logger.error(
         `Fast2SMS OTP transmission error: ${err.message}`,
