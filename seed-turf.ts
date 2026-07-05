@@ -59,7 +59,7 @@ async function main() {
         TurfPaymentPreference.ADVANCE_PAYMENT,
         TurfPaymentPreference.FULL_CASH
       ],
-      bookingApprovalType: BookingApprovalType.INSTANT,
+      bookingApprovalType: BookingApprovalType.MANUAL,
     }
   });
 

@@ -446,7 +446,9 @@ export class BookingService {
               notes: sanitizedNotes,
               bookingStatus:
                 dto.paymentType === PaymentType.FULL_CASH
-                  ? 'CONFIRMED'
+                  ? turf.bookingApprovalType === 'MANUAL'
+                    ? 'PENDING_APPROVAL'
+                    : 'CONFIRMED'
                   : 'PENDING',
               paymentStatus: 'PENDING',
             } as any,
