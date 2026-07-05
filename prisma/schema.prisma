@@ -443,7 +443,7 @@ model Turf {
   // Cancellation Policy
   cancellationAllowedBeforeHours Int                   @default(2)
   cancellationRefundPercentage   Float                 @default(75.0)
-  paymentPreference              TurfPaymentPreference @default(FULL_ONLINE)
+  paymentPreferences             TurfPaymentPreference[] @default([FULL_ONLINE])
   bookingApprovalType            BookingApprovalType   @default(INSTANT)
   createdAt                      DateTime              @default(now())
   updatedAt                      DateTime              @updatedAt

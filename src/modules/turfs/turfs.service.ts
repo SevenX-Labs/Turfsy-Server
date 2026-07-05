@@ -100,7 +100,7 @@ export class TurfsService {
         weekdayNightPrice: dto.weekdayNightPrice,
         weekendDayPrice: dto.weekendDayPrice,
         weekendNightPrice: dto.weekendNightPrice,
-        ...(dto.paymentPreference !== undefined && { paymentPreference: dto.paymentPreference }),
+        ...(dto.paymentPreferences !== undefined && { paymentPreferences: dto.paymentPreferences }),
         ...(dto.bookingApprovalType !== undefined && { bookingApprovalType: dto.bookingApprovalType }),
       },
     });
@@ -252,9 +252,7 @@ export class TurfsService {
         ...(dto.weekendNightPrice !== undefined && {
           weekendNightPrice: dto.weekendNightPrice,
         }),
-        ...(dto.paymentPreference !== undefined && {
-          paymentPreference: dto.paymentPreference,
-        }),
+        ...(dto.paymentPreferences !== undefined && { paymentPreferences: dto.paymentPreferences }),
         ...(dto.bookingApprovalType !== undefined && {
           bookingApprovalType: dto.bookingApprovalType,
         }),

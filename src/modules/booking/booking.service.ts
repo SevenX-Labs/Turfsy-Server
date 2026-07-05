@@ -357,14 +357,13 @@ export class BookingService {
       const amount = turfPrice + platformFee; // Total amount (Ground Charge + Platform Fee)
 
       // Validate payment preference matching
-      if (turf.paymentPreference === 'FULL_ONLINE' && dto.paymentType !== PaymentType.FULL_ONLINE) {
-        throw new BadRequestException('Only full online payment is allowed for this turf');
-      }
-      if (turf.paymentPreference === 'ADVANCE_PAYMENT' && dto.paymentType !== PaymentType.HALF_ONLINE_HALF_CASH) {
-        throw new BadRequestException('Only advance online payment is allowed for this turf');
-      }
-      if (turf.paymentPreference === 'FULL_CASH' && dto.paymentType !== PaymentType.FULL_CASH) {
-        throw new BadRequestException('Only full cash payment is allowed for this turf');
+      let isAllowed = false;
+      if (dto.paymentType === PaymentType.FULL_ONLINE && turf.paymentPreferences.includes('FULL_ONLINE')) isAllowed = true;
+      if (dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH && turf.paymentPreferences.includes('ADVANCE_PAYMENT')) isAllowed = true;
+      if (dto.paymentType === PaymentType.FULL_CASH && turf.paymentPreferences.includes('FULL_CASH')) isAllowed = true;
+
+      if (!isAllowed) {
+        throw new BadRequestException('The selected payment type is not allowed for this turf');
       }
 
       const depositPercentage = 0.3; // fixed 30% advance deposit rate
@@ -564,7 +563,7 @@ export class BookingService {
           advanceAmount: groundAdvance,
           remainingAtTurf,
           onlinePayable,
-          paymentPreference: turf.paymentPreference,
+          paymentPreferences: turf.paymentPreferences,
           advancePercentage: 30,
         },
       };

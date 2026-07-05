@@ -119,14 +119,16 @@ export class CreateTurfDto {
 
   @ApiProperty({
     enum: TurfPaymentPreference,
-    example: 'FULL_ONLINE',
+    example: ['FULL_ONLINE'],
+    isArray: true,
     required: false,
   })
   @IsOptional()
   @IsEnum(TurfPaymentPreference, {
-    message: 'paymentPreference must be FULL_ONLINE, ADVANCE_PAYMENT, or FULL_CASH',
+    each: true,
+    message: 'Each paymentPreference must be FULL_ONLINE, ADVANCE_PAYMENT, or FULL_CASH',
   })
-  paymentPreference?: TurfPaymentPreference;
+  paymentPreferences?: TurfPaymentPreference[];
 
   @ApiProperty({
     enum: BookingApprovalType,

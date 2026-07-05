@@ -135,9 +135,10 @@ export class UpdateTurfDto {
   })
   @IsOptional()
   @IsEnum(TurfPaymentPreference, {
-    message: 'paymentPreference must be FULL_ONLINE, ADVANCE_PAYMENT, or FULL_CASH',
+    each: true,
+    message: 'Each paymentPreference must be FULL_ONLINE, ADVANCE_PAYMENT, or FULL_CASH',
   })
-  paymentPreference?: TurfPaymentPreference;
+  paymentPreferences?: TurfPaymentPreference[];
 
   @ApiProperty({
     enum: BookingApprovalType,
