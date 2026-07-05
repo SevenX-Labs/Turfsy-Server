@@ -31,7 +31,7 @@ import * as crypto from 'crypto';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private readonly OTP_EXPIRY_SECONDS = 60;
+  private readonly OTP_EXPIRY_SECONDS = 180;
   private readonly RESEND_LIMIT_SECONDS = 60;
 
   constructor(
