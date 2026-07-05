@@ -50,6 +50,27 @@ export class CacheService {
   }
 
   /**
+   * Check if a sliding window rate limit is exceeded.
+   * Returns true if rate limited, false if allowed.
+   */
+  async checkSlidingWindowLimit(
+    key: string,
+    limit: number,
+    windowMs: number,
+  ): Promise<boolean> {
+    return this.redisService.checkSlidingWindowLimit(key, limit, windowMs);
+  }
+
+  /**
+   * Set a cooldown key with TTL.
+   * Returns true if the cooldown was successfully set (allowed to proceed).
+   * Returns false if the cooldown key was already present (blocked).
+   */
+  async setCooldown(key: string, cooldownMs: number): Promise<boolean> {
+    return this.redisService.setCooldown(key, cooldownMs);
+  }
+
+  /**
    * Get or compute: returns cached value if available,
    * otherwise calls factory, caches the result, and returns it.
    */

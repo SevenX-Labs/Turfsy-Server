@@ -112,23 +112,82 @@ export class AuthService {
   // Role is determined by the endpoint, not by the user
   // ─────────────────────────────────────────
 
-  async login(dto: LoginDto, ip: string, userAgent: string, role: Role) {
-    const { phone } = dto;
+  private async enforceOtpRateLimits(phone: string, ip: string): Promise<void> {
+    const clientIp = ip || 'unknown';
 
-    // ── Layer 1: Phone-based OTP Rate Limiting ──
-    const cacheKeyOtp = `otp_rate_limit:${phone}`;
-    const attempts = (await this.cacheService.get<number>(cacheKeyOtp)) || 0;
-    if (attempts >= 5) {
+    // 1. Verification Lockout Check: Check if verification is currently locked due to too many failed attempts
+    const lockKey = `otp_verify_attempts:${phone}:lock`;
+    const isLocked = await this.cacheService.get<boolean>(lockKey);
+    if (isLocked) {
       throw new HttpException(
         {
           success: false,
-          message:
-            'Too many OTP requests for this phone. Please try again later.',
+          message: 'Too many failed verification attempts. Please try again in 15 minutes.',
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    await this.cacheService.set(cacheKeyOtp, attempts + 1, 1000 * 60 * 60);
+
+    // 2. IP-based Limit: max 15 requests per hour (sliding window)
+    const cacheKeyIp = `otp_rate_limit:ip:${clientIp}`;
+    const ipRateLimited = await this.cacheService.checkSlidingWindowLimit(
+      cacheKeyIp,
+      15,
+      60 * 60 * 1000, // 1 hour
+    );
+    if (ipRateLimited) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Too many OTP requests from this IP. Please try again later.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // 3. Phone-based Limit: max 5 requests per hour (sliding window)
+    const cacheKeyPhone = `otp_rate_limit:phone:${phone}`;
+    const phoneRateLimited = await this.cacheService.checkSlidingWindowLimit(
+      cacheKeyPhone,
+      5,
+      60 * 60 * 1000, // 1 hour
+    );
+    if (phoneRateLimited) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Too many OTP requests for this phone. Please try again later.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // 4. Cooldown: minimum 60 seconds between consecutive requests
+    const cooldownKey = `otp_rate_limit:phone:${phone}:cooldown`;
+    const allowedByCooldown = await this.cacheService.setCooldown(
+      cooldownKey,
+      60 * 1000, // 60 seconds
+    );
+    if (!allowedByCooldown) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Please wait 60 seconds before requesting another OTP.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // POST /user/login  or  /owner/login
+  // Role is determined by the endpoint, not by the user
+  // ─────────────────────────────────────────
+
+  async login(dto: LoginDto, ip: string, userAgent: string, role: Role) {
+    const { phone } = dto;
+
+    await this.enforceOtpRateLimits(phone, ip);
 
     let auth = await this.prisma.auth.findUnique({ where: { phone } });
     if (!auth) {
@@ -184,6 +243,19 @@ export class AuthService {
   async verifyOtp(dto: VerifyOtpDto, role: Role) {
     const { phone, otp } = dto;
 
+    // Check if verification is locked
+    const lockKey = `otp_verify_attempts:${phone}:lock`;
+    const isLocked = await this.cacheService.get<boolean>(lockKey);
+    if (isLocked) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Too many failed verification attempts. Please try again in 15 minutes.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const auth = await this.prisma.auth.findUnique({
       where: { phone },
       include: {
@@ -212,6 +284,25 @@ export class AuthService {
 
     const isValid = await bcrypt.compare(otp, otpPayload.code);
     if (!isValid) {
+      const attemptKey = `otp_verify_attempts:${phone}`;
+      const failedAttempts = (await this.cacheService.get<number>(attemptKey)) || 0;
+      const newFailedAttempts = failedAttempts + 1;
+
+      if (newFailedAttempts >= 5) {
+        await this.cacheService.set(lockKey, true, 15 * 60 * 1000); // 15 mins
+        await this.cacheService.invalidate(attemptKey);
+        await this.cacheService.invalidate(`otp:${phone}:login`);
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Too many failed verification attempts. Verification locked for 15 minutes.',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      } else {
+        await this.cacheService.set(attemptKey, newFailedAttempts, 15 * 60 * 1000);
+      }
+
       if (otpPayload.attempts >= 5) {
         await this.cacheService.invalidate(`otp:${phone}:login`);
         throw new UnauthorizedException(
@@ -227,8 +318,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid OTP');
     }
 
-    // Clean up OTP on success
+    // Clean up OTP and attempts on success
     await this.cacheService.invalidate(`otp:${phone}:login`);
+    await this.cacheService.invalidate(`otp_verify_attempts:${phone}`);
+    await this.cacheService.invalidate(lockKey);
 
     // Store verified session token in Redis for deleteAccount check
     await this.cacheService.set(
@@ -293,7 +386,7 @@ export class AuthService {
   // POST /user/resend-otp  or  /owner/resend-otp
   // ─────────────────────────────────────────
 
-  async resendOtp(dto: ResendOtpDto) {
+  async resendOtp(dto: ResendOtpDto, ip?: string) {
     const { phone } = dto;
 
     const auth = await this.prisma.auth.findUnique({
@@ -304,20 +397,7 @@ export class AuthService {
       throw new NotFoundException('Account not found');
     }
 
-    // ── Layer 1: Phone-based OTP Rate Limiting Bypass Check ──
-    const cacheKeyOtp = `otp_rate_limit:${phone}`;
-    const attempts = (await this.cacheService.get<number>(cacheKeyOtp)) || 0;
-    if (attempts >= 5) {
-      throw new HttpException(
-        {
-          success: false,
-          message:
-            'Too many OTP requests for this phone. Please try again later.',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-    await this.cacheService.set(cacheKeyOtp, attempts + 1, 1000 * 60 * 60);
+    await this.enforceOtpRateLimits(phone, ip || '');
 
     const otpPayload = await this.cacheService.get<{
       code: string;
@@ -538,7 +618,7 @@ export class AuthService {
   // Sends OTP to the NEW phone number
   // ─────────────────────────────────────────
 
-  async requestPhoneChange(authId: string, newPhone: string) {
+  async requestPhoneChange(authId: string, newPhone: string, ip?: string) {
     const auth = await this.prisma.auth.findUnique({ where: { id: authId } });
     if (!auth) throw new NotFoundException('Account not found');
     if (!auth.isActive)
@@ -554,20 +634,7 @@ export class AuthService {
       );
     }
 
-    // ── Layer 1: Phone-based OTP Rate Limiting Bypass Check ──
-    const cacheKeyOtp = `otp_rate_limit:${newPhone}`;
-    const attempts = (await this.cacheService.get<number>(cacheKeyOtp)) || 0;
-    if (attempts >= 5) {
-      throw new HttpException(
-        {
-          success: false,
-          message:
-            'Too many OTP requests for this phone. Please try again later.',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-    await this.cacheService.set(cacheKeyOtp, attempts + 1, 1000 * 60 * 60);
+    await this.enforceOtpRateLimits(newPhone, ip || '');
 
     const otp = this.generateOtp();
     const hashedOtp = await this.hashOtp(otp);
@@ -609,6 +676,19 @@ export class AuthService {
     newPhone: string,
     otp: string,
   ) {
+    // Check if verification is locked
+    const lockKey = `otp_verify_attempts:${newPhone}:lock`;
+    const isLocked = await this.cacheService.get<boolean>(lockKey);
+    if (isLocked) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Too many failed verification attempts. Please try again in 15 minutes.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const auth = await this.prisma.auth.findUnique({ where: { id: authId } });
     if (!auth) throw new NotFoundException('Account not found');
 
@@ -627,6 +707,25 @@ export class AuthService {
 
     const isValid = await bcrypt.compare(otp, otpPayload.code);
     if (!isValid) {
+      const attemptKey = `otp_verify_attempts:${newPhone}`;
+      const failedAttempts = (await this.cacheService.get<number>(attemptKey)) || 0;
+      const newFailedAttempts = failedAttempts + 1;
+
+      if (newFailedAttempts >= 5) {
+        await this.cacheService.set(lockKey, true, 15 * 60 * 1000); // 15 mins
+        await this.cacheService.invalidate(attemptKey);
+        await this.cacheService.invalidate(`otp:${authId}:phone-change`);
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Too many failed verification attempts. Verification locked for 15 minutes.',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      } else {
+        await this.cacheService.set(attemptKey, newFailedAttempts, 15 * 60 * 1000);
+      }
+
       if (otpPayload.attempts >= 5) {
         await this.cacheService.invalidate(`otp:${authId}:phone-change`);
         throw new UnauthorizedException(
@@ -652,8 +751,10 @@ export class AuthService {
       );
     }
 
-    // Clean up OTP on success
+    // Clean up OTP and attempts on success
     await this.cacheService.invalidate(`otp:${authId}:phone-change`);
+    await this.cacheService.invalidate(`otp_verify_attempts:${newPhone}`);
+    await this.cacheService.invalidate(lockKey);
 
     // Store verified session token in Redis for deleteAccount check
     await this.cacheService.set(

@@ -73,8 +73,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend OTP to user phone' })
   @ApiResponse({ status: 200, description: 'OTP resent successfully' })
-  async userResendOtp(@Body() dto: ResendOtpDto) {
-    return this.authService.resendOtp(dto);
+  async userResendOtp(
+    @Body() dto: ResendOtpDto,
+    @Headers('x-forwarded-for') ip: string,
+  ) {
+    return this.authService.resendOtp(dto, ip);
   }
 
   // ═══════════════════════════════════════════
@@ -111,8 +114,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend OTP to owner phone' })
   @ApiResponse({ status: 200, description: 'OTP resent successfully' })
-  async ownerResendOtp(@Body() dto: ResendOtpDto) {
-    return this.authService.resendOtp(dto);
+  async ownerResendOtp(
+    @Body() dto: ResendOtpDto,
+    @Headers('x-forwarded-for') ip: string,
+  ) {
+    return this.authService.resendOtp(dto, ip);
   }
 
   // ═══════════════════════════════════════════
@@ -175,11 +181,12 @@ export class AuthController {
   async requestPhoneChange(
     @Req() req: any,
     @Body() body: { newPhone: string },
+    @Headers('x-forwarded-for') ip: string,
   ) {
     if (!body.newPhone) {
       throw new Error('newPhone is required');
     }
-    return this.authService.requestPhoneChange(req.user.authId, body.newPhone);
+    return this.authService.requestPhoneChange(req.user.authId, body.newPhone, ip);
   }
 
   @Post('verify-phone-change')

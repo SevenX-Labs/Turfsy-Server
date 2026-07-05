@@ -289,6 +289,71 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Check if a sliding window rate limit is exceeded.
+   * Increments the count for the sliding window if allowed.
+   * Returns true if rate limited, false if allowed.
+   */
+  async checkSlidingWindowLimit(
+    key: string,
+    limit: number,
+    windowMs: number,
+  ): Promise<boolean> {
+    if (!this.isConnected) return false; // Fail open
+    try {
+      const now = Date.now();
+      const minScore = now - windowMs;
+      const member = `${now}:${crypto.randomBytes(4).toString('hex')}`;
+
+      const results = await this.client
+        .multi()
+        .zAdd(key, { score: now, value: member })
+        .zRemRangeByScore(key, '-inf', minScore)
+        .zCard(key)
+        .pExpire(key, windowMs)
+        .exec();
+
+      if (!results) {
+        return false;
+      }
+
+      const currentCount = results[2] as unknown as number;
+      const isExceeded = currentCount > limit;
+
+      if (isExceeded) {
+        // Remove the member we just added to avoid penalizing subsequent requests longer than necessary
+        await this.client.zRem(key, member);
+        return true;
+      }
+
+      return false;
+    } catch (err: any) {
+      this.logger.error(
+        `Redis sliding window rate limit error [${key}]: ${err.message}`,
+      );
+      return false; // Fail open
+    }
+  }
+
+  /**
+   * Set a cooldown key with TTL.
+   * Returns true if the cooldown was successfully set (allowed to proceed).
+   * Returns false if the cooldown key was already present (blocked).
+   */
+  async setCooldown(key: string, cooldownMs: number): Promise<boolean> {
+    if (!this.isConnected) return true; // Fail open
+    try {
+      const result = await this.client.set(key, '1', {
+        NX: true,
+        PX: cooldownMs,
+      });
+      return result === 'OK';
+    } catch (err: any) {
+      this.logger.error(`Redis setCooldown error [${key}]: ${err.message}`);
+      return true; // Fail open
+    }
+  }
+
   // ═══════════════════════════════════════════════════════
   // LIFECYCLE
   // ═══════════════════════════════════════════════════════
