@@ -132,10 +132,6 @@ export class UserHomeService {
       // Fetch all active turfs once with aggregates
       const allTurfs = await this.fetchAllActiveTurfs(options.refresh);
       this.logger.log(`Found ${allTurfs.length} active turfs`);
-      const scopedTurfs = this.filterByPreferredSport(
-        allTurfs,
-        location.preferredSport,
-      );
 
       // Build each section in parallel for performance
       const [
@@ -148,25 +144,25 @@ export class UserHomeService {
         recentlyViewed,
       ] = await Promise.all([
         this.buildTopRecommended(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
         ),
         this.buildMostRated(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
         ),
         this.buildBudgetFriendly(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
         ),
         this.buildNearby(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.radiusKm,
@@ -174,19 +170,19 @@ export class UserHomeService {
           location.preferredSport,
         ),
         this.buildMostDemanded(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
         ),
         this.buildNewlyOpened(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
         ),
         this.buildRecentlyViewed(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
@@ -229,16 +225,12 @@ export class UserHomeService {
     }
     const location = await this.resolveLocation(options);
     const allTurfs = await this.fetchAllActiveTurfs(options.refresh);
-    const scopedTurfs = this.filterByPreferredSport(
-      allTurfs,
-      location.preferredSport,
-    );
 
     let section: UserHomeSectionDto;
     switch (sectionType) {
       case HomeSectionType.TOP_RECOMMENDED:
         section = this.buildTopRecommended(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
@@ -246,7 +238,7 @@ export class UserHomeService {
         break;
       case HomeSectionType.MOST_RATED:
         section = this.buildMostRated(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
@@ -254,7 +246,7 @@ export class UserHomeService {
         break;
       case HomeSectionType.BUDGET_FRIENDLY:
         section = this.buildBudgetFriendly(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
@@ -262,7 +254,7 @@ export class UserHomeService {
         break;
       case HomeSectionType.NEARBY:
         section = this.buildNearby(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.radiusKm,
@@ -272,7 +264,7 @@ export class UserHomeService {
         break;
       case HomeSectionType.MOST_DEMANDED:
         section = this.buildMostDemanded(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
@@ -280,7 +272,7 @@ export class UserHomeService {
         break;
       case HomeSectionType.NEWLY_OPENED:
         section = this.buildNewlyOpened(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,
@@ -288,7 +280,7 @@ export class UserHomeService {
         break;
       case HomeSectionType.RECENTLY_VIEWED:
         section = await this.buildRecentlyViewed(
-          scopedTurfs,
+          allTurfs,
           location.userLat,
           location.userLng,
           location.preferredSport,

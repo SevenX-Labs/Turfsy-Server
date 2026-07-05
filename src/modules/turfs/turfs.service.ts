@@ -519,7 +519,7 @@ export class TurfsService {
     }
 
     if (sportsType) {
-      where.sportsType = sportsType;
+      where.sportsType = (sportsType as string).toUpperCase();
     }
 
     if (minPrice !== undefined || maxPrice !== undefined) {
