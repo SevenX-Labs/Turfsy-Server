@@ -1,6 +1,6 @@
 import { IsString, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Match } from '../../common/decorators/match.decorator';
+import { Match } from '../../../common/decorators/match.decorator';
 
 export class CreateMpinDto {
   @ApiProperty({
