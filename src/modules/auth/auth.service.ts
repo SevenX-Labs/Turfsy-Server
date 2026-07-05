@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import {
   Injectable,
   BadRequestException,
@@ -402,7 +403,7 @@ export class AuthService {
 
     await this.enforceOtpRateLimits(phone, ip || '');
 
-    const otpPayload = await this.cacheService.get<{
+    let otpPayload = await this.cacheService.get<{
       code: string;
       attempts: number;
       sessionToken: string;
@@ -410,31 +411,39 @@ export class AuthService {
       resendCount: number;
     }>(`otp:${phone}:login`);
 
-    if (!otpPayload) {
-      throw new NotFoundException('Invalid OTP request');
-    }
-
-    const diff = (Date.now() - otpPayload.lastResentAt) / 1000;
-    if (diff < this.RESEND_LIMIT_SECONDS) {
-      const waitSeconds = Math.ceil(this.RESEND_LIMIT_SECONDS - diff);
-      throw new HttpException(
-        {
-          success: false,
-          message: `Please wait ${waitSeconds}s before resending`,
-          retryAfter: waitSeconds,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+    if (otpPayload) {
+      const diff = (Date.now() - otpPayload.lastResentAt) / 1000;
+      if (diff < this.RESEND_LIMIT_SECONDS) {
+        const waitSeconds = Math.ceil(this.RESEND_LIMIT_SECONDS - diff);
+        throw new HttpException(
+          {
+            success: false,
+            message: `Please wait ${waitSeconds}s before resending`,
+            retryAfter: waitSeconds,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
     }
 
     const otp = this.generateOtp();
     const hashedOtp = await this.hashOtp(otp);
     const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_SECONDS * 1000);
 
-    otpPayload.code = hashedOtp;
-    otpPayload.attempts = 0;
-    otpPayload.lastResentAt = Date.now();
-    otpPayload.resendCount++;
+    if (otpPayload) {
+      otpPayload.code = hashedOtp;
+      otpPayload.attempts = 0;
+      otpPayload.lastResentAt = Date.now();
+      otpPayload.resendCount++;
+    } else {
+      otpPayload = {
+        code: hashedOtp,
+        attempts: 0,
+        sessionToken: crypto.randomUUID(),
+        lastResentAt: Date.now(),
+        resendCount: 1,
+      };
+    }
 
     await this.cacheService.set(
       `otp:${phone}:login`,
