@@ -214,11 +214,47 @@ sequenceDiagram
 
 ---
 
+### C. Secure QR Check-in Architecture
+
+The system utilizes cryptographically secure, HMAC-signed, single-use QR codes to validate customer arrivals, replacing the legacy 4-digit PIN system.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Player as Player App
+    participant Nest as NestJS API
+    participant Owner as Owner App (Scanner)
+    participant DB as Postgres Database
+
+    %% QR Generation
+    Player->>Nest: GET /booking/:id/qr-code
+    Nest->>Nest: Generate Payload { bookingId, timestamp, nonce }
+    Nest->>Nest: Sign Payload using QR_SECRET_KEY (HMAC-SHA256)
+    Nest-->>Player: Return secure QR string
+    
+    %% QR Scanning
+    Owner->>Owner: Scan QR code from Player device
+    Owner->>Nest: POST /booking/check-in { qrPayload, signature }
+    Nest->>Nest: Re-compute HMAC using QR_SECRET_KEY
+    
+    alt Signature Matches & Unused
+        Nest->>DB: Atomic update Booking -> COMPLETED
+        Nest-->>Owner: Return 200 OK (Check-in Successful)
+    else Signature Fails / Reused
+        Nest-->>Owner: Return 400 Bad Request (Invalid or Expired QR)
+    end
+```
+
+*   **HMAC Signing**: All QR payloads are signed with a dedicated server-side `QR_SECRET_KEY`, ensuring they cannot be forged by malicious actors.
+*   **Single-Use Validation**: Atomic database transactions and nonces are used to guarantee that a QR code cannot be scanned twice (preventing replay attacks).
+
+---
+
 ## 4. Real-Time Operations & Scheduling Engine
 
 ### A. Slot Locking Engine
 
-To prevent concurrent booking conflicts for the same slot, a temporary slot lock system is implemented using Redis.
+To prevent concurrent booking conflicts for the same slot, a temporary slot lock system is implemented using Redis. Prior to locking, the API validates the 90-day advance booking constraint and ensures the slot does not overlap with any scheduled turf maintenance periods.
 
 ```mermaid
 sequenceDiagram
@@ -248,7 +284,7 @@ sequenceDiagram
 ---
 
 ### B. Background Crons & Event-Driven Tasks (Asynchronous Queue Architecture)
-*   **No-Show Cron**: Runs every 15 minutes. It queries `CONFIRMED` bookings where the start time was more than 15 minutes ago, check-in validation was not completed, and payment was cash or half-cash. The status is updated to `NO_SHOW`.
+*   **No-Show Worker**: An asynchronous background worker that automatically queries `CONFIRMED` bookings where the start time was more than 15 minutes ago without a completed check-in validation, seamlessly transitioning their status to `NO_SHOW`.
 *   **Auto-Complete Cron**: Runs every 30 minutes. It queries fully online bookings and marks them as `COMPLETED` 2 hours after their scheduled end times.
 *   **Booking Expiry Queue**: Replaces database polling for checkout windows. When a booking is created in `PENDING` state, a delayed job is added to the `booking-expiry` queue with a 5-minute timeout. When processed, if the booking remains unpaid, the system marks the booking as cancelled/expired in the database and releases all slot locks.
 *   **Payment Retry Queue**: Offloads transient payment webhook failures. If a payment signature check passes but DB updates or order verifications fail, a retry job with 5-attempt exponential backoff is scheduled. Dead-lettered jobs alert the `PaymentLoggerService` for manual admin resolution.

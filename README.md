@@ -16,7 +16,7 @@ Scalable backend for Turfsy: auth, profiles, turf discovery, booking, payments, 
 - Turf creation, search, filtering, and discovery feeds
 - Slot-safe booking with payment lifecycle and webhook confirmation
 - Booking history, invoices, rating, cancellations
-- Owner operations (check-in PIN verify, complete booking, reports)
+- Owner operations (secure QR check-in verify, complete booking, reports)
 - User settings + owner settings (separate production models)
 - Owner analytics and owner home dashboard stats
 - User gamification and leaderboards
@@ -31,7 +31,7 @@ Scalable backend for Turfsy: auth, profiles, turf discovery, booking, payments, 
 4. Save turfs
 5. Create booking + create Razorpay order
 6. Payment success via webhook confirms booking
-7. Use booking (PIN/check-in flow), then rate turf
+7. Use booking (secure QR check-in flow), then rate turf
 8. Use bookings/history/invoice/transactions
 9. Manage user settings (payment, security, preferences, notifications)
 
@@ -124,7 +124,7 @@ Base API routes are listed exactly as implemented.
 - `POST /api/v3/booking/:bookingId/confirm-payment`
 - `POST /api/v3/booking/razorpay/webhook`
 - `POST /api/v3/booking/:bookingId/payment-failed`
-- `POST /api/v3/booking/:bookingId/verify-pin`
+- `POST /api/v3/booking/verify-qr`
 - `PATCH /api/v3/booking/:bookingId/complete`
 - `GET /api/v3/booking/owner/bookings`
 - `GET /api/v3/booking/owner/bookings-filtered`

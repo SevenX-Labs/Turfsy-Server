@@ -1,5 +1,6 @@
 import { IsString, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Match } from '../../common/decorators/match.decorator';
 
 export class ChangeMpinDto {
   @ApiProperty({
@@ -23,4 +24,13 @@ export class ChangeMpinDto {
     message: 'New MPIN must be a 4-digit or 6-digit numeric code',
   })
   newMpin: string;
+
+  @ApiProperty({
+    description: 'Confirm the new 4-digit or 6-digit numeric MPIN',
+    example: '5678',
+    type: String,
+  })
+  @IsString()
+  @Match('newMpin', { message: 'Confirm MPIN must match new MPIN' })
+  confirmMpin: string;
 }

@@ -83,7 +83,7 @@ sequenceDiagram
     Server-->>User: Return open/close times, booked slots & pricing rules
     User->>Server: POST /api/v3/booking (Select Slot & Payment Type)
     Note over Server,DB: Lock slot in DB (5-minute expiration)<br/>Calculate dynamic pricing
-    Server-->>User: Return booking details, amountToPay, checkInPin
+    Server-->>User: Return booking details, amountToPay, qrPayload
     
     alt PaymentType is FULL_ONLINE or HALF_ONLINE_HALF_CASH
         User->>Server: POST /api/v3/booking/:id/create-order
@@ -109,7 +109,7 @@ sequenceDiagram
 *   **Actions**:
     1.  Calculates price based on weekday/weekend and day/night rules.
     2.  Acquires a **5-minute Database Slot Lock** (`SlotLock` model).
-    3.  Generates a **4-digit checkInPin** for validation.
+    3.  Generates a **cryptographically secure, HMAC-signed, single-use QR code payload** for validation.
     4.  Returns `amountToPay` and `depositAmount`.
 
 #### 3. Payment Modes & Rules
@@ -138,7 +138,7 @@ Allows booking creators (Lead Users) to split costs with other registered player
 ### D. Post-Booking & Gamification Flow
 1.  **Cancellation & Refund**:
     *   `PATCH /api/v3/booking/:bookingId/cancel` (with cancellation reason).
-    *   **Refund Logic**: Evaluates turf policy (e.g. must cancel >2 hours before start). Processes partial automated refund (e.g., 75%) if eligible.
+    *   **Refund Logic**: Evaluates turf policy (e.g. must cancel >2 hours before start). Processes automated refund complying with the 3-day refund and 1-day return policy structure if eligible.
 2.  **Rebooking**:
     *   `POST /api/v3/booking/:bookingId/rebook` (Clones parameters from an old booking, allowing quick selection of new date/time).
 3.  **User Gamification & Leaderboard**:
@@ -201,15 +201,15 @@ Owners verify user check-ins when players arrive at the ground.
 ```mermaid
 flowchart TD
     Arrive[Customer Arrives at Turf] --> CheckType{Booking Type?}
-    CheckType -->|Full Online| DirectComplete[Owner Marks Completed /complete or PIN check]
-    CheckType -->|Cash / Half-Cash| PINCheck[Owner requests 4-digit PIN & collects remaining cash]
-    PINCheck --> VerifyPIN[Post /booking/:id/verify-pin]
-    VerifyPIN -->|Success| CompleteState[Booking State -> COMPLETED]
+    CheckType -->|Full Online| DirectComplete[Owner Marks Completed /complete or QR scan]
+    CheckType -->|Cash / Half-Cash| QRCheck[Owner scans secure QR code & collects remaining cash]
+    QRCheck --> VerifyQR[Post /booking/check-in]
+    VerifyQR -->|Success| CompleteState[Booking State -> COMPLETED]
 ```
 
-1.  **Check-in PIN Verification**:
-    *   `POST /api/v3/booking/:bookingId/verify-pin`
-    *   **Actions**: The owner inputs the 4-digit PIN presented by the player. If correct, this verifies the booking, collects remaining cash balances, and marks status as `COMPLETED`.
+1.  **Secure QR Check-in Verification**:
+    *   `POST /api/v3/booking/check-in`
+    *   **Actions**: The owner scans the HMAC-signed QR code presented by the player. If valid and unused, this verifies the booking, collects remaining cash balances, and marks status as `COMPLETED`.
 2.  **Manual Completion**:
     *   `PATCH /api/v3/booking/:bookingId/complete`
     *   Used for fully online bookings where players show up and start playing without entering a PIN.
@@ -239,20 +239,19 @@ To ensure consistency in database states, several background automation scripts 
 
 ```mermaid
 flowchart TD
-    Cron1[No-Show Cron] -->|15 mins past booking start| StateNoShow[Mark CONFIRMED as NO_SHOW]
+    Worker1[No-Show Worker] -->|15 mins past booking start| StateNoShow[Mark CONFIRMED as NO_SHOW]
     Cron2[Auto-Complete Cron] -->|2 hours post booking end| StateCompleted[Mark Online CONFIRMED as COMPLETED]
-    Cron3[Slot Lock Cleaner] -->|Every minute| FreeSlots[Delete expired SlotLocks >5 mins]
+    Worker2[Booking Expiry Queue] -->|Delayed 5 minutes| FreeSlots[Expire unpaid PENDING bookings & clear locks]
     WH[Razorpay Webhook] -->|Payment Success event| ConfirmBooking[Confirm PENDING booking]
 ```
 
 1.  **Razorpay Webhook handler**:
     *   `POST /api/v3/booking/razorpay/webhook`
     *   Validates signatures directly from Razorpay. Confirms the booking status to `CONFIRMED` if the client application fails to send the confirmation.
-2.  **No-Show Cron**:
-    *   `POST /api/v3/booking/cron/no-shows`
-    *   Queries bookings that are `CONFIRMED` but whose play-time started >15 minutes ago without a PIN verification check-in. Auto-updates status to `NO_SHOW`.
+2.  **No-Show Worker**:
+    *   An asynchronous background worker queue processing `CONFIRMED` bookings whose play-time started >15 minutes ago without a QR validation check-in, seamlessly auto-updating the status to `NO_SHOW`.
 3.  **Auto-Complete Cron**:
     *   `POST /api/v3/booking/cron/auto-complete`
     *   Queries `CONFIRMED` bookings (for fully-online payments) and auto-completes them 2 hours after their scheduled end time.
-4.  **Slot Lock Cleaner**:
-    *   Monitors `SlotLock` records. If a booking remains `PENDING` without confirmation for more than 5 minutes, the database slot lock is removed, releasing the time slot back to public availability.
+4.  **Booking Expiry Queue (`BookingExpiryWorker`)**:
+    *   A delayed queue job that triggers 5 minutes after a `PENDING` booking is created. If the booking remains unpaid, the system automatically marks it as expired/cancelled and releases all associated slot locks.

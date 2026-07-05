@@ -93,8 +93,8 @@ sequenceDiagram
     Nest->>Redis: SETNX lock:turfId:date:time "locked" EX 300
     alt Lock Acquired
         Redis-->>Nest: Return 1
-        Nest->>DB: Write PENDING booking
-        Nest-->>Player: Return checkInPin & payment request
+        Nest->>DB: Write PENDING booking, enqueue expiry job
+        Nest-->>Player: Return secure qrPayload & payment request
     else Lock Failed
         Redis-->>Nest: Return 0
         Nest-->>Player: Return 400 (Slot is currently reserved)
@@ -105,8 +105,8 @@ sequenceDiagram
     1.  Create the slot availability calendar API (`GET /booking/availability/:turfId`).
     2.  Implement the Redis `SETNX` slot lock middleware.
     3.  Build the booking validation logic (checking parameters against turf close times).
-    4.  Generate check-in PIN numbers and assign booking records.
-    5.  Implement background cron tasks for cleaning up expired locks and auto-completing matches.
+    4.  Generate secure HMAC-signed QR code payloads and assign booking records.
+    5.  Implement background workers (BullMQ queues) for cleaning up expired bookings and auto-completing matches.
 *   **Verification Gate**:
     *   Confirm concurrent requests for the same turf slot return a success status for the first connection and a `400 Bad Request` for the second.
 

@@ -72,7 +72,7 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 ### Technical Goals
 *   Maintain a slot lock transaction consistency rate of 100%.
 *   Ensure application latency remains under 200ms for availability queries.
-*   Implement background systems to handle no-show completions and automatic slot cleanups.
+*   Implement background queue workers to handle automated "no-show" status transitions and asynchronous expired booking cleanups.
 
 ### Customer Goals
 *   Allow players to easily discover turfs within their immediate vicinity.
@@ -90,7 +90,7 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 
 ### In Scope
 *   **Android Player App**: Discovering turfs, location-based searches, slot reservation, Razorpay integration, group split-payments, profile settings, reviews, and gamification tracking.
-*   **Owner Web Dashboard**: Business registration profile, turf listing management, dynamic time-of-day pricing rules, calendar interfaces, cash check-in validations via 4-digit PINs, and revenue analytics.
+*   **Owner Web Dashboard**: Business registration profile, turf listing management, dynamic time-of-day pricing rules, turf maintenance scheduling, calendar interfaces, secure QR code check-in validations, and revenue analytics.
 *   **Platform Admin Web Panel**: Manual business verification, platform-wide user/owner moderation, booking audits, dispute resolution, featured turf management, and global platform configurations.
 *   **Exclusions**: No identity document upload mechanisms (e.g., Aadhaar/PAN/KYC) are in scope. All business verifications will be conducted manually by Platform Admins based on submitted textual profiles.
 
@@ -164,13 +164,13 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 
 #### Booking & Payment Lifecycle
 *   **Availability Inspector**: Real-time calendar lookup displaying operational hours, booked slots, and active pricing.
-*   **Slot Reservation**: 5-minute database slot lock upon booking generation to prevent double-booking.
-*   **Payment Gateway Integration**: Multi-tier deposit selections powered by Razorpay:
+*   **Slot Reservation**: 5-minute database slot lock upon booking generation to prevent double-booking. (Players can book slots up to 90 days in advance).
+*   **Payment Gateway Integration**: Multi-tier deposit selections powered by Razorpay (adhering to PG compliance for terms):
     *   `FULL_ONLINE`: 100% online deposit.
     *   `HALF_ONLINE_HALF_CASH`: 50% deposit online, 50% at the turf.
     *   `FULL_CASH`: 0% deposit online (auto-confirmed), 100% at the turf.
 *   **Rebooking**: One-tap cloning of past booking details to a new date and time.
-*   **Check-in PIN**: Generation of a unique 4-digit check-in PIN shared with the owner upon arrival.
+*   **Secure QR Check-in**: Generation of a cryptographically secure, HMAC-signed, single-use QR code for check-in verification upon arrival.
 *   **Cancellation**: Self-service cancel button that checks the cancellation policy and processes refunds automatically if requested within the eligible window.
 
 #### Group Split Payments (Splitwise for Sports)
@@ -198,7 +198,7 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 #### Turf Listing & Asset Management
 *   **Turf Creation Wizard**: Form to list ground details, dimensions, sports type (Football/Cricket), facilities (floodlights, parking, changing rooms, seating, cafeteria), and geographical coordinates.
 *   **Image Management**: Multipart image upload for turf entrance, daytime views, and nighttime views.
-*   **Status Controls**: Toggle turf state between `ACTIVE`, `INACTIVE`, and `MAINTENANCE`.
+*   **Status Controls & Maintenance**: Toggle turf state between `ACTIVE` and `INACTIVE`, and schedule automated turf maintenance blocks to prevent bookings during repairs.
 
 #### Dynamic Pricing Matrix
 *   **Time-of-day Pricing**: Set independent base rates for day slots and premium rates for night slots (floodlight hours).
@@ -207,9 +207,9 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 
 #### Operational Calendars & Verification
 *   **Live Booking Grid**: Calendar showing real-time slot states (Reserved, Available, Blocked).
-*   **PIN Check-in Validator**: Input interface to verify a customer's 4-digit check-in PIN.
-    *   For cash/half-cash bookings, confirming the PIN updates the status to `COMPLETED` and registers cash collected.
-*   **Manual Completion**: Action button to mark fully online bookings as completed without requiring a PIN.
+*   **Secure QR Check-in Validator**: Scanning interface to verify a customer's HMAC-signed QR code.
+    *   For cash/half-cash bookings, scanning a valid QR updates the status to `COMPLETED` atomically and registers cash collected.
+*   **Manual Completion**: Action button to mark fully online bookings as completed without requiring a QR scan.
 
 #### Business Intelligence & Reporting
 *   **KPI Scorecard**: Real-time display of daily/monthly revenue, booking volume, cancellation rates, and no-show stats.
@@ -248,7 +248,7 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 | **FR-PL-05** | XP & Streak Engine | Award points and track active booking streaks | P2 | 10 XP per match hour. Streak decreases by 1 if idle for more than 5 days. | None | Completing booking awards points and updates streak on player dashboard. |
 | **FR-OW-01** | Business Profile Setup | Form to collect owner and banking details | P0 | Requires bank account number, IFSC code, and business contact details. | FR-PL-01 | Owner registers business details. Profile status changes to "Pending Approval". |
 | **FR-OW-02** | Dynamic Price Configuration | Define hourly price tiers based on time and day | P0 | Supports Day, Night, Weekday, and Weekend rate categories. | None | Booking system updates pricing automatically based on the configured matrix. |
-| **FR-OW-03** | Check-in Verification | Input customer PIN to verify check-in and settle bookings | P0 | PIN matches database. Auto-marks booking as completed and logs cash payments. | DB Booking | Owner enters matching PIN, booking updates to completed, and cash is logged. |
+| **FR-OW-03** | Check-in Verification | Scan customer QR to verify check-in and settle bookings | P0 | HMAC-signed QR is valid and unused. Auto-marks booking as completed and logs cash payments. | DB Booking | Owner scans valid QR, booking updates to completed atomically, and cash is logged. |
 | **FR-AD-01** | Owner Verification | Manual admin review of business listings | P0 | Owner cannot go active or accept bookings until status is updated. | FR-OW-01 | Admin reviews pending profile, clicks approve, and turf listing goes active. |
 | **FR-AD-02** | Featured Management | Set turfs to display in promotional homepage feeds | P2 | Featured turfs are pinned to the player dashboard home feed. | None | Admin adds turf to featured list, and it displays on the user home feed. |
 
@@ -281,7 +281,7 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
     **I want to** set different prices for daytime and nighttime slots,  
     **So that** I can cover electricity costs for floodlights during late-evening matches.
 *   **As a** Turf Owner,  
-    **I want to** verify customer check-ins using a 4-digit PIN,  
+    **I want to** verify customer check-ins using a secure QR code scanner,  
     **So that** I can confirm arrivals and collect any remaining cash payments.
 *   **As a** Turf Owner,  
     **I want to** view daily and monthly revenue charts,  
@@ -322,9 +322,9 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 *   **When** the lead user adds two players by their usernames and clicks lock split,
 *   **Then** the system splits the total booking cost equally, updates each player's profile with their pending share, and locks the split config.
 
-### Scenario 5: Check-in PIN Verification
-*   **Given** a player has a confirmed cash booking with a generated 4-digit PIN,
-*   **When** the owner inputs the matching PIN on the check-in screen,
+### Scenario 5: Secure QR Check-in Verification
+*   **Given** a player has a confirmed cash booking with an HMAC-signed QR code,
+*   **When** the owner scans the valid QR code on the check-in screen,
 *   **Then** the system marks the booking as completed, registers the cash transaction, and updates the player's match history.
 
 ---
@@ -333,12 +333,12 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 
 ### Booking Rules
 *   Bookings must be made in 60-minute blocks matching the turf's slot duration.
-*   Players cannot book slots that start in the past.
+*   Players cannot book slots that start in the past, and can only book slots up to 90 days in advance.
 *   A single user account can book a maximum of 3 slots on a single day.
 
 ### Cancellation & Refund Rules
 *   Cancellations must be made outside the turf's cancellation window (e.g., at least 2 hours before the start time) to receive a refund.
-*   Approved cancellations return the turf's designated refund percentage (e.g., 75%) to the original payment source.
+*   Approved cancellations return the turf's designated refund percentage to the original payment source, complying with a mandatory 3-day refund and 1-day return policy structure.
 *   Cancellations made inside the cancellation window are not eligible for a refund.
 
 ### Slot Lock Rules
@@ -360,14 +360,14 @@ Existing solutions consist of general-purpose calendar applications or spreadshe
 ### Booking Status
 *   `PENDING`: Awaiting online deposit (slot locked for 5 minutes).
 *   `CONFIRMED`: Deposit paid online OR booking created via cash mode.
-*   `COMPLETED`: Check-in PIN verified by the owner.
-*   `CANCELLED`: Cancelled by the user or released by the system.
-*   `NO_SHOW`: Time slot has passed without check-in verification.
+*   `COMPLETED`: Secure QR code successfully scanned by the owner.
+*   `CANCELLED`: Cancelled by the user or released asynchronously by the booking expiry queue worker.
+*   `NO_SHOW`: Time slot has passed without check-in verification (status transitioned automatically via background worker).
 
 ### Notifications
 *   Booking confirmations and payment status updates trigger immediate push notifications to both players and owners.
 *   cancellation alerts are dispatched to the owner immediately upon a player cancellation.
-*   Check-in PIN notifications are sent to the player 1 hour before the scheduled start time.
+*   Check-in QR code access notifications are sent to the player 1 hour before the scheduled start time.
 
 ### Owner Approval & Verification
 *   Newly registered owners are placed in a restricted state and cannot activate listings.
@@ -504,7 +504,7 @@ graph TD
     *   Business onboarding form.
     *   Turf listing wizard (amenities, location, pricing rules).
     *   Live calendar grid views.
-    *   Check-in verification using 4-digit PINs.
+    *   Secure check-in verification using HMAC-signed QR codes.
     *   Basic daily/monthly revenue metrics.
 *   **Admin Web Panel**:
     *   Owner profile verification queue.

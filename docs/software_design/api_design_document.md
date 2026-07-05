@@ -390,7 +390,7 @@ Manages booking reservations, payment processing, check-ins, and cost splitting.
         "depositAmount": 600,
         "amountToPay": 600,
         "remainingAmount": 600,
-        "checkInPin": "9081"
+        "qrPayload": "hmac-signed-base64-string"
       }
     }
     ```
@@ -542,20 +542,21 @@ Retrieves revenue statistics and business metrics for turf owners.
     }
     ```
 
-### 2. Verify Customer Check-in PIN
-Validates the customer PIN to settle bookings at the turf.
+### 2. Verify Customer Secure QR Code
+Validates the customer's HMAC-signed QR code to settle bookings at the turf.
 *   **Method**: `POST`
-*   **Endpoint**: `/booking/:bookingId/verify-pin`
+*   **Endpoint**: `/booking/check-in`
 *   **Request Body**:
     ```json
     {
-      "pin": "9081"
+      "qrPayload": "base64-encoded-payload",
+      "signature": "hmac-sha256-signature"
     }
     ```
 *   **Response (200 OK)**:
     ```json
     {
       "success": true,
-      "message": "PIN verified. Booking marked as COMPLETED."
+      "message": "QR code verified. Booking marked as COMPLETED."
     }
     ```

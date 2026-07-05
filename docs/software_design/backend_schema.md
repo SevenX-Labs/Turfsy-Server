@@ -166,7 +166,7 @@ Tracks transactional scheduling data, payments, and check-in statuses.
     | `depositAmount`| `Float` | `@default(0)` | Required deposit amount. |
     | `razorpayOrderId`| `String?`| Optional | External payment transaction order reference. |
     | `razorpayPaymentId`| `String?`| Optional | External payment reference. |
-    | `checkInPin` | `String?` | Optional | 4-digit numeric verification PIN. |
+    | `qrNonce` | `String?` | `@unique` | Nonce for single-use QR validation. |
 *   **Performance Indexes**:
     *   `@@unique([turfId, bookingDate, startTime])` (Enforces booking uniqueness to prevent duplicate reservations)
     *   `@@index([userId, bookingDate, bookingStatus])` (Fast index for "My Bookings" lists)
