@@ -115,6 +115,7 @@ export class TurfsController {
   }
 
   @Get()
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async listTurfs(
     @Query('page') page?: string,
@@ -128,6 +129,7 @@ export class TurfsController {
   // 2. Search Nearby Turfs (by current location or manual map pin)
   // GET /api/v3/turfs/nearby?lat=19.07&lng=72.87&radiusKm=10
   @Get('nearby')
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async getNearbyTurfs(
     @Query('lat') lat: string,
