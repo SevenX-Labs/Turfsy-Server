@@ -29,6 +29,7 @@ import { RedisModule } from './common/redis/redis.module';
 import { BullMqModule } from './common/bullmq/bullmq.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { PlatformFeeSlabModule } from './modules/platform-fee-slab/platform-fee-slab.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { PlatformFeeSlabModule } from './modules/platform-fee-slab/platform-fee-
     RedisModule,
     BullMqModule,
     PlatformFeeSlabModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

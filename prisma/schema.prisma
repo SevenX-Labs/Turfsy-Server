@@ -105,6 +105,8 @@ enum AdminActionType {
   SYSTEM_CONFIG_CHANGED
   NOTIFICATION_SENT
   SUPPORT_TICKET_REPLIED
+  SUPPORT_TICKET_RESOLVED
+  SETTLEMENT_PAID
   LEADERBOARD_RESET
 }
 
@@ -184,36 +186,7 @@ model AdminActionLog {
   @@index([createdAt])
 }
 
-model AdminBooking {
-  id            String        @id @default(uuid())
-  userProfileId String
-  turfId        String
-  bookingDate   DateTime
-  slotStartTime String
-  slotEndTime   String
-  durationMins  Int
-  totalAmount   Float
-  platformFee   Float         @default(0)
-  ownerPayout   Float         @default(0)
-  status        BookingStatus @default(PENDING)
-  paymentMethod String?
-  transactionId String?
-  cancelledAt   DateTime?
-  cancelledBy   String?
-  cancelReason  String?
-  completedAt   DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  turf          Turf          @relation(fields: [turfId], references: [id], name: "AdminBookingToTurf")
-  user          UserProfile   @relation(fields: [userProfileId], references: [id], name: "AdminBookingToUser")
 
-  @@index([bookingDate])
-  @@index([createdAt])
-  @@index([status])
-  @@index([turfId])
-  @@index([userProfileId])
-  @@map("Booking")
-}
 
 model Review {
   id            String      @id @default(uuid())
@@ -266,6 +239,12 @@ model PlatformConfig {
   maintenanceMode           Boolean  @default(false)
   bookingEnabled            Boolean  @default(true)
   registrationEnabled       Boolean  @default(true)
+  bookingWindowDays         Int      @default(90)
+  termsUrl                  String?
+  privacyUrl                String?
+  contactEmail              String?
+  contactPhone              String?
+  notificationTemplates     Json?
   updatedBy                 String?
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
@@ -383,7 +362,6 @@ model UserProfile {
   payment        Payment?
   auth           Auth           @relation(fields: [authId], references: [id], onDelete: Cascade)
   reviews        Review[]
-  adminBookings  AdminBooking[] @relation("AdminBookingToUser")
 
   @@index([username])
 }
@@ -399,6 +377,7 @@ model OwnerProfile {
   auth          Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
   payment       Payment?
   turfs         Turf[]
+  settlements   Settlement[]
 
   @@index([authId])
 }
@@ -457,7 +436,6 @@ model Turf {
   recentViews                    RecentView[]
   reviews                        Review[]
   priceHistory                   PriceHistory[]
-  adminBookings                  AdminBooking[]        @relation("AdminBookingToTurf")
   maintenanceRecords             TurfMaintenance[]
 
   @@index([ownerProfileId])
@@ -779,4 +757,30 @@ model TurfMaintenance {
   @@index([turfId])
   @@index([startDate, endDate])
   @@map("turf_maintenances")
+}
+
+enum SettlementStatus {
+  PENDING
+  PAID
+  COMPLETED
+}
+
+model Settlement {
+  id             String           @id @default(uuid())
+  ownerProfileId String           @map("owner_profile_id")
+  amount         Float
+  status         SettlementStatus @default(PENDING)
+  txRef          String?          @map("tx_ref")
+  notes          String?
+  bookingCount   Int?             @map("booking_count")
+  period         String?
+  paidAt         DateTime?        @map("paid_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  owner          OwnerProfile     @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([ownerProfileId])
+  @@index([status])
+  @@map("settlements")
 }
