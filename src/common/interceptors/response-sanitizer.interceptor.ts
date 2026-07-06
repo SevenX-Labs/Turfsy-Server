@@ -47,7 +47,6 @@ export class ResponseSanitizerInterceptor implements NestInterceptor {
     if (shouldMaskPin) {
       return this.recursiveStripFields(data, [
         'checkInPin',
-        'pinExpiresAt',
         'pinAttempts',
         'pinLocked',
       ]);

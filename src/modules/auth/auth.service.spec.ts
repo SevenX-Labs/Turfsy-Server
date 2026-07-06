@@ -59,6 +59,8 @@ const mockCache = {
   set: jest.fn(),
   del: jest.fn(),
   invalidate: jest.fn(),
+  checkSlidingWindowLimit: jest.fn(),
+  setCooldown: jest.fn(),
 };
 const mockMetrics = {
   otpSentTotal: { inc: jest.fn() },
@@ -81,6 +83,8 @@ describe('AuthService', () => {
     mockCache.get.mockResolvedValue(undefined);
     mockCache.set.mockResolvedValue(undefined);
     mockCache.invalidate.mockResolvedValue(undefined);
+    mockCache.checkSlidingWindowLimit.mockResolvedValue(false);
+    mockCache.setCooldown.mockResolvedValue(true);
 
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
     mockJwt.sign.mockReturnValue('mocked.jwt.token');
@@ -120,7 +124,7 @@ describe('AuthService', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.expiresIn).toBe(60);
+      expect(result.expiresIn).toBe(180);
       expect(mockPrisma.auth.create).toHaveBeenCalled();
       expect(mockCache.set).toHaveBeenCalled();
     });
@@ -146,10 +150,13 @@ describe('AuthService', () => {
         userProfile: null,
         ownerProfile: null,
       });
-      mockCache.get.mockResolvedValueOnce({
-        code: 'hashed',
-        attempts: 0,
-        sessionToken: 'token',
+      mockCache.get.mockImplementation(async (key: string) => {
+        if (key.startsWith('otp_verify_attempts:')) return null;
+        return {
+          code: 'hashed',
+          attempts: 0,
+          sessionToken: 'token',
+        };
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       mockCache.invalidate.mockResolvedValue(undefined);
@@ -180,7 +187,7 @@ describe('AuthService', () => {
         id: 'auth-1',
         phone: '9876543210',
       });
-      mockCache.get.mockResolvedValueOnce(null);
+      mockCache.get.mockImplementation(async (key: string) => null);
 
       await expect(
         service.verifyOtp({ phone: '9876543210', otp: '123456' }, Role.USER),
@@ -192,10 +199,13 @@ describe('AuthService', () => {
         id: 'auth-1',
         phone: '9876543210',
       });
-      mockCache.get.mockResolvedValueOnce({
-        code: 'hashed',
-        attempts: 0,
-        sessionToken: 'token',
+      mockCache.get.mockImplementation(async (key: string) => {
+        if (key.startsWith('otp_verify_attempts:')) return null;
+        return {
+          code: 'hashed',
+          attempts: 0,
+          sessionToken: 'token',
+        };
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
       mockCache.set.mockResolvedValue(undefined);
@@ -213,6 +223,7 @@ describe('AuthService', () => {
         phone: '9876543210',
       });
       mockCache.get.mockImplementation(async (key: string) => {
+        if (key.startsWith('otp_verify_attempts:')) return null;
         if (key.startsWith('otp_rate_limit:')) return 0;
         return {
           code: 'hashed',
@@ -235,6 +246,7 @@ describe('AuthService', () => {
         phone: '9876543210',
       });
       mockCache.get.mockImplementation(async (key: string) => {
+        if (key.startsWith('otp_verify_attempts:')) return null;
         if (key.startsWith('otp_rate_limit:')) return 0;
         return {
           code: 'hashed',

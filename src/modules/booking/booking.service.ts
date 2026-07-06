@@ -387,15 +387,6 @@ export class BookingService {
         depositAmount = onlinePayable;
       }
 
-      // ── Layer 8: Secure PIN generation (crypto.randomInt) ──
-      
-      // Correctly handle PIN expiry for overnight slots
-      const isOvernightBooking = dto.startTime > dto.endTime;
-      const pinExpiresAt = this.buildSlotDateTime(
-        dto.bookingDate,
-        dto.endTime,
-        isOvernightBooking ? 1 : 0,
-      );
 
       const slotLock = await this.acquireSlotLock(authId, {
         turfId: dto.turfId,
@@ -440,7 +431,6 @@ export class BookingService {
               groundCharge: turfPrice,
               platformFee,
               depositAmount,
-              pinExpiresAt,
               notes: sanitizedNotes,
               bookingStatus:
                 dto.paymentType === PaymentType.FULL_CASH

@@ -135,7 +135,7 @@ describe('AuthController', () => {
       });
 
       const result = await controller.userResendOtp(dto as any, '127.0.0.1');
-      expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto);
+      expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto, '127.0.0.1');
       expect(result.success).toBe(true);
     });
   });
@@ -151,7 +151,7 @@ describe('AuthController', () => {
       });
 
       const result = await controller.ownerResendOtp(dto as any, '127.0.0.1');
-      expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto);
+      expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto, '127.0.0.1');
       expect(result.success).toBe(true);
     });
   });
