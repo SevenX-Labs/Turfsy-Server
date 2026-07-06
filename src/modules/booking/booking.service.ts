@@ -2864,7 +2864,18 @@ export class BookingService {
   // ═══════════════════════════════════════════════════════
   async getMyBookings(authId: string) {
     const bookings = await this.prisma.booking.findMany({
-      where: { userId: authId },
+      where: {
+        OR: [
+          { userId: authId },
+          {
+            bookingSplit: {
+              players: {
+                some: { userId: authId },
+              },
+            },
+          },
+        ],
+      },
       include: {
         turf: {
           select: {
