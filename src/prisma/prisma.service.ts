@@ -27,7 +27,7 @@ export class PrismaService
       max: 20, // Increased from 15 for higher concurrency
       min: 5, // Keep minimum warm connections
       idleTimeoutMillis: 30000, // Release idle connections after 30s
-      connectionTimeoutMillis: 5000, // Reduced from 10s — fail fast if DB is down
+      connectionTimeoutMillis: 30000, // Increased to 30s to prevent Render startup timeouts
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000,
       statement_timeout: 30000, // Kill queries running > 30s

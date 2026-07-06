@@ -151,7 +151,7 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3000;
   app.enableShutdownHooks();
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   app
     .get(Logger)
     .log(`Server started successfully on port ${port}`, 'Bootstrap');
