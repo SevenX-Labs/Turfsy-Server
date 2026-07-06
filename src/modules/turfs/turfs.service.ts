@@ -168,6 +168,8 @@ export class TurfsService {
             turf.groundDayUrl,
             turf.groundNightUrl,
           ].filter(Boolean),
+          rating: typeof turf.averageRating === 'number' ? Math.round(turf.averageRating * 10) / 10 : 0,
+          reviewCount: turf.totalReviews ?? 0,
         };
       })
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
@@ -423,8 +425,8 @@ export class TurfsService {
             turf.groundDayUrl,
             turf.groundNightUrl,
           ].filter(Boolean),
-          rating: 0,
-          reviewCount: 0,
+          rating: typeof turf.averageRating === 'number' ? Math.round(turf.averageRating * 10) / 10 : 0,
+          reviewCount: turf.totalReviews ?? 0,
         }));
 
         return {
@@ -474,8 +476,8 @@ export class TurfsService {
       images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
         Boolean,
       ),
-      rating: 0,
-      reviewCount: 0,
+      rating: typeof turf.averageRating === 'number' ? Math.round(turf.averageRating * 10) / 10 : 0,
+      reviewCount: turf.totalReviews ?? 0,
     }));
 
     return {
@@ -589,8 +591,8 @@ export class TurfsService {
           turf.groundDayUrl,
           turf.groundNightUrl,
         ].filter(Boolean),
-        rating: 0,
-        reviewCount: 0,
+        rating: typeof turf.averageRating === 'number' ? Math.round(turf.averageRating * 10) / 10 : 0,
+        reviewCount: turf.totalReviews ?? 0,
       };
     });
 
