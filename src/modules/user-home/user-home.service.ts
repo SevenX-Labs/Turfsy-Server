@@ -104,8 +104,8 @@ type RawTurf = {
     name: string;
     contactNumber: string;
   };
-  _avg?: { rating: number | null } | null;
-  _count?: { reviews: number } | null;
+  averageRating: number;
+  totalReviews: number;
 };
 
 @Injectable()
@@ -350,6 +350,8 @@ export class UserHomeService {
             entranceUrl: true,
             updatedAt: true,
             createdAt: true,
+            averageRating: true,
+            totalReviews: true,
             owner: {
               select: {
                 name: true,
@@ -374,12 +376,11 @@ export class UserHomeService {
     if (turf.groundDayUrl) images.push(turf.groundDayUrl);
     if (turf.groundNightUrl) images.push(turf.groundNightUrl);
 
-    const rating =
-      typeof turf._avg?.rating === 'number'
-        ? Math.round(turf._avg.rating * 10) / 10
+    const rating = typeof turf.averageRating === 'number'
+        ? Math.round(turf.averageRating * 10) / 10
         : 0;
 
-    const reviewCount = turf._count?.reviews ?? 0;
+    const reviewCount = turf.totalReviews ?? 0;
 
     return {
       id: turf.id,
@@ -552,8 +553,8 @@ export class UserHomeService {
     // Weighted scoring for "Handpicked" match
     // matched all criteria: low budget (0.2), near by (0.4), and best rating (0.4)
     const scored = turfs.map((t) => {
-      const rating = typeof t._avg?.rating === 'number' ? t._avg.rating : 0;
-      const reviews = t._count?.reviews ?? 0;
+      const rating = typeof t.averageRating === 'number' ? t.averageRating : 0;
+      const reviews = t.totalReviews ?? 0;
       const dist = this.getDistance(t, userLat, userLng);
 
       // Normalised proximity score (40%)
@@ -575,8 +576,8 @@ export class UserHomeService {
     const sorted = scored
       .filter(
         (s) =>
-          (s.turf._avg?.rating ?? 0) >= MIN_RATING_THRESHOLD ||
-          (s.turf._count?.reviews ?? 0) === 0,
+          (s.turf.averageRating ?? 0) >= MIN_RATING_THRESHOLD ||
+          (s.turf.totalReviews ?? 0) === 0,
       )
       .sort((a, b) => b.score - a.score);
 
@@ -609,10 +610,10 @@ export class UserHomeService {
   ): UserHomeSectionDto {
     const sorted = this.prioritizeByPreferredSport(
       [...turfs].sort((a, b) => {
-        const rA = a._avg?.rating ?? 0;
-        const rB = b._avg?.rating ?? 0;
+        const rA = a.averageRating ?? 0;
+        const rB = b.averageRating ?? 0;
         if (rB !== rA) return rB - rA;
-        return (b._count?.reviews ?? 0) - (a._count?.reviews ?? 0);
+        return (b.totalReviews ?? 0) - (a.totalReviews ?? 0);
       }),
       preferredSport,
     ).slice(0, SECTION_LIMIT);
@@ -723,8 +724,8 @@ export class UserHomeService {
     const scored = this.prioritizeByPreferredSport(
       turfs
         .map((t) => {
-          const reviews = t._count?.reviews ?? 0;
-          const rating = t._avg?.rating ?? 0;
+          const reviews = t.totalReviews ?? 0;
+          const rating = t.averageRating ?? 0;
           const demandScore = reviews * 0.6 + (rating / 5) * 100 * 0.4;
           return { turf: t, score: demandScore, sportsType: t.sportsType };
         })

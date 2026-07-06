@@ -3489,6 +3489,24 @@ export class BookingService {
       },
     });
 
+    // Update the averageRating and totalReviews on the Turf
+    const aggregations = await this.prisma.turfRating.aggregate({
+      where: { turfId: booking.turfId },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    const newAvg = aggregations._avg.rating ? Math.round(aggregations._avg.rating * 10) / 10 : 0;
+    const newCount = aggregations._count.rating ?? 0;
+
+    await this.prisma.turf.update({
+      where: { id: booking.turfId },
+      data: {
+        averageRating: newAvg,
+        totalReviews: newCount,
+      },
+    });
+
     this.paymentLogger.log({
       userId: authId,
       bookingId,
