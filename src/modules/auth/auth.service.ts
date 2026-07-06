@@ -587,7 +587,7 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    const { userProfile, ownerProfile, payment, ...authData } = auth;
+    const { userProfile, ownerProfile, payment, mpinHash, mpinCreatedAt, mpinUpdatedAt, mpinLockedUntil, failedMpinAttempts, ...authData } = auth;
     let profile: Record<string, any> | null =
       auth.role === Role.OWNER ? ownerProfile : userProfile;
 
@@ -608,12 +608,13 @@ export class AuthService {
       };
     }
 
-    // Include phone number in the result specifically
+    // Include phone number and MPIN status in the result
     const result = {
       success: true,
       data: {
         ...authData,
         phone: auth.phone,
+        isMpinSet: !!mpinHash,
         profile,
         payment,
       },
