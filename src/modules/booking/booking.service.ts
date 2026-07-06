@@ -48,6 +48,7 @@ const MIN_ADVANCE_BOOKING_MINS = 30; // Must book at least 30 minutes before sta
 export class BookingService {
   private readonly logger = new Logger(BookingService.name);
   private razorpay: Razorpay;
+  private readonly isLiveMode: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -63,13 +64,34 @@ export class BookingService {
     @InjectQueue('payment-retry') private readonly paymentRetryQueue: Queue,
     @InjectQueue('booking-expiry') private readonly bookingExpiryQueue: Queue,
   ) {
+    const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
+    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+    const webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET') || '';
+
+    // ── Validate Razorpay credentials at startup ──
+    if (!keyId || !keySecret) {
+      throw new Error('FATAL: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set in environment variables.');
+    }
+    if (!webhookSecret) {
+      throw new Error('FATAL: RAZORPAY_WEBHOOK_SECRET must be set in environment variables.');
+    }
+
+    this.isLiveMode = keyId.startsWith('rzp_live_');
+    if (this.isLiveMode) {
+      this.logger.log('Razorpay initialized in LIVE mode.');
+    } else if (keyId.startsWith('rzp_test_')) {
+      this.logger.warn('Razorpay initialized in TEST mode. Do NOT use in production.');
+    } else {
+      throw new Error('FATAL: RAZORPAY_KEY_ID must start with rzp_live_ or rzp_test_.');
+    }
+
     this.razorpay = new Razorpay({
-      key_id: this.configService.get<string>('RAZORPAY_KEY_ID') || '',
-      key_secret: this.configService.get<string>('RAZORPAY_KEY_SECRET') || '',
+      key_id: keyId,
+      key_secret: keySecret,
     });
 
-    if (!this.configService.get<string>('QR_SECRET_KEY')) {
-      throw new Error('FATAL: QR_SECRET_KEY is missing from environment variables.');
+    if (!this.configService.get<string>('QR_SECRET_KEY') || this.configService.get<string>('QR_SECRET_KEY') === 'your_super_secret_qr_key_here') {
+      throw new Error('FATAL: QR_SECRET_KEY must be set to a real secret value in environment variables.');
     }
   }
 
@@ -857,51 +879,44 @@ export class BookingService {
         throw new BadRequestException('Invalid amount');
       }
 
-      const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
+      // ── Razorpay minimum amount validation (₹1 = 100 paise) ──
+      if (amountInPaise < 100) {
+        throw new BadRequestException('Minimum payable amount is ₹1');
+      }
 
-      // ── Mock behavior for testing ──
-      if (keyId === 'your_razorpay_key_id' || keyId === '') {
-        const mockOrderId = `order_${crypto.randomBytes(8).toString('hex')}`;
-        await this.prisma.booking.update({
-          where: { id: bookingId },
-          data: { razorpayOrderId: mockOrderId },
+      // ── Create Razorpay order ──
+      let order: any;
+      try {
+        order = await this.razorpay.orders.create({
+          amount: amountInPaise,
+          currency: 'INR',
+          receipt: `TRF-${booking.id.slice(0, 7)}`,
+          notes: {
+            bookingId: booking.id,
+            turfId: booking.turfId,
+            paymentType: booking.paymentType,
+          },
+          payment_capture: true, // Auto-capture payment on success
         });
-
+      } catch (rzpError) {
+        this.logger.error(
+          `[RAZORPAY] Order creation failed for booking ${bookingId}: ${rzpError?.message || rzpError}`,
+        );
         this.paymentLogger.log({
           userId: authId,
           bookingId,
           turfId: booking.turfId,
           action: 'create-order',
           amount: booking.depositAmount,
-          razorpayOrderId: mockOrderId,
           ip,
-          result: 'SUCCESS',
+          result: 'FAILED',
+          rejectionReason: `Razorpay API error: ${rzpError?.message || 'Unknown'}`,
         });
-
-        return {
-          success: true,
-          data: {
-            orderId: mockOrderId,
-            amount: amountInPaise,
-            currency: 'INR',
-            bookingId: booking.id,
-            displayId: this.formatBookingId(booking.id),
-            keyId: 'mock_test_key',
-          },
-        };
+        throw new HttpException(
+          'Payment gateway is temporarily unavailable. Please try again.',
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
       }
-
-      // ── Create real Razorpay order ──
-      const order = await this.razorpay.orders.create({
-        amount: amountInPaise,
-        currency: 'INR',
-        receipt: `TRF-${booking.id.slice(0, 7)}`,
-        notes: {
-          bookingId: booking.id,
-          turfId: booking.turfId,
-          paymentType: booking.paymentType,
-        },
-      });
 
       // ── Store order ID in DB BEFORE returning to client ──
       await this.prisma.booking.update({
@@ -1024,7 +1039,7 @@ export class BookingService {
       const keySecret =
         this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
 
-      if (keySecret !== 'your_razorpay_key_secret' && keySecret !== '') {
+      {
         // Step 1: Reconstruct HMAC-SHA256 signature
         const body = `${dto.razorpayOrderId}|${dto.razorpayPaymentId}`;
         const expectedSignature = crypto
@@ -1443,6 +1458,41 @@ export class BookingService {
     }
 
     const event = payload?.event;
+    // ── Handle payment.failed event ──
+    if (event === 'payment.failed') {
+      const failedPayment = payload?.payload?.payment?.entity;
+      if (failedPayment) {
+        const failedOrderId = failedPayment.order_id;
+        if (failedOrderId) {
+          const failedBooking = await this.prisma.booking.findFirst({
+            where: { razorpayOrderId: failedOrderId, bookingStatus: 'PENDING' },
+          });
+          if (failedBooking) {
+            this.logger.warn({
+              event: 'razorpay_payment_failed_webhook',
+              bookingId: failedBooking.id,
+              orderId: failedOrderId,
+              errorCode: failedPayment.error_code,
+              errorDescription: failedPayment.error_description,
+            });
+            this.paymentLogger.log({
+              userId: failedBooking.userId,
+              bookingId: failedBooking.id,
+              turfId: failedBooking.turfId,
+              action: 'failed',
+              amount: failedBooking.depositAmount,
+              razorpayOrderId: failedOrderId,
+              ip,
+              result: 'FAILED',
+              rejectionReason: failedPayment.error_description || failedPayment.error_code || 'Payment failed via webhook',
+            });
+            this.metrics.paymentFailedTotal.inc();
+          }
+        }
+      }
+      return { success: true, message: 'Payment failure recorded' };
+    }
+
     if (!event || !['payment.captured', 'order.paid'].includes(event)) {
       return {
         success: true,
@@ -2503,18 +2553,8 @@ export class BookingService {
           (booking.turf.cancellationRefundPercentage / 100),
       );
 
-      const keySecret =
-        this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
-      const isMockMode =
-        keySecret === 'your_razorpay_key_secret' || keySecret === '';
-
-      if (isMockMode) {
-        // Mock refund for testing
-        razorpayRefundId = `rfnd_mock_${crypto.randomBytes(6).toString('hex')}`;
-        newPaymentStatus = 'REFUNDED' as PaymentStatus;
-      } else {
+      if (refundAmount > 0) {
         try {
-          // Step 5: Call Razorpay Refund API
           const refund = await this.razorpay.payments.refund(
             booking.razorpayPaymentId,
             {
@@ -2526,7 +2566,6 @@ export class BookingService {
             },
           );
 
-          // Step 6: ONLY update to REFUNDED if Razorpay confirms
           razorpayRefundId = refund.id;
           newPaymentStatus = 'REFUNDED' as PaymentStatus;
         } catch (refundError) {
@@ -3859,15 +3898,7 @@ export class BookingService {
     if (booking.paymentStatus === 'SUCCESS' && booking.razorpayPaymentId) {
       refundAmount = booking.depositAmount;
 
-      const keySecret =
-        this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
-      const isMockMode =
-        keySecret === 'your_razorpay_key_secret' || keySecret === '';
-
-      if (isMockMode) {
-        razorpayRefundId = `rfnd_mock_${crypto.randomBytes(6).toString('hex')}`;
-        newPaymentStatus = 'REFUNDED' as PaymentStatus;
-      } else {
+      if (refundAmount > 0) {
         try {
           const refund = await this.razorpay.payments.refund(
             booking.razorpayPaymentId,

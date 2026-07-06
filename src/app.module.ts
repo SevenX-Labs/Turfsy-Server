@@ -57,6 +57,7 @@ import { PlatformFeeSlabModule } from './modules/platform-fee-slab/platform-fee-
             'req.body.paymentSecret',
             'req.body.secret',
             'req.body.checkInPin',
+            'req.body.razorpaySignature',
             'res.headers["set-cookie"]',
           ],
           censor: '[REDACTED]',

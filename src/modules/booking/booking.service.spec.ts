@@ -47,8 +47,9 @@ describe('BookingService - Platform Fee Slabs', () => {
 
   const mockConfigService = {
     get: jest.fn((key) => {
-      if (key === 'RAZORPAY_KEY_ID') return 'key_id';
-      if (key === 'RAZORPAY_KEY_SECRET') return 'your_razorpay_key_secret';
+      if (key === 'RAZORPAY_KEY_ID') return 'rzp_test_mock_key_id_123';
+      if (key === 'RAZORPAY_KEY_SECRET') return 'mock_test_key_secret_123';
+      if (key === 'RAZORPAY_WEBHOOK_SECRET') return 'mock_webhook_secret_123';
       if (key === 'QR_SECRET_KEY') return 'test-qr-secret-key';
       return null;
     }),
@@ -147,7 +148,7 @@ describe('BookingService - Platform Fee Slabs', () => {
         mockQueue as any,
         mockQueue as any,
       );
-    }).toThrow('FATAL: QR_SECRET_KEY is missing from environment variables.');
+    }).toThrow('FATAL: QR_SECRET_KEY must be set to a real secret value in environment variables.');
 
     // Restore
     mockConfigService.get = originalGet;
@@ -445,6 +446,14 @@ describe('BookingService - Platform Fee Slabs', () => {
     });
 
     it('should reject a PENDING_APPROVAL booking and trigger refund', async () => {
+      // Mock the Razorpay refund API call on the service instance
+      (service as any).razorpay = {
+        payments: {
+          refund: jest.fn().mockResolvedValue({ id: 'rfnd_test_123' }),
+        },
+        orders: { create: jest.fn(), fetch: jest.fn() },
+      };
+
       const response = await service.rejectBooking('owner-auth-id', 'booking-uuid');
       expect(response.success).toBe(true);
       expect(response.data.bookingStatus).toBe('REJECTED');
