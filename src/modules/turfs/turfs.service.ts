@@ -453,7 +453,12 @@ export class TurfsService {
         where: {
           status: 'ACTIVE',
           deletedAt: null,
-          name: { contains: q, mode: 'insensitive' },
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { city: { contains: q, mode: 'insensitive' } },
+            { address: { contains: q, mode: 'insensitive' } },
+            { pincode: { contains: q, mode: 'insensitive' } },
+          ],
         },
         include: {
           owner: { select: { name: true, contactNumber: true } },
@@ -466,7 +471,12 @@ export class TurfsService {
         where: {
           status: 'ACTIVE',
           deletedAt: null,
-          name: { contains: q, mode: 'insensitive' },
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { city: { contains: q, mode: 'insensitive' } },
+            { address: { contains: q, mode: 'insensitive' } },
+            { pincode: { contains: q, mode: 'insensitive' } },
+          ],
         },
       }),
     ]);
@@ -517,7 +527,11 @@ export class TurfsService {
     };
 
     if (city) {
-      where.city = { equals: city, mode: 'insensitive' };
+      where.OR = [
+        { city: { contains: city, mode: 'insensitive' } },
+        { address: { contains: city, mode: 'insensitive' } },
+        { pincode: { contains: city, mode: 'insensitive' } },
+      ];
     }
 
     if (sportsType) {
