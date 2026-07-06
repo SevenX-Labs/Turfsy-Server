@@ -1966,209 +1966,7 @@ export class BookingService {
     }
   }
 
-  async verifyCheckInPin(
-    ownerAuthId: string,
-    bookingId: string,
-    pin: string,
-    ip?: string,
-  ) {
-    // ── Layer 6: Rate Limiting ──
-    await this.rateLimiter.check(
-      `booking:${bookingId}:verify-pin`,
-      RATE_LIMITS.VERIFY_PIN,
-    );
 
-    const lockKey = `payment:lock:cash:${bookingId}`;
-    const lockValue = await this.redisService.acquireLock(lockKey, 15000);
-    if (!lockValue) {
-      throw new ConflictException(
-        'Check-in is currently being processed. Please try again.',
-      );
-    }
-
-    try {
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { turf: { include: { owner: true } } },
-      });
-      if (!booking) throw new NotFoundException('Booking not found');
-
-      // ── Layer 1: Owner verification ──
-      if (booking.turf.owner.authId !== ownerAuthId) {
-        throw new ForbiddenException('Access denied.');
-      }
-
-      // ── Layer 2: Idempotency — already completed? ──
-      if (booking.bookingStatus === 'COMPLETED') {
-        return {
-          success: true,
-          message: 'Booking already completed.',
-          data: { ...booking, displayId: this.formatBookingId(booking.id) },
-        };
-      }
-
-      // ── Layer 5: State Machine ──
-      if (booking.bookingStatus !== 'CONFIRMED') {
-        throw new BadRequestException('Invalid booking state');
-      }
-
-      // ── Layer 8: Check PIN lock ──
-      if (booking.pinLocked) {
-        throw new HttpException('Resource locked.', HttpStatus.LOCKED); // 423
-      }
-
-      // ── Layer 8: Time window check (-10 min from start, +10 min from end) ──
-      const now = new Date();
-      const datePart = booking.bookingDate.toISOString().split('T')[0];
-      const isOvernight = booking.startTime > booking.endTime;
-      const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
-      const slotEnd = this.buildSlotDateTime(
-        datePart,
-        booking.endTime,
-        isOvernight ? 1 : 0,
-      );
-
-      const windowStart = new Date(
-        slotStart.getTime() - PIN_WINDOW_MINUTES * 60 * 1000,
-      );
-      const windowEnd = new Date(
-        slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000,
-      );
-
-      if (now < windowStart) {
-        throw new BadRequestException(
-          `PIN verification window opens at ${windowStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
-        );
-      }
-      if (now > windowEnd) {
-        throw new BadRequestException('PIN verification window expired');
-      }
-
-      // ── Layer 8: Constant-time PIN comparison ──
-      const storedPin = booking.checkInPin || '';
-      let pinValid = false;
-      try {
-        const pinBuf = Buffer.from(pin.padEnd(4, ' '));
-        const storedBuf = Buffer.from(storedPin.padEnd(4, ' '));
-        pinValid =
-          pinBuf.length === storedBuf.length &&
-          crypto.timingSafeEqual(pinBuf, storedBuf);
-      } catch {
-        pinValid = false;
-      }
-
-      if (!pinValid) {
-        // ── Layer 8: Track failed attempts ──
-        const newAttempts = (booking.pinAttempts || 0) + 1;
-        const shouldLock = newAttempts >= PIN_MAX_ATTEMPTS;
-
-        await this.prisma.booking.update({
-          where: { id: bookingId },
-          data: {
-            pinAttempts: newAttempts,
-            pinLocked: shouldLock,
-          },
-        });
-
-        if (shouldLock) {
-          // ── Layer 12: Alert on PIN lock ──
-          this.paymentLogger.alert('PIN locked due to 5 wrong attempts', {
-            bookingId,
-            ownerAuthId,
-            ip,
-          });
-          throw new HttpException('Resource locked.', HttpStatus.LOCKED); // 423
-        }
-
-        this.paymentLogger.log({
-          userId: ownerAuthId,
-          bookingId,
-          turfId: booking.turfId,
-          action: 'verify-pin',
-          ip,
-          result: 'REJECTED',
-          rejectionReason: `Invalid PIN (attempt ${newAttempts}/${PIN_MAX_ATTEMPTS})`,
-        });
-
-        throw new BadRequestException('Invalid PIN');
-      }
-
-      // ── PIN valid → complete booking ──
-      const atomicUpdate = await this.prisma.booking.updateMany({
-        where: { id: bookingId, bookingStatus: 'CONFIRMED' },
-        data: {
-          paymentStatus: 'SUCCESS',
-          bookingStatus: 'COMPLETED',
-          visitedAt: new Date(),
-          pinAttempts: 0,
-        },
-      });
-
-      if (atomicUpdate.count === 0) {
-        throw new ConflictException('Booking has already been processed.');
-      }
-
-      const updated = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { user: { include: { userProfile: true } } },
-      });
-
-      if (!updated) {
-        throw new NotFoundException('Booking not found after update');
-      }
-
-      await this.userGamificationService.handleBookingCompletion(
-        updated.userId,
-        bookingId,
-      );
-
-      const userName = updated.user?.userProfile?.name || 'Customer';
-
-      // ── Layer 12 ──
-      this.paymentLogger.log({
-        userId: ownerAuthId,
-        bookingId,
-        turfId: booking.turfId,
-        action: 'verify-pin',
-        ip,
-        result: 'SUCCESS',
-      });
-
-      // ── Push Notification (Final Payment) ──
-      this.triggerPushNotification(
-        updated.userId,
-        'Payment Completed ✔',
-        'Your booking is fully paid. Enjoy your game!',
-        {
-          type: 'PAYMENT_FULL',
-          bookingId: updated.id,
-        },
-      );
-
-      // ── Notify Owner ──
-      this.triggerPushNotification(
-        ownerAuthId,
-        'Visit Completed! 🏟️',
-        `Booking ${this.formatBookingId(updated.id)} is now complete.`,
-        {
-          type: 'VISIT_COMPLETED_OWNER',
-          bookingId: updated.id,
-        },
-      );
-
-      return {
-        success: true,
-        message: `Check-in verified! Welcome ${userName}. Booking ${this.formatBookingId(updated.id)} completed.`,
-        data: {
-          ...updated,
-          displayId: this.formatBookingId(updated.id),
-          userName,
-        },
-      };
-    } finally {
-      if (lockValue) await this.redisService.releaseLock(lockKey, lockValue);
-    }
-  }
 
   // ═══════════════════════════════════════════════════════
   // 5. MARK ONLINE BOOKING COMPLETED (Owner side)
@@ -2223,7 +2021,6 @@ export class BookingService {
         bookingStatus: 'COMPLETED',
         paymentStatus: 'SUCCESS', // For CASH fallback, we assume money collected
         visitedAt: new Date(),
-        pinAttempts: 0,
       },
     });
 
@@ -3091,8 +2888,6 @@ export class BookingService {
       bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
       // Layer 11: Strip sensitive fields
-      pinAttempts: undefined,
-      pinLocked: undefined,
     }));
 
     return { success: true, count: mapped.length, data: mapped };
@@ -3198,8 +2993,6 @@ export class BookingService {
         qrStatus,
         qrMessage,
         qrCode,
-        pinAttempts: undefined,
-        pinLocked: undefined,
       },
     };
   }
@@ -3307,8 +3100,6 @@ export class BookingService {
       ...b,
       bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
-      pinAttempts: undefined,
-      pinLocked: undefined,
     }));
 
     return { success: true, count: mapped.length, data: mapped };
@@ -3378,8 +3169,6 @@ export class BookingService {
       ...b,
       bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
-      pinAttempts: undefined,
-      pinLocked: undefined,
     }));
 
     return { success: true, count: mapped.length, data: mapped };

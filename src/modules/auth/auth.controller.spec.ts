@@ -134,7 +134,7 @@ describe('AuthController', () => {
         message: 'OTP resent successfully',
       });
 
-      const result = await controller.userResendOtp(dto as any);
+      const result = await controller.userResendOtp(dto as any, '127.0.0.1');
       expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto);
       expect(result.success).toBe(true);
     });
@@ -150,7 +150,7 @@ describe('AuthController', () => {
         message: 'OTP resent successfully',
       });
 
-      const result = await controller.ownerResendOtp(dto as any);
+      const result = await controller.ownerResendOtp(dto as any, '127.0.0.1');
       expect(mockAuthService.resendOtp).toHaveBeenCalledWith(dto);
       expect(result.success).toBe(true);
     });

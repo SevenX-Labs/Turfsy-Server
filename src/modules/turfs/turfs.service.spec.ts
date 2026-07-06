@@ -57,7 +57,7 @@ describe('TurfsService', () => {
       mockPrisma.turf.create.mockResolvedValue({
         id: 'turf-id',
         name: 'Turf A',
-        paymentPreference: TurfPaymentPreference.ADVANCE_PAYMENT,
+        paymentPreferences: [TurfPaymentPreference.ADVANCE_PAYMENT],
       });
 
       const result = await service.createTurf('owner-auth-id', {
@@ -76,11 +76,11 @@ describe('TurfsService', () => {
         weekdayNightPrice: 1500,
         weekendDayPrice: 1200,
         weekendNightPrice: 1800,
-        paymentPreference: TurfPaymentPreference.ADVANCE_PAYMENT,
+        paymentPreferences: [TurfPaymentPreference.ADVANCE_PAYMENT],
       });
 
       expect(result.success).toBe(true);
-      expect(result.data.paymentPreference).toBe(TurfPaymentPreference.ADVANCE_PAYMENT);
+      expect(result.data.paymentPreferences).toBe(TurfPaymentPreference.ADVANCE_PAYMENT);
       expect(mockPrisma.turf.create).toHaveBeenCalled();
     });
   });
@@ -96,15 +96,15 @@ describe('TurfsService', () => {
       });
       mockPrisma.turf.update.mockResolvedValue({
         id: 'turf-id',
-        paymentPreference: TurfPaymentPreference.FULL_CASH,
+        paymentPreferences: [TurfPaymentPreference.FULL_CASH],
       });
 
       const result = await service.updateTurf('owner-auth-id', 'turf-id', {
-        paymentPreference: TurfPaymentPreference.FULL_CASH,
+        paymentPreferences: [TurfPaymentPreference.FULL_CASH],
       });
 
       expect(result.success).toBe(true);
-      expect(result.data.paymentPreference).toBe(TurfPaymentPreference.FULL_CASH);
+      expect(result.data.paymentPreferences).toBe(TurfPaymentPreference.FULL_CASH);
       expect(mockPrisma.turf.update).toHaveBeenCalled();
     });
   });
