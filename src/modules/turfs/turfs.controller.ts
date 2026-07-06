@@ -16,6 +16,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import {
   FileFieldsInterceptor,
@@ -199,6 +200,7 @@ export class TurfsController {
 
   // 5. Advanced Filtration & Sorting
   @Get('filter')
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async filterTurfs(
     @Query('city') city?: string,
