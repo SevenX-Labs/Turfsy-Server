@@ -203,7 +203,7 @@ export class TurfsController {
 
   // 5. Advanced Filtration & Sorting
   @Get('filter')
-  @SkipThrottle()
+  @SkipThrottle({ default: true, strict: true, medium: true })
   @HttpCode(HttpStatus.OK)
   async filterTurfs(
     @Query('city') city?: string,

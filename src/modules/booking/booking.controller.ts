@@ -433,7 +433,7 @@ export class BookingController {
   // GET /api/v3/booking/my-bookings
   // ──────────────────────────────────────────────
   @Get('my-bookings')
-  @SkipThrottle()
+  @SkipThrottle({ default: true, strict: true, medium: true })
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getMyBookings(@Req() req: any) {
