@@ -27,7 +27,6 @@ import { ResponseSanitizerInterceptor } from '../../common/interceptors/response
 import {
   CreateBookingDto,
   ConfirmPaymentDto,
-  VerifyPinDto,
   VerifyQrDto,
   RateTurfDto,
   CancelBookingDto,
@@ -421,6 +420,7 @@ export class BookingController {
   // GET /api/v3/booking/my-bookings/active
   // ──────────────────────────────────────────────
   @Get('my-bookings/active')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getActiveBooking(@Req() req: any) {
@@ -432,6 +432,7 @@ export class BookingController {
   // GET /api/v3/booking/my-bookings
   // ──────────────────────────────────────────────
   @Get('my-bookings')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getMyBookings(@Req() req: any) {

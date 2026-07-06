@@ -388,8 +388,7 @@ export class BookingService {
       }
 
       // ── Layer 8: Secure PIN generation (crypto.randomInt) ──
-      const checkInPin = crypto.randomInt(1000, 9999).toString();
-
+      
       // Correctly handle PIN expiry for overnight slots
       const isOvernightBooking = dto.startTime > dto.endTime;
       const pinExpiresAt = this.buildSlotDateTime(
@@ -441,7 +440,6 @@ export class BookingService {
               groundCharge: turfPrice,
               platformFee,
               depositAmount,
-              checkInPin,
               pinExpiresAt,
               notes: sanitizedNotes,
               bookingStatus:
@@ -1908,7 +1906,6 @@ export class BookingService {
           visitedAt: now,
           checkedInByOwnerId: ownerAuthId,
           scanIpAddress: ip || null,
-          checkInPin: null,
         },
       });
 
@@ -2103,7 +2100,6 @@ export class BookingService {
           paymentStatus: 'SUCCESS',
           bookingStatus: 'COMPLETED',
           visitedAt: new Date(),
-          checkInPin: null, // Layer 8: Null PIN after success
           pinAttempts: 0,
         },
       });
@@ -2227,7 +2223,6 @@ export class BookingService {
         bookingStatus: 'COMPLETED',
         paymentStatus: 'SUCCESS', // For CASH fallback, we assume money collected
         visitedAt: new Date(),
-        checkInPin: null, // Clean up unused PIN
         pinAttempts: 0,
       },
     });
@@ -3096,7 +3091,6 @@ export class BookingService {
       bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
       // Layer 11: Strip sensitive fields
-      checkInPin: undefined,
       pinAttempts: undefined,
       pinLocked: undefined,
     }));
@@ -3313,7 +3307,6 @@ export class BookingService {
       ...b,
       bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
-      checkInPin: undefined,
       pinAttempts: undefined,
       pinLocked: undefined,
     }));
@@ -3385,7 +3378,6 @@ export class BookingService {
       ...b,
       bookingStatus: this.mapBookingStatus(b),
       displayId: this.formatBookingId(b.id),
-      checkInPin: undefined,
       pinAttempts: undefined,
       pinLocked: undefined,
     }));
@@ -3863,7 +3855,6 @@ export class BookingService {
         endTime: booking.endTime,
         amount: booking.amount,
         paymentStatus: booking.paymentStatus,
-        pin: booking.checkInPin,
       },
     });
   }

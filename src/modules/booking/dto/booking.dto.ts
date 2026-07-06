@@ -70,13 +70,6 @@ export class ConfirmPaymentDto {
   razorpaySignature: string;
 }
 
-export class VerifyPinDto {
-  @IsString()
-  @IsNotEmpty({ message: 'PIN is required' })
-  @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 numeric digits' })
-  pin: string;
-}
-
 export class VerifyQrDto {
   @IsString()
   @IsNotEmpty({ message: 'QR data is required' })
