@@ -1957,6 +1957,11 @@ export class BookingService {
         where: { id: bookingId },
       });
 
+      await this.userGamificationService.handleBookingCompletion(
+        booking.userId,
+        bookingId,
+      );
+
       const checkInTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       // ── Trigger notifications ──
