@@ -130,31 +130,21 @@ export class AdminModule implements OnModuleInit {
 
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     
-    // Check if SUPER_ADMIN exists
-    const superAdmin = await this.prisma.admin.findFirst({
-      where: { role: 'SUPER_ADMIN' },
+    await this.prisma.admin.upsert({
+      where: { email: trimmedEmail },
+      update: {
+        passwordHash,
+        role: 'SUPER_ADMIN',
+        isActive: true,
+      },
+      create: {
+        email: trimmedEmail,
+        passwordHash,
+        name: 'Super Admin',
+        role: 'SUPER_ADMIN',
+        isActive: true,
+      },
     });
-
-    if (!superAdmin) {
-      await this.prisma.admin.create({
-        data: {
-          email: trimmedEmail,
-          passwordHash,
-          name: 'Super Admin',
-          role: 'SUPER_ADMIN',
-          isActive: true,
-        },
-      });
-      console.log(`[SEED] Created default SUPER_ADMIN: ${trimmedEmail}`);
-    } else {
-      await this.prisma.admin.update({
-        where: { id: superAdmin.id },
-        data: {
-          email: trimmedEmail,
-          passwordHash,
-        },
-      });
-      console.log(`[SEED] Updated SUPER_ADMIN credentials to match environment variables: ${trimmedEmail}`);
-    }
+    console.log(`[SEED] Ensured SUPER_ADMIN exists and matches environment variables: ${trimmedEmail}`);
   }
 }

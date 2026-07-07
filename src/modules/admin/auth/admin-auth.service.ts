@@ -30,40 +30,33 @@ export class AdminAuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // 2. Fetch admin from DB to get the correct UUID for relational logs (ActionLogs, Sessions)
-    let admin = await this.prisma.admin.findFirst({
-      where: { role: 'SUPER_ADMIN' },
-    });
-
-    // If admin doesn't exist in DB yet, create it on the fly to ensure foreign keys work
-    if (!admin) {
-      const passwordHash = await bcrypt.hash(envPassword, 10);
-      admin = await this.prisma.admin.create({
-        data: {
-          email: envEmail.toLowerCase().trim(),
-          passwordHash,
-          name: 'Super Admin',
-          role: 'SUPER_ADMIN',
-          isActive: true,
-        },
-      });
-    }
-
-    if (!admin.isActive) {
-      throw new ForbiddenException('Admin account is suspended');
-    }
-
-    // Reset failed attempts & update login tracking
-    await this.prisma.admin.update({
-      where: { id: admin.id },
-      data: {
+    // 2. Find or create admin by the exact ENV email (avoids unique constraint conflicts)
+    const passwordHash = await bcrypt.hash(envPassword, 10);
+    const admin = await this.prisma.admin.upsert({
+      where: { email: envEmail.toLowerCase().trim() },
+      update: {
+        passwordHash,
         failedAttempts: 0,
         lockedUntil: null,
         lastLoginAt: new Date(),
         lastLoginIp: ipAddress,
-        email: envEmail.toLowerCase().trim(), // Ensure email stays synced
+        role: 'SUPER_ADMIN',
+        isActive: true,
+      },
+      create: {
+        email: envEmail.toLowerCase().trim(),
+        passwordHash,
+        name: 'Super Admin',
+        role: 'SUPER_ADMIN',
+        isActive: true,
+        lastLoginAt: new Date(),
+        lastLoginIp: ipAddress,
       },
     });
+
+    if (!admin.isActive) {
+      throw new ForbiddenException('Admin account is suspended');
+    }
 
     // 3. Generate JWT token
     const secret = this.configService.get<string>('JWT_ACCESS_SECRET') || 'your_access_secret_2709';
