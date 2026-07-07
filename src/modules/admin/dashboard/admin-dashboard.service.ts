@@ -53,7 +53,9 @@ export class AdminDashboardService {
         platformFee: true,
       },
     });
-    const platformFeeEarned = todayPlatformFeeSum._sum.platformFee || 0;
+    const grossPlatformFee = todayPlatformFeeSum._sum.platformFee || 0;
+    const razorpayDeduction = todayRevenue * 0.02;
+    const platformFeeEarned = Math.max(0, grossPlatformFee - razorpayDeduction);
 
     // Settlements
     const pendingSettlementsSum = await this.prisma.settlement.aggregate({
@@ -200,9 +202,9 @@ export class AdminDashboardService {
         todayRevenue: todayAgg._sum.amount || 0,
         weeklyRevenue: weeklyAgg._sum.amount || 0,
         monthlyRevenue: monthlyAgg._sum.amount || 0,
-        platformFeeEarned: todayAgg._sum.platformFee || 0,
-        totalPlatformFeeWeekly: weeklyAgg._sum.platformFee || 0,
-        totalPlatformFeeMonthly: monthlyAgg._sum.platformFee || 0,
+        platformFeeEarned: Math.max(0, (todayAgg._sum.platformFee || 0) - ((todayAgg._sum.amount || 0) * 0.02)),
+        totalPlatformFeeWeekly: Math.max(0, (weeklyAgg._sum.platformFee || 0) - ((weeklyAgg._sum.amount || 0) * 0.02)),
+        totalPlatformFeeMonthly: Math.max(0, (monthlyAgg._sum.platformFee || 0) - ((monthlyAgg._sum.amount || 0) * 0.02)),
         pendingSettlementAmount: pendingAgg._sum.amount || 0,
       },
     };
