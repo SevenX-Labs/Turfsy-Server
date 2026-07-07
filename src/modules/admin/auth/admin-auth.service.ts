@@ -42,13 +42,7 @@ export class AdminAuthService {
         data: {
           email: envEmail.toLowerCase().trim(),
           passwordHash,
-          name: 'Super Admin',forward-logs-shared.ts:95 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
-
-forward-logs-shared.ts:95 [HMR] connected
-
-turfsy.onrender.com/api/v1/admin/auth/login:1  Failed to load resource: the server responded with a status of 401 ()
-
-
+          name: 'Super Admin',
           role: 'SUPER_ADMIN',
           isActive: true,
         },
