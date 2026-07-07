@@ -15,40 +15,51 @@ export class AdminAuthService {
   ) {}
 
   async login(dto: AdminLoginDto, ipAddress: string, userAgent: string) {
-    const admin = await this.prisma.admin.findUnique({
-      where: { email: dto.email.toLowerCase().trim() },
+    const envEmail = this.configService.get<string>('ADMIN_EMAIL');
+    const envPassword = this.configService.get<string>('ADMIN_PASSWORD');
+
+    if (!envEmail || !envPassword) {
+      throw new UnauthorizedException('Admin credentials are not configured on the server');
+    }
+
+    // 1. Verify credentials purely against ENV variables
+    if (
+      dto.email.toLowerCase().trim() !== envEmail.toLowerCase().trim() ||
+      dto.password !== envPassword
+    ) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // 2. Fetch admin from DB to get the correct UUID for relational logs (ActionLogs, Sessions)
+    let admin = await this.prisma.admin.findFirst({
+      where: { role: 'SUPER_ADMIN' },
     });
 
+    // If admin doesn't exist in DB yet, create it on the fly to ensure foreign keys work
     if (!admin) {
-      throw new UnauthorizedException('Invalid email or password');
+      const passwordHash = await bcrypt.hash(envPassword, 10);
+      admin = await this.prisma.admin.create({
+        data: {
+          email: envEmail.toLowerCase().trim(),
+          passwordHash,
+          name: 'Super Admin',forward-logs-shared.ts:95 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+
+forward-logs-shared.ts:95 [HMR] connected
+
+turfsy.onrender.com/api/v1/admin/auth/login:1  Failed to load resource: the server responded with a status of 401 ()
+
+
+          role: 'SUPER_ADMIN',
+          isActive: true,
+        },
+      });
     }
 
     if (!admin.isActive) {
       throw new ForbiddenException('Admin account is suspended');
     }
 
-    if (admin.lockedUntil && new Date() < admin.lockedUntil) {
-      throw new ForbiddenException('Admin account is temporarily locked due to too many failed attempts');
-    }
-
-    const isMatch = await bcrypt.compare(dto.password, admin.passwordHash);
-    if (!isMatch) {
-      const failedAttempts = admin.failedAttempts + 1;
-      let lockedUntil: Date | null = null;
-      if (failedAttempts >= 5) {
-        lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 mins lock
-      }
-      await this.prisma.admin.update({
-        where: { id: admin.id },
-        data: {
-          failedAttempts,
-          lockedUntil,
-        },
-      });
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    // Reset failed attempts
+    // Reset failed attempts & update login tracking
     await this.prisma.admin.update({
       where: { id: admin.id },
       data: {
@@ -56,19 +67,20 @@ export class AdminAuthService {
         lockedUntil: null,
         lastLoginAt: new Date(),
         lastLoginIp: ipAddress,
+        email: envEmail.toLowerCase().trim(), // Ensure email stays synced
       },
     });
 
-    // Generate token
+    // 3. Generate JWT token
     const secret = this.configService.get<string>('JWT_ACCESS_SECRET') || 'your_access_secret_2709';
     const expiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '24h';
     
     const payload = { adminId: admin.id, email: admin.email, role: admin.role };
     const token = this.jwtService.sign(payload, { secret, expiresIn: expiresIn as any });
 
-    // Create session in database
+    // 4. Create session in database
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // match 24h
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await this.prisma.adminSession.create({
       data: {
@@ -80,14 +92,14 @@ export class AdminAuthService {
       },
     });
 
-    // Record action log
+    // 5. Record action log
     await this.prisma.adminActionLog.create({
       data: {
         adminId: admin.id,
-        action: 'ADMIN_CREATED', // we can log login here, or define actions
+        action: 'ADMIN_CREATED',
         targetType: 'Admin',
         targetId: admin.id,
-        reason: 'Successful Login',
+        reason: 'Successful Login via ENV verification',
         ipAddress,
         metadata: { userAgent },
       },

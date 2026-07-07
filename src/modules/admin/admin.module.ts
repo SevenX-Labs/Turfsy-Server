@@ -128,13 +128,14 @@ export class AdminModule implements OnModuleInit {
 
     const trimmedEmail = adminEmail.toLowerCase().trim();
 
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
+    
     // Check if SUPER_ADMIN exists
     const superAdmin = await this.prisma.admin.findFirst({
       where: { role: 'SUPER_ADMIN' },
     });
 
     if (!superAdmin) {
-      const passwordHash = await bcrypt.hash(adminPassword, 10);
       await this.prisma.admin.create({
         data: {
           email: trimmedEmail,
@@ -146,7 +147,14 @@ export class AdminModule implements OnModuleInit {
       });
       console.log(`[SEED] Created default SUPER_ADMIN: ${trimmedEmail}`);
     } else {
-      console.log(`[SEED] SUPER_ADMIN already exists: ${superAdmin.email}`);
+      await this.prisma.admin.update({
+        where: { id: superAdmin.id },
+        data: {
+          email: trimmedEmail,
+          passwordHash,
+        },
+      });
+      console.log(`[SEED] Updated SUPER_ADMIN credentials to match environment variables: ${trimmedEmail}`);
     }
   }
 }
