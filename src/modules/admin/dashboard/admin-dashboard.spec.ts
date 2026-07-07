@@ -25,7 +25,6 @@ describe('AdminDashboard', () => {
         _sum: { amount: 1500 },
       }),
     },
-    supportTicket: { count: jest.fn().mockResolvedValue(2) },
     adminActionLog: { findMany: jest.fn().mockResolvedValue([]) },
   };
 

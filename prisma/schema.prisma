@@ -104,25 +104,11 @@ enum AdminActionType {
   ADMIN_DEACTIVATED
   SYSTEM_CONFIG_CHANGED
   NOTIFICATION_SENT
-  SUPPORT_TICKET_REPLIED
-  SUPPORT_TICKET_RESOLVED
   SETTLEMENT_PAID
   LEADERBOARD_RESET
 }
 
-enum TicketPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
 
-enum TicketStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
-}
 
 enum SplitPlayerStatus {
   PENDING
@@ -250,40 +236,7 @@ model PlatformConfig {
   updatedAt                 DateTime @updatedAt
 }
 
-model SupportTicket {
-  id          String               @id @default(uuid())
-  userId      String
-  userRole    Role
-  subject     String
-  description String
-  status      TicketStatus         @default(OPEN)
-  priority    TicketPriority       @default(MEDIUM)
-  assignedTo  String?
-  resolvedAt  DateTime?
-  closedAt    DateTime?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  replies     SupportTicketReply[]
 
-  @@index([assignedTo])
-  @@index([createdAt])
-  @@index([priority])
-  @@index([status])
-  @@index([userId])
-}
-
-model SupportTicketReply {
-  id         String        @id @default(uuid())
-  ticketId   String
-  senderId   String
-  senderType String
-  message    String
-  createdAt  DateTime      @default(now())
-  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-
-  @@index([createdAt])
-  @@index([ticketId])
-}
 
 model NotificationLog {
   id         String   @id @default(uuid())

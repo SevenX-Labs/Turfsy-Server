@@ -68,10 +68,7 @@ export class AdminDashboardService {
     });
     const completedSettlements = completedSettlementsSum._sum.amount || 0;
 
-    // Open Support Tickets
-    const openSupportTickets = await this.prisma.supportTicket.count({
-      where: { status: 'OPEN' },
-    });
+
 
     // Pending Manual Booking Approvals
     const pendingManualApprovals = await this.prisma.booking.count({
@@ -144,7 +141,6 @@ export class AdminDashboardService {
           platformFeeEarned,
           pendingSettlements,
           completedSettlements,
-          openSupportTickets,
           pendingManualApprovals,
         },
         recentActivity: {

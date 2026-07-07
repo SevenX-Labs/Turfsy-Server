@@ -47,10 +47,6 @@ import { AdminPlatformFeeSlabsController } from './platform-fee-slabs/admin-plat
 import { AdminNotificationsController } from './notifications/admin-notifications.controller';
 import { AdminNotificationsService } from './notifications/admin-notifications.service';
 
-// Support
-import { AdminSupportController } from './support/admin-support.controller';
-import { AdminSupportService } from './support/admin-support.service';
-
 // Settings
 import { AdminSettingsController } from './settings/admin-settings.controller';
 import { AdminSettingsService } from './settings/admin-settings.service';
@@ -87,7 +83,6 @@ import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
     AdminAnalyticsController,
     AdminPlatformFeeSlabsController,
     AdminNotificationsController,
-    AdminSupportController,
     AdminSettingsController,
     AdminAuditLogsController,
   ],
@@ -101,7 +96,6 @@ import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
     AdminSettlementsService,
     AdminAnalyticsService,
     AdminNotificationsService,
-    AdminSupportService,
     AdminSettingsService,
     AdminAuditLogsService,
     JwtAdminGuard,
