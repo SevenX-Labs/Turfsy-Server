@@ -55,6 +55,13 @@ export class PlatformFeeSlabService {
     });
   }
 
+  async findActive() {
+    return this.prisma.platformFeeSlab.findMany({
+      where: { isActive: true },
+      orderBy: { minAmount: 'asc' },
+    });
+  }
+
   async findOne(id: string) {
     const slab = await this.prisma.platformFeeSlab.findUnique({
       where: { id },

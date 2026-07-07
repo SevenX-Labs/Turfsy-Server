@@ -41,6 +41,12 @@ export class PlatformFeeSlabController {
     return this.service.findAll();
   }
 
+  @Get('active')
+  @HttpCode(HttpStatus.OK)
+  async findActiveSlabs() {
+    return this.service.findActive();
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
