@@ -30,6 +30,7 @@ import { BullMqModule } from './common/bullmq/bullmq.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { PlatformFeeSlabModule } from './modules/platform-fee-slab/platform-fee-slab.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { OwnerSettlementsModule } from './modules/owner-settlements/owner-settlements.module';
 
 @Module({
   imports: [
@@ -98,6 +99,7 @@ import { AdminModule } from './modules/admin/admin.module';
     OwnerHomeModule,
     OwnerAnalyticsModule,
     OwnerSettingsModule,
+    OwnerSettlementsModule,
     UserGamificationModule,
     UserSettingsModule,
     UserBookingSplitwiseModule,
