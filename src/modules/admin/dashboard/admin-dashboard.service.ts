@@ -39,9 +39,11 @@ export class AdminDashboardService {
       },
       _sum: {
         amount: true,
+        depositAmount: true,
       },
     });
     const todayRevenue = todayRevenueSum._sum.amount || 0;
+    const todayDeposit = todayRevenueSum._sum.depositAmount || 0;
 
     // Platform Fee Earned
     const todayPlatformFeeSum = await this.prisma.booking.aggregate({
@@ -54,7 +56,7 @@ export class AdminDashboardService {
       },
     });
     const grossPlatformFee = todayPlatformFeeSum._sum.platformFee || 0;
-    const razorpayDeduction = todayRevenue * 0.02;
+    const razorpayDeduction = todayDeposit * 0.02;
     const platformFeeEarned = Math.max(0, grossPlatformFee - razorpayDeduction);
 
     // Settlements
@@ -174,21 +176,21 @@ export class AdminDashboardService {
           bookingStatus: { in: ['CONFIRMED', 'COMPLETED'] },
           bookingDate: { gte: startOfToday, lte: endOfToday },
         },
-        _sum: { amount: true, platformFee: true },
+        _sum: { amount: true, platformFee: true, depositAmount: true },
       }),
       this.prisma.booking.aggregate({
         where: {
           bookingStatus: { in: ['CONFIRMED', 'COMPLETED'] },
           bookingDate: { gte: startOfWeek },
         },
-        _sum: { amount: true, platformFee: true },
+        _sum: { amount: true, platformFee: true, depositAmount: true },
       }),
       this.prisma.booking.aggregate({
         where: {
           bookingStatus: { in: ['CONFIRMED', 'COMPLETED'] },
           bookingDate: { gte: startOfMonth },
         },
-        _sum: { amount: true, platformFee: true },
+        _sum: { amount: true, platformFee: true, depositAmount: true },
       }),
       this.prisma.settlement.aggregate({
         where: { status: 'PENDING' },
@@ -202,9 +204,9 @@ export class AdminDashboardService {
         todayRevenue: todayAgg._sum.amount || 0,
         weeklyRevenue: weeklyAgg._sum.amount || 0,
         monthlyRevenue: monthlyAgg._sum.amount || 0,
-        platformFeeEarned: Math.max(0, (todayAgg._sum.platformFee || 0) - ((todayAgg._sum.amount || 0) * 0.02)),
-        totalPlatformFeeWeekly: Math.max(0, (weeklyAgg._sum.platformFee || 0) - ((weeklyAgg._sum.amount || 0) * 0.02)),
-        totalPlatformFeeMonthly: Math.max(0, (monthlyAgg._sum.platformFee || 0) - ((monthlyAgg._sum.amount || 0) * 0.02)),
+        platformFeeEarned: Math.max(0, (todayAgg._sum.platformFee || 0) - ((todayAgg._sum.depositAmount || 0) * 0.02)),
+        totalPlatformFeeWeekly: Math.max(0, (weeklyAgg._sum.platformFee || 0) - ((weeklyAgg._sum.depositAmount || 0) * 0.02)),
+        totalPlatformFeeMonthly: Math.max(0, (monthlyAgg._sum.platformFee || 0) - ((monthlyAgg._sum.depositAmount || 0) * 0.02)),
         pendingSettlementAmount: pendingAgg._sum.amount || 0,
       },
     };
