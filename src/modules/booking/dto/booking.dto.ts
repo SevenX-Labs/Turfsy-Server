@@ -76,6 +76,16 @@ export class VerifyQrDto {
   qrData: string;
 }
 
+export class ManualCheckInDto {
+  @IsString()
+  @IsNotEmpty({ message: 'A reason is mandatory for manual check-in' })
+  @IsIn(['Scanner Not Working', 'Camera Issue', 'Technical Issue', 'Other'], {
+    message: 'Reason must be one of the pre-defined options',
+  })
+  reason: string;
+}
+
+
 export class RateTurfDto {
   @IsInt({ message: 'Rating must be an integer' })
   @Min(1, { message: 'Rating minimum is 1' })

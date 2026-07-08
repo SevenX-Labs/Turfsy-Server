@@ -2014,11 +2014,11 @@ export class BookingService {
 
 
   // ═══════════════════════════════════════════════════════
-  // 5. MARK ONLINE BOOKING COMPLETED (Owner side)
+  // 5. MANUAL CHECK-IN (Owner Override)
   //    Layer 1: Owner + turf verification
-  //    Layer 5: State Machine (CONFIRMED → COMPLETED, ONLINE only)
+  //    Layer 5: State Machine (CONFIRMED → COMPLETED)
   // ═══════════════════════════════════════════════════════
-  async completeBooking(ownerAuthId: string, bookingId: string, ip?: string) {
+  async manualCheckIn(ownerAuthId: string, bookingId: string, reason: string, ip?: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { turf: { include: { owner: true } } },
@@ -2032,45 +2032,55 @@ export class BookingService {
 
     // ── Layer 5: State Machine ──
     if (booking.bookingStatus !== 'CONFIRMED') {
-      throw new BadRequestException('Only confirmed bookings can be completed');
+      throw new BadRequestException('Only confirmed bookings can be checked-in');
     }
 
-    // ── Layer 5 & Layer 8: Payment type check & Fallback Override ──
-    if (
-      booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH ||
-      booking.paymentType === PaymentType.FULL_CASH
-    ) {
-      // For CASH, allow manual completion ONLY if the PIN window has expired
-      const now = new Date();
-      const datePart = booking.bookingDate.toISOString().split('T')[0];
-      const isOvernight = booking.startTime > booking.endTime;
-      const slotEnd = this.buildSlotDateTime(
-        datePart,
-        booking.endTime,
-        isOvernight ? 1 : 0,
-      );
-      const windowEnd = new Date(
-        slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000,
-      );
+    // ── Time Window Check ──
+    // Manual check-in is allowed ONLY during the same QR validity window
+    const now = new Date();
+    const datePart = booking.bookingDate.toISOString().split('T')[0];
+    const isOvernight = booking.startTime > booking.endTime;
+    const slotStart = this.buildSlotDateTime(datePart, booking.startTime);
+    const slotEnd = this.buildSlotDateTime(
+      datePart,
+      booking.endTime,
+      isOvernight ? 1 : 0,
+    );
 
-      if (now <= windowEnd) {
-        throw new BadRequestException(
-          'Use Verify-PIN for active CASH bookings. Manual override is only available after the slot ends.',
-        );
-      }
+    const windowStart = new Date(
+      slotStart.getTime() - PIN_WINDOW_MINUTES * 60 * 1000,
+    );
+    const windowEnd = new Date(
+      slotEnd.getTime() + PIN_WINDOW_MINUTES * 60 * 1000,
+    );
+
+    if (now < windowStart) {
+      throw new BadRequestException(
+        `Check-in window opens at ${windowStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
+      );
     }
+    if (now > windowEnd) {
+      throw new BadRequestException('Check-in window expired');
+    }
+
+    // ── Audit Log via Notes ──
+    const auditLogEntry = `\n[MANUAL CHECK-IN] Reason: ${reason}. By Owner at ${now.toISOString()}. IP: ${ip || 'unknown'}`;
+    const newNotes = (booking.notes || '') + auditLogEntry;
 
     const atomicUpdate = await this.prisma.booking.updateMany({
       where: { id: bookingId, bookingStatus: 'CONFIRMED' },
       data: {
         bookingStatus: 'COMPLETED',
         paymentStatus: 'SUCCESS', // For CASH fallback, we assume money collected
-        visitedAt: new Date(),
+        visitedAt: now,
+        notes: newNotes,
+        checkedInByOwnerId: ownerAuthId,
+        scanIpAddress: ip || null,
       },
     });
 
     if (atomicUpdate.count === 0) {
-      throw new ConflictException('Booking has already been completed.');
+      throw new ConflictException('Booking has already been checked-in.');
     }
 
     const updated = await this.prisma.booking.findUnique({
@@ -2090,36 +2100,37 @@ export class BookingService {
       userId: ownerAuthId,
       bookingId,
       turfId: booking.turfId,
-      action: 'complete',
+      action: 'manual-checkin',
       ip,
       result: 'SUCCESS',
+      rejectionReason: reason,
     });
 
-    // ── Push Notification (Final Payment - Manual Override) ──
+    // ── Push Notification ──
     this.triggerPushNotification(
       updated.userId,
-      'Payment Completed ✔',
-      'Your booking is fully paid. Enjoy your game!',
+      'Check-in successful ✔',
+      'You have been manually checked in by the turf owner. Enjoy your game!',
       {
-        type: 'PAYMENT_FULL',
+        type: 'MANUAL_CHECKIN_CUSTOMER',
         bookingId: updated.id,
       },
-    );
+    ).catch(e => this.logger.error(`Notification error: ${e.message}`));
 
     // ── Notify Owner ──
     this.triggerPushNotification(
       ownerAuthId,
-      'Booking Completed manually! ✅',
-      `You've marked ${this.formatBookingId(updated.id)} as complete.`,
+      'Manual Check-in Saved ✅',
+      `You've manually checked in ${this.formatBookingId(updated.id)}. Reason logged.`,
       {
-        type: 'MANUAL_COMPLETED_OWNER',
+        type: 'MANUAL_CHECKIN_OWNER',
         bookingId: updated.id,
       },
-    );
+    ).catch(e => this.logger.error(`Notification error: ${e.message}`));
 
     return {
       success: true,
-      message: 'Booking marked as completed.',
+      message: 'Booking manually checked in and logged.',
       data: { ...updated, displayId: this.formatBookingId(updated.id) },
     };
   }

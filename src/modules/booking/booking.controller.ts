@@ -32,6 +32,7 @@ import {
   RateTurfDto,
   CancelBookingDto,
   RebookBookingDto,
+  ManualCheckInDto,
 } from './dto/booking.dto';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -195,20 +196,21 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
-  // 6. MARK BOOKING COMPLETED (Owner only, ONLINE)
-  // PATCH /api/v3/booking/:bookingId/complete
+  // 6. MANUAL CHECK-IN (Owner Override)
+  // POST /api/v3/booking/:bookingId/manual-checkin
   // Layer 1: JWT + OWNER role
   // ──────────────────────────────────────────────
-  @Patch(':bookingId/complete')
+  @Post(':bookingId/manual-checkin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   @HttpCode(HttpStatus.OK)
-  async completeBooking(
+  async manualCheckIn(
     @Req() req: any,
     @Param('bookingId', new ParseUUIDPipe({ version: '4' })) bookingId: string,
+    @Body() dto: ManualCheckInDto,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.completeBooking(req.user.authId, bookingId, ip);
+    return this.bookingService.manualCheckIn(req.user.authId, bookingId, dto.reason, ip);
   }
 
   // ──────────────────────────────────────────────
