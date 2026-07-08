@@ -23,6 +23,7 @@ enum Gender {
 enum SportsType {
   FOOTBALL
   CRICKET
+  BOTH
 }
 
 enum TurfStatus {
