@@ -67,6 +67,7 @@ describe('BookingService - Platform Fee Slabs', () => {
   const mockUserGamification = {
     incrementBookings: jest.fn(),
     handleNoShow: jest.fn().mockResolvedValue({}),
+    handleBookingCompletion: jest.fn().mockResolvedValue({}),
   };
 
   const mockEmailService = {
