@@ -19,6 +19,7 @@ export interface PaymentLogEntry {
     | 'split-remove-player'
     | 'split-trigger'
     | 'split-update-status'
+    | 'manual-checkin'
     | 'pending_approval';
   amount?: number;
   razorpayOrderId?: string;
