@@ -22,7 +22,7 @@ export class OwnerAnalyticsService {
   async getTotalRevenue(ownerAuthId: string) {
     const bookings = await this.getOwnerBookings(ownerAuthId);
     const total = bookings
-      .filter((b) => b.bookingStatus === 'COMPLETED')
+      .filter((b) => ['COMPLETED', 'CONFIRMED'].includes(b.bookingStatus))
       .reduce((sum, b) => sum + b.amount, 0);
     return { success: true, data: { totalRevenue: total } };
   }
@@ -34,8 +34,8 @@ export class OwnerAnalyticsService {
 
   async getCompletedBookings(ownerAuthId: string) {
     const bookings = await this.getOwnerBookings(ownerAuthId);
-    const count = bookings.filter(
-      (b) => b.bookingStatus === 'COMPLETED',
+    const count = bookings.filter((b) =>
+      ['COMPLETED', 'CONFIRMED'].includes(b.bookingStatus),
     ).length;
     return { success: true, data: { completedBookings: count } };
   }
@@ -52,7 +52,7 @@ export class OwnerAnalyticsService {
     const bookings = await this.getOwnerBookings(ownerAuthId);
     const map: { [date: string]: number } = {};
     bookings
-      .filter((b) => b.bookingStatus === 'COMPLETED')
+      .filter((b) => ['COMPLETED', 'CONFIRMED'].includes(b.bookingStatus))
       .forEach((b) => {
         const date = b.bookingDate.toISOString().split('T')[0];
         map[date] = (map[date] || 0) + b.amount;
@@ -91,14 +91,16 @@ export class OwnerAnalyticsService {
         (b) =>
           (b.paymentType === PaymentType.HALF_ONLINE_HALF_CASH ||
             b.paymentType === PaymentType.FULL_CASH) &&
-          (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+          (['COMPLETED', 'CONFIRMED'].includes(b.bookingStatus) ||
+            b.paymentStatus === 'SUCCESS'),
       )
       .reduce((sum, b) => sum + b.amount, 0);
     const onlineAmount = bookings
       .filter(
         (b) =>
           b.paymentType === PaymentType.FULL_ONLINE &&
-          (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+          (['COMPLETED', 'CONFIRMED'].includes(b.bookingStatus) ||
+            b.paymentStatus === 'SUCCESS'),
       )
       .reduce((sum, b) => sum + b.amount, 0);
     return { success: true, data: { cashAmount, onlineAmount } };
@@ -138,7 +140,9 @@ export class OwnerAnalyticsService {
     const bookings = await this.getOwnerBookings(ownerAuthId);
     // (Existing combined logic)
     const totalBookings = bookings.length;
-    const completed = bookings.filter((b) => b.bookingStatus === 'COMPLETED');
+    const completed = bookings.filter((b) =>
+      ['COMPLETED', 'CONFIRMED'].includes(b.bookingStatus),
+    );
     const cancelled = bookings.filter((b) => b.bookingStatus === 'CANCELLED');
     const noShows = bookings.filter((b) => b.bookingStatus === 'NO_SHOW');
     const totalRevenue = completed.reduce((sum, b) => sum + b.amount, 0);
