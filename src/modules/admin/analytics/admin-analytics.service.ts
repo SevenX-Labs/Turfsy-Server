@@ -11,15 +11,16 @@ export class AdminAnalyticsService {
     // 1. Core aggregates (Completed bookings)
     const completedAgg = await this.prisma.booking.aggregate({
       where: { bookingStatus: { in: ['CONFIRMED', 'COMPLETED'] } },
-      _sum: { amount: true, platformFee: true },
+      _sum: { amount: true, platformFee: true, depositAmount: true },
       _count: { id: true },
     });
 
     const totalRevenue = completedAgg._sum.amount || 0;
     const grossPlatformFee = completedAgg._sum.platformFee || 0;
+    const totalDepositAmount = completedAgg._sum.depositAmount || 0;
     const totalPlatformFee = Math.max(
       0,
-      grossPlatformFee - totalRevenue * 0.02,
+      grossPlatformFee - totalDepositAmount * 0.02,
     );
     const completedCount = completedAgg._count.id;
 
