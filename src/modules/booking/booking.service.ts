@@ -806,6 +806,49 @@ export class BookingService {
   //     Layer 6: Rate Limiting (3/booking/5min)
   // ═══════════════════════════════════════════════════════
   async createRazorpayOrder(authId: string, bookingId: string, ip?: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    // ── Layer 1: Verify booking ownership ──
+    if (booking.userId !== authId)
+      throw new ForbiddenException('Access denied.');
+
+    // ── Layer 5: State Machine ──
+    if (booking.bookingStatus !== 'PENDING') {
+      throw new BadRequestException('Booking is not in pending state');
+    }
+
+    // ══════════════════════════════════════════════════
+    // Layer 2: Idempotency — return existing order
+    // ══════════════════════════════════════════════════
+    if (booking.razorpayOrderId) {
+      this.paymentLogger.log({
+        userId: authId,
+        bookingId,
+        turfId: booking.turfId,
+        action: 'create-order',
+        amount: booking.depositAmount,
+        razorpayOrderId: booking.razorpayOrderId,
+        ip,
+        result: 'SUCCESS',
+        rejectionReason: 'Idempotent return — existing order',
+      });
+
+      return {
+        success: true,
+        data: {
+          orderId: booking.razorpayOrderId,
+          amount: booking.depositAmount * 100,
+          currency: 'INR',
+          bookingId: booking.id,
+          displayId: this.formatBookingId(booking.id),
+          keyId: this.configService.get<string>('RAZORPAY_KEY_ID'),
+        },
+      };
+    }
+
     // ── Layer 6: Rate Limiting ──
     await this.rateLimiter.check(
       `booking:${bookingId}:create-order`,
@@ -830,48 +873,6 @@ export class BookingService {
     }
 
     try {
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
-      });
-      if (!booking) throw new NotFoundException('Booking not found');
-
-      // ── Layer 1: Verify booking ownership ──
-      if (booking.userId !== authId)
-        throw new ForbiddenException('Access denied.');
-
-      // ── Layer 5: State Machine ──
-      if (booking.bookingStatus !== 'PENDING') {
-        throw new BadRequestException('Booking is not in pending state');
-      }
-
-      // ══════════════════════════════════════════════════
-      // Layer 2: Idempotency — return existing order
-      // ══════════════════════════════════════════════════
-      if (booking.razorpayOrderId) {
-        this.paymentLogger.log({
-          userId: authId,
-          bookingId,
-          turfId: booking.turfId,
-          action: 'create-order',
-          amount: booking.depositAmount,
-          razorpayOrderId: booking.razorpayOrderId,
-          ip,
-          result: 'SUCCESS',
-          rejectionReason: 'Idempotent return — existing order',
-        });
-
-        return {
-          success: true,
-          data: {
-            orderId: booking.razorpayOrderId,
-            amount: booking.depositAmount * 100,
-            currency: 'INR',
-            bookingId: booking.id,
-            displayId: this.formatBookingId(booking.id),
-            keyId: this.configService.get<string>('RAZORPAY_KEY_ID'),
-          },
-        };
-      }
 
       // ── Layer 4: Amount from DB (NEVER from request) ──
       const amountInPaise = Math.round(booking.depositAmount * 100);

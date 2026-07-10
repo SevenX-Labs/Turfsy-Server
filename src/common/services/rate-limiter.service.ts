@@ -65,9 +65,9 @@ export class RateLimiterService {
  */
 export const RATE_LIMITS = {
   CREATE_BOOKING: { limit: 5, windowMs: 10 * 60 * 1000 }, // 5 req/user/10min
-  CREATE_ORDER: { limit: 3, windowMs: 5 * 60 * 1000 }, // 3 req/booking/5min
-  CONFIRM_PAYMENT: { limit: 3, windowMs: 5 * 60 * 1000 }, // 3 req/booking/5min
-  PAYMENT_FAILED: { limit: 5, windowMs: 10 * 60 * 1000 }, // 5 req/user/10min
+  CREATE_ORDER: { limit: 10, windowMs: 5 * 60 * 1000 }, // 10 req/booking/5min
+  CONFIRM_PAYMENT: { limit: 10, windowMs: 5 * 60 * 1000 }, // 10 req/booking/5min
+  PAYMENT_FAILED: { limit: 10, windowMs: 10 * 60 * 1000 }, // 10 req/user/10min
   VERIFY_PIN: { limit: 5, windowMs: 15 * 60 * 1000 }, // 5 req/booking/15min
   CANCEL: { limit: 3, windowMs: 10 * 60 * 1000 }, // 3 req/user/10min
   RATE_TURF: { limit: 1, windowMs: Number.MAX_SAFE_INTEGER }, // lifetime (DB check)

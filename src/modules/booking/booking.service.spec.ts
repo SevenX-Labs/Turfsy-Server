@@ -180,9 +180,13 @@ describe('BookingService - Platform Fee Slabs', () => {
       { minAmount: 4001, maxAmount: 5000, platformFee: 250, isActive: true },
     ];
 
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const bookingDateStr = tomorrow.toISOString().split('T')[0];
+
     const createDto = {
       turfId: 'turf-1',
-      bookingDate: '2026-07-10',
+      bookingDate: bookingDateStr,
       startTime: '10:00',
       endTime: '11:00',
       durationMins: 60,
@@ -198,7 +202,7 @@ describe('BookingService - Platform Fee Slabs', () => {
       mockPrisma.slotLock.update.mockResolvedValue({ id: 'lock-id' });
       mockPrisma.booking.create.mockResolvedValue({
         id: 'booking-id',
-        bookingDate: '2026-07-10',
+        bookingDate: bookingDateStr,
         startTime: '10:00',
         endTime: '11:00',
         paymentType: PaymentType.FULL_ONLINE,
@@ -247,15 +251,15 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentType: PaymentType.HALF_ONLINE_HALF_CASH,
       });
 
-      // Ground Charge = 1200, Platform Fee = 100
-      // Ground Advance = 1200 * 0.3 = 360
-      // Online Payable = 360 + 100 = 460
-      // Remaining at turf = 1200 - 360 = 840
+      // Total = 1200 + 100 = 1300
+      // Online Payable = Math.round(1300 * 0.3) = 390
+      // Ground Advance = 390 - 100 = 290
+      // Remaining at Turf = 1300 - 390 = 910
       expect(response.data.groundCharge).toBe(1200);
       expect(response.data.platformFee).toBe(100);
-      expect(response.data.advanceAmount).toBe(360);
-      expect(response.data.onlinePayable).toBe(460);
-      expect(response.data.remainingAtTurf).toBe(840);
+      expect(response.data.advanceAmount).toBe(290);
+      expect(response.data.onlinePayable).toBe(390);
+      expect(response.data.remainingAtTurf).toBe(910);
     });
 
     it('should calculate correct amounts for FULL_CASH preference', async () => {
@@ -269,13 +273,13 @@ describe('BookingService - Platform Fee Slabs', () => {
       });
 
       // Ground Charge = 1200, Platform Fee = 100
-      // Online Payable = 100 (platformFee only)
-      // Remaining at turf = 1200 (ground charge)
+      // Online Payable = 0
+      // Remaining at turf = 1300 (total amount)
       expect(response.data.groundCharge).toBe(1200);
       expect(response.data.platformFee).toBe(100);
       expect(response.data.advanceAmount).toBe(0);
-      expect(response.data.onlinePayable).toBe(100);
-      expect(response.data.remainingAtTurf).toBe(1200);
+      expect(response.data.onlinePayable).toBe(0);
+      expect(response.data.remainingAtTurf).toBe(1300);
     });
 
     it('should throw BadRequestException if no active slab matches the ground charge', async () => {
