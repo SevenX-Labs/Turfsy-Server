@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
@@ -31,6 +31,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
 import { PlatformFeeSlabModule } from './modules/platform-fee-slab/platform-fee-slab.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { OwnerSettlementsModule } from './modules/owner-settlements/owner-settlements.module';
+import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
 
 @Module({
   imports: [
@@ -115,7 +116,7 @@ import { OwnerSettlementsModule } from './modules/owner-settlements/owner-settle
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: CustomThrottlerGuard,
     },
     {
       provide: APP_INTERCEPTOR,
