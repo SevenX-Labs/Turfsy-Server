@@ -233,30 +233,140 @@ export class AdminUsersService {
     const users = await this.prisma.auth.findMany({
       where: { role: 'USER', deletedAt: null },
       include: { userProfile: true },
-      take: 50,
+      orderBy: { createdAt: 'desc' },
     });
 
     return new Promise((resolve, reject) => {
-      const doc = new ((pdfkit as any).default || (pdfkit as any))({ margin: 50 });
+      const doc = new ((pdfkit as any).default || (pdfkit as any))({
+        size: 'A4',
+        margin: 40,
+        bufferPages: true,
+      });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      doc.fontSize(20).text('Turfsy Users Report', { align: 'center' });
-      doc.moveDown();
-      doc.fontSize(10).text(`Generated on: ${new Date().toLocaleString()}`, { align: 'right' });
-      doc.moveDown();
+      // Colors
+      const primaryColor = '#4F46E5';
+      const textColor = '#1F2937';
+      const lightGray = '#F9FAFB';
+      const borderGray = '#E5E7EB';
+      const activeColor = '#059669';
+      const bannedColor = '#DC2626';
 
-      doc.fontSize(10).text('ID | Name | Phone | Email | City | Status', { underline: true });
-      doc.moveDown();
+      // Header block
+      doc.rect(40, 40, 515, 60).fill(primaryColor);
+      doc.fillColor('#FFFFFF');
+      doc.fontSize(16).font('Helvetica-Bold').text('TURFSY ADMIN', 55, 52);
+      doc.fontSize(10).font('Helvetica').text('Users Directory Directory & Account Audit', 55, 74);
+      
+      // Date meta info
+      doc.fontSize(8).font('Helvetica').text(`Generated: ${new Date().toLocaleString()}`, 380, 55, { align: 'right', width: 160 });
+      doc.text(`Total Records: ${users.length}`, 380, 72, { align: 'right', width: 160 });
+
+      // Table Setup
+      let y = 120;
+      const headers = ['#', 'Name', 'Phone', 'Email', 'City', 'Status'];
+      const colWidths = [25, 110, 85, 170, 75, 50];
+      const startX = 40;
+
+      // Draw table header
+      doc.rect(startX, y, 515, 20).fill('#ECECFE');
+      doc.fillColor('#1F2937');
+      doc.fontSize(8).font('Helvetica-Bold');
+
+      let currentX = startX;
+      for (let i = 0; i < headers.length; i++) {
+        doc.text(headers[i], currentX + 5, y + 6, {
+          width: colWidths[i] - 10,
+          align: i === 0 ? 'center' : 'left',
+        });
+        currentX += colWidths[i];
+      }
+      y += 20;
+
+      // Table rows
+      doc.font('Helvetica').fontSize(8);
+      let count = 1;
 
       for (const u of users) {
-        doc.fontSize(9).text(
-          `${u.id.substring(0, 8)}... | ${u.userProfile?.name || 'N/A'} | ${u.phone} | ${u.userProfile?.email || 'N/A'} | ${u.userProfile?.city || 'N/A'} | ${u.isBanned ? 'SUSPENDED' : 'ACTIVE'}`
+        // Page overflow check
+        if (y > 750) {
+          doc.addPage();
+          y = 50; // Reset Y on new page
+          
+          // Re-draw header on new page
+          doc.rect(startX, y, 515, 20).fill('#ECECFE');
+          doc.fillColor('#1F2937');
+          doc.fontSize(8).font('Helvetica-Bold');
+
+          let cx = startX;
+          for (let i = 0; i < headers.length; i++) {
+            doc.text(headers[i], cx + 5, y + 6, {
+              width: colWidths[i] - 10,
+              align: i === 0 ? 'center' : 'left',
+            });
+            cx += colWidths[i];
+          }
+          y += 20;
+          doc.font('Helvetica').fontSize(8);
+        }
+
+        // Draw background for zebra striping
+        if (count % 2 === 0) {
+          doc.rect(startX, y, 515, 22).fill(lightGray);
+        }
+
+        // Draw horizontal line at bottom of row
+        doc.strokeColor(borderGray).lineWidth(0.5).moveTo(startX, y + 22).lineTo(startX + 515, y + 22).stroke();
+
+        // Print cell text
+        doc.fillColor(textColor);
+        
+        let cx = startX;
+        // #
+        doc.text(count.toString(), cx + 5, y + 7, { width: colWidths[0] - 10, align: 'center' });
+        cx += colWidths[0];
+
+        // Name
+        doc.font('Helvetica-Bold').text(u.userProfile?.name || 'N/A', cx + 5, y + 7, { width: colWidths[1] - 10, ellipsis: true });
+        doc.font('Helvetica');
+        cx += colWidths[1];
+
+        // Phone
+        doc.text(u.phone || 'N/A', cx + 5, y + 7, { width: colWidths[2] - 10, ellipsis: true });
+        cx += colWidths[2];
+
+        // Email
+        doc.text(u.userProfile?.email || 'N/A', cx + 5, y + 7, { width: colWidths[3] - 10, ellipsis: true });
+        cx += colWidths[3];
+
+        // City
+        doc.text(u.userProfile?.city || 'N/A', cx + 5, y + 7, { width: colWidths[4] - 10, ellipsis: true });
+        cx += colWidths[4];
+
+        // Status
+        const statusText = u.isBanned ? 'BANNED' : 'ACTIVE';
+        doc.fillColor(u.isBanned ? bannedColor : activeColor).font('Helvetica-Bold');
+        doc.text(statusText, cx + 5, y + 7, { width: colWidths[5] - 10, align: 'left' });
+        doc.font('Helvetica');
+        
+        y += 22;
+        count++;
+      }
+
+      // Add page numbers at the footer
+      const range = doc.bufferedPageRange();
+      for (let i = range.start; i < range.start + range.count; i++) {
+        doc.switchToPage(i);
+        doc.fillColor('#9CA3AF').fontSize(8).text(
+          `Page ${i + 1} of ${range.count}`,
+          40,
+          800,
+          { align: 'center', width: 515 }
         );
-        doc.moveDown(0.5);
       }
 
       doc.end();
