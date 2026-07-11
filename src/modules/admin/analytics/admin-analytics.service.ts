@@ -8,7 +8,7 @@ export class AdminAnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPlatformAnalytics() {
-    // 1. Core aggregates (Completed bookings)
+    // 1. Core aggregates 
     const completedAgg = await this.prisma.booking.aggregate({
       where: { bookingStatus: { in: ['CONFIRMED', 'COMPLETED'] } },
       _sum: { amount: true, platformFee: true, depositAmount: true },
