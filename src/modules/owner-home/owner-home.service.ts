@@ -169,13 +169,168 @@ export class OwnerHomeService {
   }
 
   async getDashboardStats(ownerAuthId: string) {
-    // ... logic remains but basically aggregates all ...
-    const { bookings } = await this.getOwnerData(ownerAuthId);
-    // (Existing logic simplified)
+    const { owner, bookings } = await this.getOwnerData(ownerAuthId);
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // 1. Revenue Calculations
+    const revenueToday = bookings
+      .filter(
+        (b) =>
+          b.bookingDate.toISOString().split('T')[0] === today &&
+          (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+      )
+      .reduce((sum, b) => sum + b.amount, 0);
+
+    const revenueMonth = bookings
+      .filter(
+        (b) =>
+          b.bookingDate >= firstOfMonth &&
+          (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+      )
+      .reduce((sum, b) => sum + b.amount, 0);
+
+    const revenueOverall = bookings
+      .filter(
+        (b) =>
+          b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS',
+      )
+      .reduce((sum, b) => sum + b.amount, 0);
+
+    // 2. Booking Counts
+    const bookingsTotal = bookings.length;
+    const bookingsToday = bookings.filter(
+      (b) => b.bookingDate.toISOString().split('T')[0] === today,
+    ).length;
+    const bookingsUpcoming = bookings.filter(
+      (b) => b.bookingDate >= new Date() && b.bookingStatus === 'CONFIRMED',
+    ).length;
+    const bookingsCompleted = bookings.filter((b) => b.bookingStatus === 'COMPLETED').length;
+    const bookingsCancelled = bookings.filter((b) => b.bookingStatus === 'CANCELLED').length;
+    const bookingsNoShow = bookings.filter((b) => b.bookingStatus === 'NO_SHOW').length;
+
+    // 3. Quick Stats
+    const completedBookingsList = bookings.filter((b) => b.bookingStatus === 'COMPLETED');
+    const avgBookingValue = completedBookingsList.length 
+      ? Math.round(completedBookingsList.reduce((sum, b) => sum + b.amount, 0) / completedBookingsList.length)
+      : 0;
+    const cancellationRate = bookingsTotal 
+      ? `${((bookingsCancelled / bookingsTotal) * 100).toFixed(1)}%` 
+      : '0%';
+
+    // 4. Trends - Revenue Chart (7 Days)
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const revenueChart = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const dateStr = d.toISOString().split('T')[0];
+      const dayLabel = weekdays[d.getDay()];
+      const revenue = bookings
+        .filter(
+          (b) =>
+            b.bookingDate.toISOString().split('T')[0] === dateStr &&
+            (b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS'),
+        )
+        .reduce((sum, b) => sum + b.amount, 0);
+      return { label: dayLabel, value: revenue };
+    });
+
+    // 5. Trends - Peak Hour
+    const hourCounts: Record<string, number> = {};
+    bookings.forEach((b) => {
+      if (b.startTime) {
+        const slot = b.startTime.split(' ')[0] || 'Unknown';
+        hourCounts[slot] = (hourCounts[slot] || 0) + 1;
+      }
+    });
+    let peakHour = 'N/A';
+    let maxCount = 0;
+    Object.entries(hourCounts).forEach(([slot, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        peakHour = slot;
+      }
+    });
+
+    // 6. Trends - Payment Split
+    const online = bookings.filter(
+      (b) => b.paymentType === 'FULL_ONLINE',
+    ).length;
+    const cash = bookings.filter(
+      (b) =>
+        b.paymentType === 'HALF_ONLINE_HALF_CASH' ||
+        b.paymentType === 'FULL_CASH',
+    ).length;
+
+    // 7. Trends - Most Booked Turf
+    const turfCounts: Record<string, { name: string; count: number }> = {};
+    bookings.forEach((b) => {
+      if (b.turfId) {
+        if (!turfCounts[b.turfId]) {
+          turfCounts[b.turfId] = { name: b.turf?.name || 'Unknown Turf', count: 0 };
+        }
+        turfCounts[b.turfId].count += 1;
+      }
+    });
+    let mostBookedTurf = 'N/A';
+    let maxTurfBookings = 0;
+    Object.values(turfCounts).forEach((tc) => {
+      if (tc.count > maxTurfBookings) {
+        maxTurfBookings = tc.count;
+        mostBookedTurf = tc.name;
+      }
+    });
+
+    // 8. Recent Bookings (limit 5)
+    const recentBookings = [...bookings]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 5)
+      .map((b) => ({
+        id: b.id,
+        displayId: `TRF-${b.id.slice(0, 7).toUpperCase()}`,
+        turfName: b.turf?.name || 'Unknown Turf',
+        amount: b.amount,
+        status: b.bookingStatus,
+        paymentType: b.paymentType,
+        paymentStatus: b.paymentStatus,
+        balanceAmount: b.amount - (b.depositAmount || 0),
+        depositAmount: b.depositAmount,
+        createdAt: b.createdAt.toISOString(),
+      }));
+
     return {
       success: true,
       data: {
-        /* ... as before ... */
+        summary: {
+          revenue: {
+            today: revenueToday,
+            month: revenueMonth,
+            overall: revenueOverall,
+          },
+          counts: {
+            total: bookingsTotal,
+            today: bookingsToday,
+            upcoming: bookingsUpcoming,
+            completed: bookingsCompleted,
+            cancelled: bookingsCancelled,
+            noShow: bookingsNoShow,
+          },
+          quickStats: {
+            avgBookingValue,
+            cancellationRate,
+          },
+        },
+        trends: {
+          revenueChart,
+          peakHour,
+          paymentSplit: {
+            online,
+            cash,
+          },
+          mostBookedTurf,
+        },
+        recentBookings,
       },
     };
   }
