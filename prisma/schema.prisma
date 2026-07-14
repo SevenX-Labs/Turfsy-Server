@@ -515,7 +515,7 @@ model Booking {
   rating             TurfRating?
   bookingSplit       BookingSplit?
 
-  @@unique([turfId, bookingDate, startTime])
+  @@index([turfId, bookingDate, startTime])
   @@index([userId])
   @@index([turfId])
   @@index([bookingStatus])
