@@ -399,9 +399,9 @@ export class BookingService {
         onlinePayable = amount;
         remainingAtTurf = 0;
       } else if (dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH) {
-        onlinePayable = Math.round(amount * depositPercentage);
-        groundAdvance = onlinePayable - platformFee;
-        remainingAtTurf = amount - onlinePayable;
+        groundAdvance = Math.round(turfPrice * depositPercentage);
+        onlinePayable = groundAdvance + platformFee;
+        remainingAtTurf = turfPrice - groundAdvance;
         depositAmount = onlinePayable;
       } else if (dto.paymentType === PaymentType.FULL_CASH) {
         onlinePayable = 0;

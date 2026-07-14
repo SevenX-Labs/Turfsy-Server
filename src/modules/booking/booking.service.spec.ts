@@ -252,14 +252,14 @@ describe('BookingService - Platform Fee Slabs', () => {
       });
 
       // Total = 1200 + 100 = 1300
-      // Online Payable = Math.round(1300 * 0.3) = 390
-      // Ground Advance = 390 - 100 = 290
-      // Remaining at Turf = 1300 - 390 = 910
+      // Ground Advance = Math.round(1200 * 0.3) = 360
+      // Online Payable = 360 + 100 = 460
+      // Remaining at Turf = 1200 - 360 = 840
       expect(response.data.groundCharge).toBe(1200);
       expect(response.data.platformFee).toBe(100);
-      expect(response.data.advanceAmount).toBe(290);
-      expect(response.data.onlinePayable).toBe(390);
-      expect(response.data.remainingAtTurf).toBe(910);
+      expect(response.data.advanceAmount).toBe(360);
+      expect(response.data.onlinePayable).toBe(460);
+      expect(response.data.remainingAtTurf).toBe(840);
     });
 
     it('should calculate correct amounts for FULL_CASH preference', async () => {
