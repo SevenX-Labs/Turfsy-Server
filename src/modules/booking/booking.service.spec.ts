@@ -462,8 +462,8 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const response = await service.rejectBooking('owner-auth-id', 'booking-uuid');
       expect(response.success).toBe(true);
-      expect(response.data.bookingStatus).toBe('REJECTED');
-      expect(response.data.paymentStatus).toBe('REFUNDED');
+      expect(response.data!.bookingStatus).toBe('REJECTED');
+      expect(response.data!.paymentStatus).toBe('REFUNDED');
     });
   });
 
@@ -779,9 +779,9 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const response = await service.cancelBooking('user-id', 'booking-uuid');
       expect(response.success).toBe(true);
-      expect(response.data.bookingStatus).toBe('CANCELLED');
-      expect(response.data.paymentStatus).toBe('REFUNDED');
-      expect(response.data.refundAmount).toBe(950); // 1000 - 50 = 950
+      expect(response.data!.bookingStatus).toBe('CANCELLED');
+      expect(response.data!.paymentStatus).toBe('REFUNDED');
+      expect(response.data!.refundAmount).toBe(950); // 1000 - 50 = 950
     });
 
     it('should refund 50% of turfPortion when customer cancels between 24 and 72 hours before slot', async () => {
@@ -814,9 +814,9 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const response = await service.cancelBooking('user-id', 'booking-uuid');
       expect(response.success).toBe(true);
-      expect(response.data.bookingStatus).toBe('CANCELLED');
-      expect(response.data.paymentStatus).toBe('REFUNDED');
-      expect(response.data.refundAmount).toBe(475); // (1000 - 50) * 0.5 = 475
+      expect(response.data!.bookingStatus).toBe('CANCELLED');
+      expect(response.data!.paymentStatus).toBe('REFUNDED');
+      expect(response.data!.refundAmount).toBe(475); // (1000 - 50) * 0.5 = 475
     });
 
     it('should refund 0 when customer cancels <24 hours before slot', async () => {
@@ -849,9 +849,9 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const response = await service.cancelBooking('user-id', 'booking-uuid');
       expect(response.success).toBe(true);
-      expect(response.data.bookingStatus).toBe('CANCELLED');
-      expect(response.data.paymentStatus).toBe('SUCCESS');
-      expect(response.data.refundAmount).toBe(0);
+      expect(response.data!.bookingStatus).toBe('CANCELLED');
+      expect(response.data!.paymentStatus).toBe('SUCCESS');
+      expect(response.data!.refundAmount).toBe(0);
     });
 
     it('should refund 100% of turf/advance portion when customer cancels a PENDING_APPROVAL booking', async () => {
@@ -884,8 +884,8 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const response = await service.cancelBooking('user-id', 'booking-uuid');
       expect(response.success).toBe(true);
-      expect(response.data.bookingStatus).toBe('CANCELLED');
-      expect(response.data.paymentStatus).toBe('REFUNDED');
+      expect(response.data!.bookingStatus).toBe('CANCELLED');
+      expect(response.data!.paymentStatus).toBe('REFUNDED');
     });
   });
 
@@ -1087,13 +1087,13 @@ describe('BookingService - Platform Fee Slabs', () => {
       // First cancellation call
       const res1 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel');
       expect(res1.success).toBe(true);
-      expect(res1.data.bookingStatus).toBe('CANCELLED');
+      expect(res1.data!.bookingStatus).toBe('CANCELLED');
 
       // Second cancellation call (duplicate request)
       const res2 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel again');
       expect(res2.success).toBe(true);
       expect(res2.message).toBe('Booking already cancelled.');
-      expect(res2.data.bookingStatus).toBe('CANCELLED');
+      expect(res2.data!.bookingStatus).toBe('CANCELLED');
 
       // Only one refund call made
       expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
@@ -1103,13 +1103,13 @@ describe('BookingService - Platform Fee Slabs', () => {
       // First rejection call
       const res1 = await service.rejectBooking('owner-auth-id', 'booking-uuid');
       expect(res1.success).toBe(true);
-      expect(res1.data.bookingStatus).toBe('REJECTED');
+      expect(res1.data!.bookingStatus).toBe('REJECTED');
 
       // Second rejection call (duplicate request)
       const res2 = await service.rejectBooking('owner-auth-id', 'booking-uuid');
       expect(res2.success).toBe(true);
       expect(res2.message).toBe('Booking already rejected.');
-      expect(res2.data.bookingStatus).toBe('REJECTED');
+      expect(res2.data!.bookingStatus).toBe('REJECTED');
 
       // Only one refund call made
       expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
@@ -1119,8 +1119,8 @@ describe('BookingService - Platform Fee Slabs', () => {
       // Owner rejects the booking first
       const res1 = await service.rejectBooking('owner-auth-id', 'booking-uuid');
       expect(res1.success).toBe(true);
-      expect(res1.data.bookingStatus).toBe('REJECTED');
-      expect(res1.data.resolvedBy).toBe('OWNER');
+      expect(res1.data!.bookingStatus).toBe('REJECTED');
+      expect((res1.data as any).resolvedBy).toBe('OWNER');
 
       // Customer then attempts to cancel
       const res2 = await service.cancelBooking('user-id', 'booking-uuid', 'Change of plans');
@@ -1138,8 +1138,8 @@ describe('BookingService - Platform Fee Slabs', () => {
       mockBooking.bookingStatus = 'PENDING_APPROVAL';
       const res1 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel');
       expect(res1.success).toBe(true);
-      expect(res1.data.bookingStatus).toBe('CANCELLED');
-      expect(res1.data.resolvedBy).toBe('CUSTOMER');
+      expect(res1.data!.bookingStatus).toBe('CANCELLED');
+      expect((res1.data as any).resolvedBy).toBe('CUSTOMER');
 
       // Owner then attempts to reject
       const res2 = await service.rejectBooking('owner-auth-id', 'booking-uuid');
