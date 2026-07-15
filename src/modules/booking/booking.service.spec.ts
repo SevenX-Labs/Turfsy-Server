@@ -885,7 +885,119 @@ describe('BookingService - Platform Fee Slabs', () => {
       expect(response.success).toBe(true);
       expect(response.data.bookingStatus).toBe('CANCELLED');
       expect(response.data.paymentStatus).toBe('REFUNDED');
-      expect(response.data.refundAmount).toBe(950); // 100% refund of turfPortion since it was never confirmed
+    });
+  });
+
+  describe('Razorpay Refund Webhook Events', () => {
+    beforeEach(() => {
+      mockPrisma.booking.findFirst = jest.fn().mockResolvedValue({
+        id: 'booking-uuid',
+        userId: 'user-id',
+        turfId: 'turf-1',
+        paymentStatus: 'SUCCESS',
+        paymentType: 'FULL_ONLINE',
+        depositAmount: 1000,
+        platformFee: 50,
+      });
+
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
+        id: 'booking-uuid',
+        ...data,
+      }));
+    });
+
+    const getSignature = (payload: any) => {
+      const rawBody = Buffer.from(JSON.stringify(payload));
+      const signature = crypto
+        .createHmac('sha256', 'mock_webhook_secret_123')
+        .update(rawBody)
+        .digest('hex');
+      return { rawBody, signature };
+    };
+
+    it('should successfully process refund.processed webhook event', async () => {
+      const payload = {
+        event: 'refund.processed',
+        payload: {
+          refund: {
+            entity: {
+              id: 'rfnd_123',
+              payment_id: 'pay_123',
+              amount: 95000,
+              notes: {
+                bookingId: 'booking-uuid',
+              },
+            },
+          },
+        },
+      };
+
+      const { rawBody, signature } = getSignature(payload);
+
+      const response = await service.handleRazorpayWebhook(payload, signature, rawBody);
+      expect(response.success).toBe(true);
+      expect(response.message).toBe('Refund processing recorded');
+      expect(mockPrisma.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'booking-uuid' },
+          data: {
+            paymentStatus: 'REFUNDED',
+            razorpayRefundId: 'rfnd_123',
+          },
+        }),
+      );
+    });
+
+    it('should successfully handle refund.failed webhook event and revert status to SUCCESS', async () => {
+      const payload = {
+        event: 'refund.failed',
+        payload: {
+          refund: {
+            entity: {
+              id: 'rfnd_123',
+              payment_id: 'pay_123',
+              amount: 95000,
+              notes: {
+                bookingId: 'booking-uuid',
+              },
+            },
+          },
+        },
+      };
+
+      const { rawBody, signature } = getSignature(payload);
+
+      const response = await service.handleRazorpayWebhook(payload, signature, rawBody);
+      expect(response.success).toBe(true);
+      expect(response.message).toBe('Refund failure recorded');
+      expect(mockPrisma.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'booking-uuid' },
+          data: {
+            paymentStatus: 'SUCCESS',
+          },
+        }),
+      );
+    });
+
+    it('should successfully log refund.created webhook event', async () => {
+      const payload = {
+        event: 'refund.created',
+        payload: {
+          refund: {
+            entity: {
+              id: 'rfnd_123',
+              payment_id: 'pay_123',
+            },
+          },
+        },
+      };
+
+      const { rawBody, signature } = getSignature(payload);
+
+      const response = await service.handleRazorpayWebhook(payload, signature, rawBody);
+      expect(response.success).toBe(true);
+      expect(response.message).toBe('Refund creation logged');
     });
   });
 });

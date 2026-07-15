@@ -1494,6 +1494,111 @@ export class BookingService {
       return { success: true, message: 'Payment failure recorded' };
     }
 
+    // ── Handle refund.created event ──
+    if (event === 'refund.created') {
+      const refundEntity = payload?.payload?.refund?.entity;
+      if (refundEntity) {
+        this.logger.log({
+          event: 'razorpay_refund_created_webhook',
+          refundId: refundEntity.id,
+          paymentId: refundEntity.payment_id,
+        });
+      }
+      return { success: true, message: 'Refund creation logged' };
+    }
+
+    // ── Handle refund.processed event ──
+    if (event === 'refund.processed') {
+      const refundEntity = payload?.payload?.refund?.entity;
+      if (refundEntity) {
+        const bookingId = refundEntity.notes?.bookingId;
+        const paymentId = refundEntity.payment_id;
+
+        const isValidUuid = typeof bookingId === 'string' && bookingId.length === 36;
+        const booking = await this.prisma.booking.findFirst({
+          where: {
+            OR: [
+              ...(isValidUuid ? [{ id: bookingId }] : []),
+              ...(paymentId ? [{ razorpayPaymentId: paymentId }] : []),
+            ],
+          },
+        });
+
+        if (booking) {
+          await this.prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+              paymentStatus: 'REFUNDED',
+              razorpayRefundId: refundEntity.id,
+            },
+          });
+
+          this.logger.log({
+            event: 'razorpay_refund_processed_webhook',
+            bookingId: booking.id,
+            refundId: refundEntity.id,
+            amount: refundEntity.amount / 100,
+          });
+
+          this.paymentLogger.log({
+            userId: booking.userId,
+            bookingId: booking.id,
+            turfId: booking.turfId,
+            action: 'refund',
+            amount: refundEntity.amount / 100,
+            razorpayPaymentId: paymentId,
+            result: 'SUCCESS',
+          });
+        }
+      }
+      return { success: true, message: 'Refund processing recorded' };
+    }
+
+    // ── Handle refund.failed event ──
+    if (event === 'refund.failed') {
+      const refundEntity = payload?.payload?.refund?.entity;
+      if (refundEntity) {
+        const bookingId = refundEntity.notes?.bookingId;
+        const paymentId = refundEntity.payment_id;
+
+        const isValidUuid = typeof bookingId === 'string' && bookingId.length === 36;
+        const booking = await this.prisma.booking.findFirst({
+          where: {
+            OR: [
+              ...(isValidUuid ? [{ id: bookingId }] : []),
+              ...(paymentId ? [{ razorpayPaymentId: paymentId }] : []),
+            ],
+          },
+        });
+
+        if (booking) {
+          // Revert status to SUCCESS or PENDING based on booking type
+          const targetStatus = booking.paymentType === 'HALF_ONLINE_HALF_CASH' ? 'PENDING' : 'SUCCESS';
+          await this.prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+              paymentStatus: targetStatus,
+            },
+          });
+
+          this.logger.error({
+            event: 'razorpay_refund_failed_webhook',
+            bookingId: booking.id,
+            refundId: refundEntity.id,
+            paymentId,
+          });
+
+          this.paymentLogger.alert('Refund failed via Razorpay webhook', {
+            bookingId: booking.id,
+            userId: booking.userId,
+            refundId: refundEntity.id,
+            paymentId,
+          });
+        }
+      }
+      return { success: true, message: 'Refund failure recorded' };
+    }
+
     if (!event || !['payment.captured', 'order.paid'].includes(event)) {
       return {
         success: true,
