@@ -12,6 +12,7 @@ export class AdminBookingsService {
     search?: string;
     bookingStatus?: BookingStatus;
     paymentStatus?: PaymentStatus;
+    refundStatus?: string;
     page?: number;
     limit?: number;
   }) {
@@ -26,6 +27,13 @@ export class AdminBookingsService {
     }
     if (query.paymentStatus) {
       where.paymentStatus = query.paymentStatus;
+    }
+    if (query.refundStatus) {
+      if (query.refundStatus === 'ANY') {
+        where.refundStatus = { not: 'NONE' };
+      } else {
+        where.refundStatus = query.refundStatus;
+      }
     }
     if (query.search) {
       where.OR = [
@@ -105,10 +113,17 @@ export class AdminBookingsService {
     return { success: true, data: updated };
   }
 
-  async exportBookingsCsv(query: { search?: string; bookingStatus?: BookingStatus; paymentStatus?: PaymentStatus }): Promise<string> {
+  async exportBookingsCsv(query: { search?: string; bookingStatus?: BookingStatus; paymentStatus?: PaymentStatus; refundStatus?: string }): Promise<string> {
     const where: any = {};
     if (query.bookingStatus) where.bookingStatus = query.bookingStatus;
     if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
+    if (query.refundStatus) {
+      if (query.refundStatus === 'ANY') {
+        where.refundStatus = { not: 'NONE' };
+      } else {
+        where.refundStatus = query.refundStatus;
+      }
+    }
     if (query.search) {
       where.OR = [
         { id: { contains: query.search } },
@@ -135,16 +150,25 @@ export class AdminBookingsService {
       { label: 'Amount Paid', value: 'amount' },
       { label: 'Booking Status', value: 'bookingStatus' },
       { label: 'Payment Status', value: 'paymentStatus' },
+      { label: 'Refund Status', value: 'refundStatus' },
+      { label: 'Refund Amount', value: 'refundAmount' },
     ];
 
     const json2csvParser = new Parser({ fields });
     return json2csvParser.parse(bookings);
   }
 
-  async exportBookingsPdf(query: { search?: string; bookingStatus?: BookingStatus; paymentStatus?: PaymentStatus }): Promise<Buffer> {
+  async exportBookingsPdf(query: { search?: string; bookingStatus?: BookingStatus; paymentStatus?: PaymentStatus; refundStatus?: string }): Promise<Buffer> {
     const where: any = {};
     if (query.bookingStatus) where.bookingStatus = query.bookingStatus;
     if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
+    if (query.refundStatus) {
+      if (query.refundStatus === 'ANY') {
+        where.refundStatus = { not: 'NONE' };
+      } else {
+        where.refundStatus = query.refundStatus;
+      }
+    }
     if (query.search) {
       where.OR = [
         { id: { contains: query.search } },

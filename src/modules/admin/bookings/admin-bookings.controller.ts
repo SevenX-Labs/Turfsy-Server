@@ -19,10 +19,11 @@ export class AdminBookingsController {
     @Query('search') search?: string,
     @Query('bookingStatus') bookingStatus?: BookingStatus,
     @Query('paymentStatus') paymentStatus?: PaymentStatus,
+    @Query('refundStatus') refundStatus?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.bookingsService.listBookings({ search, bookingStatus, paymentStatus, page, limit });
+    return this.bookingsService.listBookings({ search, bookingStatus, paymentStatus, refundStatus, page, limit });
   }
 
   @Get('stats')
@@ -37,9 +38,10 @@ export class AdminBookingsController {
     @Query('search') search: string,
     @Query('bookingStatus') bookingStatus: BookingStatus,
     @Query('paymentStatus') paymentStatus: PaymentStatus,
+    @Query('refundStatus') refundStatus: string,
     @Res() res: Response,
   ) {
-    const csv = await this.bookingsService.exportBookingsCsv({ search, bookingStatus, paymentStatus });
+    const csv = await this.bookingsService.exportBookingsCsv({ search, bookingStatus, paymentStatus, refundStatus });
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=bookings.csv');
     return res.status(200).send(csv);
@@ -51,9 +53,10 @@ export class AdminBookingsController {
     @Query('search') search: string,
     @Query('bookingStatus') bookingStatus: BookingStatus,
     @Query('paymentStatus') paymentStatus: PaymentStatus,
+    @Query('refundStatus') refundStatus: string,
     @Res() res: Response,
   ) {
-    const buffer = await this.bookingsService.exportBookingsPdf({ search, bookingStatus, paymentStatus });
+    const buffer = await this.bookingsService.exportBookingsPdf({ search, bookingStatus, paymentStatus, refundStatus });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename=bookings_report.pdf');
     return res.status(200).send(buffer);
