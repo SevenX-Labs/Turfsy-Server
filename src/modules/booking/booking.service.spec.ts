@@ -43,6 +43,7 @@ describe('BookingService - Platform Fee Slabs', () => {
     },
     $transaction: jest.fn((cb) => cb(mockPrisma)),
     $queryRawUnsafe: jest.fn().mockResolvedValue([]),
+    $executeRaw: jest.fn().mockResolvedValue(1),
   };
 
   const mockConfigService = {
@@ -426,10 +427,10 @@ describe('BookingService - Platform Fee Slabs', () => {
       mockPrisma.booking = {
         ...mockPrisma.booking,
         findUnique: jest.fn().mockResolvedValue(mockBooking),
-        update: jest.fn().mockImplementation(({ data }) => ({
-          ...mockBooking,
-          ...data,
-        })),
+        update: jest.fn().mockImplementation(({ data }) => {
+          mockBooking = { ...mockBooking, ...data };
+          return mockBooking;
+        }),
         deleteMany: jest.fn(),
       };
       // We also mock bookingSplit
@@ -771,10 +772,10 @@ describe('BookingService - Platform Fee Slabs', () => {
       };
 
       mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(mockBooking);
-      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
-        ...mockBooking,
-        ...data,
-      }));
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => {
+        mockBooking = { ...mockBooking, ...data };
+        return mockBooking;
+      });
 
       const response = await service.cancelBooking('user-id', 'booking-uuid');
       expect(response.success).toBe(true);
@@ -806,10 +807,10 @@ describe('BookingService - Platform Fee Slabs', () => {
       };
 
       mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(mockBooking);
-      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
-        ...mockBooking,
-        ...data,
-      }));
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => {
+        mockBooking = { ...mockBooking, ...data };
+        return mockBooking;
+      });
 
       const response = await service.cancelBooking('user-id', 'booking-uuid');
       expect(response.success).toBe(true);
@@ -841,10 +842,10 @@ describe('BookingService - Platform Fee Slabs', () => {
       };
 
       mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(mockBooking);
-      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
-        ...mockBooking,
-        ...data,
-      }));
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => {
+        mockBooking = { ...mockBooking, ...data };
+        return mockBooking;
+      });
 
       const response = await service.cancelBooking('user-id', 'booking-uuid');
       expect(response.success).toBe(true);
@@ -876,10 +877,10 @@ describe('BookingService - Platform Fee Slabs', () => {
       };
 
       mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(mockBooking);
-      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
-        ...mockBooking,
-        ...data,
-      }));
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => {
+        mockBooking = { ...mockBooking, ...data };
+        return mockBooking;
+      });
 
       const response = await service.cancelBooking('user-id', 'booking-uuid');
       expect(response.success).toBe(true);
@@ -1012,6 +1013,143 @@ describe('BookingService - Platform Fee Slabs', () => {
           },
         }),
       );
+    });
+  });
+
+  describe('Security and Concurrency Controls', () => {
+    let mockBooking: any;
+
+    beforeEach(() => {
+      // Mock the Razorpay refund API call on the service instance
+      (service as any).razorpay = {
+        payments: {
+          refund: jest.fn().mockResolvedValue({ id: 'rfnd_test_123', status: 'processed' }),
+        },
+        orders: { create: jest.fn(), fetch: jest.fn() },
+      };
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 10); // 10 hours in future
+
+      const now = new Date();
+      const futureHour = (now.getHours() + 4) % 24;
+      const startTime = `${futureHour.toString().padStart(2, '0')}:00`;
+      const endTime = `${((futureHour + 1) % 24).toString().padStart(2, '0')}:00`;
+
+      mockBooking = {
+        id: 'booking-uuid',
+        userId: 'user-id',
+        bookingDate: futureDate,
+        startTime,
+        endTime,
+        bookingStatus: 'PENDING_APPROVAL',
+        paymentStatus: 'SUCCESS',
+        paymentType: 'FULL_ONLINE',
+        depositAmount: 1000,
+        platformFee: 50,
+        razorpayPaymentId: 'pay_123',
+        turf: {
+          id: 'turf-1',
+          name: 'Airoli Kickoff Turf',
+          owner: { authId: 'owner-auth-id' },
+        },
+      };
+
+      mockPrisma.booking.findUnique = jest.fn().mockImplementation(() => Promise.resolve(mockBooking));
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => {
+        mockBooking = { ...mockBooking, ...data };
+        return mockBooking;
+      });
+      (mockPrisma as any).bookingSplit = {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      };
+    });
+
+    it('should reject customer cancellation if requester is not the booking user (unauthorized)', async () => {
+      await expect(
+        service.cancelBooking('another-user-id', 'booking-uuid', 'Change of plans'),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(mockPrisma.booking.update).not.toHaveBeenCalled();
+      expect((service as any).razorpay.payments.refund).not.toHaveBeenCalled();
+    });
+
+    it('should reject owner rejection if requester does not own the turf (unauthorized)', async () => {
+      await expect(
+        service.rejectBooking('another-owner-auth-id', 'booking-uuid'),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(mockPrisma.booking.update).not.toHaveBeenCalled();
+      expect((service as any).razorpay.payments.refund).not.toHaveBeenCalled();
+    });
+
+    it('should handle same-actor duplicate cancellation requests idempotently', async () => {
+      // First cancellation call
+      const res1 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel');
+      expect(res1.success).toBe(true);
+      expect(res1.data.bookingStatus).toBe('CANCELLED');
+
+      // Second cancellation call (duplicate request)
+      const res2 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel again');
+      expect(res2.success).toBe(true);
+      expect(res2.message).toBe('Booking already cancelled.');
+      expect(res2.data.bookingStatus).toBe('CANCELLED');
+
+      // Only one refund call made
+      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle same-actor duplicate rejection requests idempotently', async () => {
+      // First rejection call
+      const res1 = await service.rejectBooking('owner-auth-id', 'booking-uuid');
+      expect(res1.success).toBe(true);
+      expect(res1.data.bookingStatus).toBe('REJECTED');
+
+      // Second rejection call (duplicate request)
+      const res2 = await service.rejectBooking('owner-auth-id', 'booking-uuid');
+      expect(res2.success).toBe(true);
+      expect(res2.message).toBe('Booking already rejected.');
+      expect(res2.data.bookingStatus).toBe('REJECTED');
+
+      // Only one refund call made
+      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
+    });
+
+    it('should gracefully resolve customer cancellation vs owner rejection race', async () => {
+      // Owner rejects the booking first
+      const res1 = await service.rejectBooking('owner-auth-id', 'booking-uuid');
+      expect(res1.success).toBe(true);
+      expect(res1.data.bookingStatus).toBe('REJECTED');
+      expect(res1.data.resolvedBy).toBe('OWNER');
+
+      // Customer then attempts to cancel
+      const res2 = await service.cancelBooking('user-id', 'booking-uuid', 'Change of plans');
+      expect(res2.success).toBe(true);
+      expect(res2.bookingStatus).toBe('REJECTED');
+      expect(res2.resolvedBy).toBe('OWNER');
+      expect(res2.message).toContain('already rejected by the venue');
+
+      // Only one refund call made total
+      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
+    });
+
+    it('should gracefully resolve owner rejection vs customer cancellation race', async () => {
+      // Customer cancels the booking first (requires PENDING_APPROVAL state for time-independent refund)
+      mockBooking.bookingStatus = 'PENDING_APPROVAL';
+      const res1 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel');
+      expect(res1.success).toBe(true);
+      expect(res1.data.bookingStatus).toBe('CANCELLED');
+      expect(res1.data.resolvedBy).toBe('CUSTOMER');
+
+      // Owner then attempts to reject
+      const res2 = await service.rejectBooking('owner-auth-id', 'booking-uuid');
+      expect(res2.success).toBe(true);
+      expect(res2.bookingStatus).toBe('CANCELLED');
+      expect(res2.resolvedBy).toBe('CUSTOMER');
+      expect(res2.message).toContain('already cancelled by the customer');
+
+      // Only one refund call made total
+      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
     });
   });
 });

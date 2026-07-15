@@ -70,7 +70,11 @@ enum RefundStatus {
   FAILED
 }
 
-
+enum ResolvedBy {
+  CUSTOMER
+  OWNER
+  SYSTEM
+}
 enum PaymentType {
   FULL_ONLINE
   HALF_ONLINE_HALF_CASH
@@ -501,6 +505,7 @@ model Booking {
   bookingStatus      BookingStatus @default(PENDING) @map("booking_status")
   paymentStatus      PaymentStatus @default(PENDING) @map("payment_status")
   refundStatus       RefundStatus  @default(NONE) @map("refund_status")
+  resolvedBy         ResolvedBy?   @map("resolved_by")
   paymentType        PaymentType   @map("payment_type")
   amount             Float
   groundCharge       Float         @default(0) @map("ground_charge")

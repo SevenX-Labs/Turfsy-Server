@@ -23,6 +23,7 @@ import {
   PaymentType,
   BookingStatus,
   RefundStatus,
+  ResolvedBy,
 } from '@prisma/client';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
@@ -164,9 +165,10 @@ export class BookingService {
     });
   }
 
-  private async releaseSlotLockForBooking(booking: Booking) {
+  private async releaseSlotLockForBooking(booking: Booking, tx?: any) {
+    const prismaClient = tx || this.prisma;
     const bookingDate = this.normalizeBookingDate(booking.bookingDate);
-    await this.prisma.slotLock.deleteMany({
+    await prismaClient.slotLock.deleteMany({
       where: {
         OR: [
           { bookingId: booking.id },
@@ -2629,159 +2631,233 @@ export class BookingService {
     // ── Strip HTML from reason ──
     const sanitizedReason = reason ? this.stripHtml(reason) : undefined;
 
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { turf: { include: { owner: true } } },
-    });
-    if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.userId !== authId)
-      throw new ForbiddenException('Access denied.');
+    // Phase 1: Interactive Transaction with Row Lock
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
+      // 1. Acquire row lock on the booking row immediately
+      await tx.$executeRaw`SELECT 1 FROM bookings WHERE id = ${bookingId} FOR UPDATE`;
 
-    // ══════════════════════════════════════════════════
-    // Layer 2: Idempotency
-    // ══════════════════════════════════════════════════
-    if (booking.bookingStatus === 'CANCELLED') {
-      return {
-        success: true,
-        message: 'Booking already cancelled.',
-        data: {
-          ...booking,
-          displayId: this.formatBookingId(booking.id),
-          refundAmount: 0,
-        },
-      };
-    }
+      // 2. Fetch the booking with all relations
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: { turf: { include: { owner: true } } },
+      });
 
-    if (booking.paymentStatus === 'REFUNDED') {
-      return {
-        success: true,
-        message: 'Already refunded.',
-        data: {
-          ...booking,
-          displayId: this.formatBookingId(booking.id),
-          refundAmount: 0,
-        },
-      };
-    }
+      if (!booking) throw new NotFoundException('Booking not found');
 
-    // ── Layer 5: State Machine ──
-    if (
-      booking.bookingStatus !== 'CONFIRMED' &&
-      booking.bookingStatus !== 'PENDING' &&
-      booking.bookingStatus !== 'PENDING_APPROVAL'
-    ) {
-      throw new BadRequestException('Invalid booking state');
-    }
+      // 3. Authorization check (verify ownership)
+      if (booking.userId !== authId) {
+        this.logger.error(
+          `[AUTH FAILURE] User ${authId} attempted to cancel Booking ${bookingId} belonging to user ${booking.userId}`,
+        );
+        this.paymentLogger.alert('Unauthorized booking cancellation attempt', {
+          userId: authId,
+          bookingId,
+        });
+        throw new ForbiddenException('Access denied.');
+      }
 
-    // ── Check if slot has already started ──
-    const slotDateTime = this.buildSlotDateTime(
-      booking.bookingDate.toISOString().split('T')[0],
-      booking.startTime,
-    );
-    const hoursUntilSlot =
-      (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
+      // 4. Duplicate checks (Section 3: Same-Actor Duplicate Request)
+      if (booking.bookingStatus === 'CANCELLED') {
+        return {
+          type: 'DUPLICATE' as const,
+          success: true,
+          message: 'Booking already cancelled.',
+          data: {
+            id: booking.id,
+            bookingStatus: booking.bookingStatus,
+            paymentStatus: booking.paymentStatus,
+            refundStatus: booking.refundStatus,
+            resolvedBy: booking.resolvedBy,
+            displayId: this.formatBookingId(booking.id),
+            refundAmount: 0,
+          },
+        };
+      }
 
-    if (hoursUntilSlot <= 0) {
-      throw new BadRequestException('Cannot cancel booking after slot start time');
-    }
+      // 5. Cross-Actor Race checks (Section 4: Cross-Actor Race)
+      if (booking.bookingStatus === 'REJECTED') {
+        const refundMsg = booking.refundStatus === 'PROCESSED'
+          ? 'Your refund has been processed.'
+          : (booking.refundStatus === 'FAILED' ? 'Please contact support regarding your refund.' : 'Your refund has been initiated.');
+        return {
+          type: 'CROSS_ACTOR_LOCKED' as const,
+          success: true,
+          bookingStatus: booking.bookingStatus,
+          refundStatus: booking.refundStatus,
+          resolvedBy: booking.resolvedBy,
+          message: `This booking was already rejected by the venue before your cancellation was processed. ${refundMsg}`,
+        };
+      }
 
-    // ══════════════════════════════════════════════════
-    // Layer 9: Refund Safety
-    // ══════════════════════════════════════════════════
-    let refundAmount = 0;
-    let newPaymentStatus: PaymentStatus =
-      booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
-    let newRefundStatus: RefundStatus = 'NONE';
-    let razorpayRefundId: string | null = null;
+      // 6. State Machine checks
+      if (
+        booking.bookingStatus !== 'CONFIRMED' &&
+        booking.bookingStatus !== 'PENDING' &&
+        booking.bookingStatus !== 'PENDING_APPROVAL'
+      ) {
+        throw new BadRequestException('Invalid booking state');
+      }
 
-    // Check if customer paid online (captured via Razorpay)
-    const hasPaidOnline =
-      booking.razorpayPaymentId &&
-      (booking.paymentStatus === 'SUCCESS' ||
-        (booking.paymentType === 'HALF_ONLINE_HALF_CASH' &&
-          booking.paymentStatus === 'PENDING'));
+      // Check if slot has already started
+      const slotDateTime = this.buildSlotDateTime(
+        booking.bookingDate.toISOString().split('T')[0],
+        booking.startTime,
+      );
+      const hoursUntilSlot =
+        (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
 
-    if (hasPaidOnline) {
-      const platformFee = booking.platformFee ?? 0;
-      const turfPortion = Math.max(0, booking.depositAmount - platformFee);
+      if (hoursUntilSlot <= 0) {
+        throw new BadRequestException('Cannot cancel booking after slot start time');
+      }
 
-      if (booking.bookingStatus === 'PENDING_APPROVAL') {
-        // Booking was never confirmed, so 100% refund of turf/advance portion
-        refundAmount = turfPortion;
-      } else {
-        // Booking was CONFIRMED, apply time-based refund matrix
-        if (hoursUntilSlot > 72) {
-          // More than 72 Hours: 100% refund of turf/advance portion
+      // 7. Calculate Refund Amount
+      let refundAmount = 0;
+      let newPaymentStatus: PaymentStatus =
+        booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
+      let newRefundStatus: RefundStatus = 'NONE';
+
+      // Check if customer paid online (captured via Razorpay)
+      const hasPaidOnline =
+        booking.razorpayPaymentId &&
+        (booking.paymentStatus === 'SUCCESS' ||
+          (booking.paymentType === 'HALF_ONLINE_HALF_CASH' &&
+            booking.paymentStatus === 'PENDING'));
+
+      if (hasPaidOnline) {
+        const platformFee = booking.platformFee ?? 0;
+        const turfPortion = Math.max(0, booking.depositAmount - platformFee);
+
+        if (booking.bookingStatus === 'PENDING_APPROVAL') {
+          // Booking was never confirmed, so 100% refund of turf/advance portion
           refundAmount = turfPortion;
-        } else if (hoursUntilSlot >= 24) {
-          // 24–72 Hours: 50% refund of turf/advance portion
-          refundAmount = turfPortion * 0.5;
         } else {
-          // Less than 24 Hours: No Refund
-          refundAmount = 0;
+          // Booking was CONFIRMED, apply time-based refund matrix
+          if (hoursUntilSlot > 72) {
+            // More than 72 Hours: 100% refund of turf/advance portion
+            refundAmount = turfPortion;
+          } else if (hoursUntilSlot >= 24) {
+            // 24–72 Hours: 50% refund of turf/advance portion
+            refundAmount = turfPortion * 0.5;
+          } else {
+            // Less than 24 Hours: No Refund
+            refundAmount = 0;
+          }
+        }
+
+        refundAmount = Math.floor(refundAmount);
+        if (refundAmount > 0) {
+          newRefundStatus = 'INITIATED';
         }
       }
 
-      refundAmount = Math.floor(refundAmount);
+      // Write changes to DB *inside* the transaction to commit state before calling Razorpay (Section 2)
+      const updated = await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          bookingStatus: 'CANCELLED',
+          paymentStatus: newPaymentStatus,
+          refundStatus: newRefundStatus,
+          resolvedBy: 'CUSTOMER',
+          cancelledAt: new Date(),
+          cancelReason: sanitizedReason || null,
+        },
+      });
 
-      if (refundAmount > 0) {
-        try {
-          const refund = (await this.razorpay.payments.refund(
-            booking.razorpayPaymentId!,
-            {
-              amount: refundAmount * 100, // paise
-              speed: 'normal',
-              notes: {
-                bookingId,
-                reason: sanitizedReason || 'User cancellation',
-              },
+      // Clean up split if exists
+      await tx.bookingSplit.deleteMany({
+        where: { bookingId },
+      });
+
+      // Release Slot Lock
+      await this.releaseSlotLockForBooking(updated, tx as any);
+
+      return {
+        type: 'FRESH' as const,
+        booking,
+        updated,
+        refundAmount,
+        newRefundStatus,
+        hasPaidOnline,
+      };
+    });
+
+    // If duplicate or cross-actor losing request, return response directly
+    if (transactionResult.type === 'DUPLICATE') {
+      return {
+        success: true,
+        message: transactionResult.message,
+        data: transactionResult.data,
+      };
+    }
+
+    if (transactionResult.type === 'CROSS_ACTOR_LOCKED') {
+      return {
+        success: true,
+        bookingStatus: transactionResult.bookingStatus,
+        refundStatus: transactionResult.refundStatus,
+        resolvedBy: transactionResult.resolvedBy,
+        message: transactionResult.message,
+      };
+    }
+
+    // Phase 2: Call Razorpay *outside* the transaction lock
+    const { booking, updated, refundAmount, newRefundStatus, hasPaidOnline } = transactionResult;
+    let finalRefundStatus: RefundStatus = newRefundStatus;
+    let finalPaymentStatus: PaymentStatus = booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
+    let razorpayRefundId: string | null = null;
+    let finalBooking = updated;
+
+    if (hasPaidOnline && refundAmount > 0) {
+      try {
+        const refund = (await this.razorpay.payments.refund(
+          booking.razorpayPaymentId!,
+          {
+            amount: refundAmount * 100, // paise
+            speed: 'normal',
+            notes: {
+              bookingId,
+              reason: sanitizedReason || 'User cancellation',
             },
-          )) as any;
+          },
+        )) as any;
 
-          razorpayRefundId = refund.id;
-          newPaymentStatus = 'REFUNDED' as PaymentStatus;
-          newRefundStatus = refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
-        } catch (refundError) {
-          // Razorpay failed → cancel booking but DON'T mark as refunded
-          this.logger.error(
-            `[REFUND FAILED] bookingId=${bookingId}`,
-            refundError?.stack || refundError,
-          );
-          this.paymentLogger.alert('Refund API call failed', {
-            bookingId,
-            userId: authId,
-            error: String(refundError),
-          });
-          this.metrics.refundTotal.inc({ status: 'failed' });
-          // Keep payment status as-is, just cancel the booking
-          newPaymentStatus = booking.paymentStatus;
-          newRefundStatus = 'FAILED';
-          refundAmount = 0;
-        }
+        razorpayRefundId = refund.id;
+        finalPaymentStatus = 'REFUNDED' as PaymentStatus;
+        finalRefundStatus = refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
+
+        // Update with details outside lock
+        finalBooking = await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            paymentStatus: finalPaymentStatus,
+            refundStatus: finalRefundStatus,
+            razorpayRefundId,
+          },
+        });
+      } catch (refundError) {
+        this.logger.error(
+          `[REFUND FAILED] bookingId=${bookingId}`,
+          refundError?.stack || refundError,
+        );
+        this.paymentLogger.alert('Refund API call failed', {
+          bookingId,
+          userId: authId,
+          error: String(refundError),
+        });
+        this.metrics.refundTotal.inc({ status: 'failed' });
+
+        // Update refund status to FAILED on Razorpay failure
+        finalRefundStatus = 'FAILED';
+        finalBooking = await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            refundStatus: finalRefundStatus,
+          },
+        });
       }
     }
-    // If paymentStatus is PENDING or FAILED → cancel without refund
 
-    const updated = await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        bookingStatus: 'CANCELLED',
-        paymentStatus: newPaymentStatus,
-        refundStatus: newRefundStatus,
-        cancelledAt: new Date(),
-        cancelReason: sanitizedReason || null,
-        razorpayRefundId,
-      },
-    });
-
-    // Clean up split if exists
-    await this.prisma.bookingSplit.deleteMany({
-      where: { bookingId },
-    });
-
-    await this.releaseSlotLockForBooking(updated);
-
-    // ── Layer 12 ──
+    // Phase 3: Notifications & Analytics (only run for FRESH cancellations)
     this.paymentLogger.log({
       userId: authId,
       bookingId,
@@ -2796,18 +2872,19 @@ export class BookingService {
 
     this.logger.log({
       event: 'booking_cancelled',
-      bookingId: updated.id,
+      bookingId,
       userId: authId,
       refundAmount,
       reason: sanitizedReason || 'User Request',
     });
+
     this.metrics.bookingCancelledTotal.inc();
-    if (refundAmount > 0) {
+    if (refundAmount > 0 && finalRefundStatus === 'PROCESSED') {
       this.metrics.refundTotal.inc({ status: 'success' });
     }
 
     this.sendCancellationEmail(
-      updated.id,
+      bookingId,
       sanitizedReason || 'User Request',
     ).catch((err) =>
       this.logger.error(
@@ -2823,7 +2900,7 @@ export class BookingService {
         `${booking.turf.name} slot at ${booking.startTime} was cancelled by the customer.`,
         {
           type: 'BOOKING_CANCELLED_OWNER',
-          bookingId: updated.id,
+          bookingId,
         },
       );
     }
@@ -2835,8 +2912,8 @@ export class BookingService {
           ? `Booking cancelled. Refund of ₹${refundAmount} will be processed.`
           : 'Booking cancelled successfully.',
       data: {
-        ...updated,
-        displayId: this.formatBookingId(updated.id),
+        ...finalBooking,
+        displayId: this.formatBookingId(bookingId),
         refundAmount,
       },
     };
@@ -4041,102 +4118,203 @@ export class BookingService {
   }
 
   async rejectBooking(ownerAuthId: string, bookingId: string) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        turf: {
-          include: {
-            owner: true,
+    // Phase 1: Interactive Transaction with Row Lock
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
+      // 1. Acquire row lock on the booking row immediately
+      await tx.$executeRaw`SELECT 1 FROM bookings WHERE id = ${bookingId} FOR UPDATE`;
+
+      // 2. Fetch the booking with all relations
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          turf: {
+            include: {
+              owner: true,
+            },
           },
         },
-      },
+      });
+
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      // 3. Authorization check (verify ownership)
+      if (booking.turf.owner.authId !== ownerAuthId) {
+        this.logger.error(
+          `[AUTH FAILURE] Owner ${ownerAuthId} attempted to reject Booking ${bookingId} belonging to turf owned by owner ${booking.turf.owner.authId}`,
+        );
+        this.paymentLogger.alert('Unauthorized booking rejection attempt', {
+          userId: ownerAuthId,
+          bookingId,
+        });
+        throw new ForbiddenException('You do not own the turf for this booking');
+      }
+
+      // 4. Duplicate checks (Section 3: Same-Actor Duplicate Request)
+      if (booking.bookingStatus === 'REJECTED') {
+        return {
+          type: 'DUPLICATE' as const,
+          success: true,
+          message: 'Booking already rejected.',
+          data: {
+            id: booking.id,
+            bookingStatus: booking.bookingStatus,
+            paymentStatus: booking.paymentStatus,
+            refundStatus: booking.refundStatus,
+            resolvedBy: booking.resolvedBy,
+            displayId: this.formatBookingId(booking.id),
+          },
+        };
+      }
+
+      // 5. Cross-Actor Race checks (Section 4: Cross-Actor Race)
+      if (booking.bookingStatus === 'CANCELLED') {
+        return {
+          type: 'CROSS_ACTOR_LOCKED' as const,
+          success: true,
+          bookingStatus: booking.bookingStatus,
+          refundStatus: booking.refundStatus,
+          resolvedBy: booking.resolvedBy,
+          message: 'This booking was already cancelled by the customer before your rejection was processed.',
+        };
+      }
+
+      // 6. State Machine checks
+      if (booking.bookingStatus !== 'PENDING_APPROVAL') {
+        throw new BadRequestException('Booking is not in PENDING_APPROVAL state');
+      }
+
+      // 7. Calculate Refund Amount
+      let refundAmount = 0;
+      let newPaymentStatus: PaymentStatus =
+        booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
+      let newRefundStatus: RefundStatus = 'NONE';
+
+      const hasPaidOnline =
+        booking.razorpayPaymentId &&
+        (booking.paymentStatus === 'SUCCESS' ||
+          (booking.paymentType === 'HALF_ONLINE_HALF_CASH' &&
+            booking.paymentStatus === 'PENDING'));
+
+      if (hasPaidOnline) {
+        const platformFee = booking.platformFee ?? 0;
+        refundAmount = Math.max(0, booking.depositAmount - platformFee);
+        refundAmount = Math.floor(refundAmount);
+
+        if (refundAmount > 0) {
+          newRefundStatus = 'INITIATED';
+        }
+      }
+
+      // Write changes to DB *inside* the transaction to commit state before calling Razorpay (Section 2)
+      const updated = await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          bookingStatus: 'REJECTED',
+          paymentStatus: newPaymentStatus,
+          refundStatus: newRefundStatus,
+          resolvedBy: 'OWNER',
+          cancelledAt: new Date(),
+          cancelReason: 'Rejected by owner',
+        },
+      });
+
+      // Clean up split if exists
+      await tx.bookingSplit.deleteMany({
+        where: { bookingId },
+      });
+
+      // Release Slot Lock
+      await this.releaseSlotLockForBooking(updated, tx as any);
+
+      return {
+        type: 'FRESH' as const,
+        booking,
+        updated,
+        refundAmount,
+        newRefundStatus,
+        hasPaidOnline,
+      };
     });
 
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
+    // If duplicate or cross-actor losing request, return response directly
+    if (transactionResult.type === 'DUPLICATE') {
+      return {
+        success: true,
+        message: transactionResult.message,
+        data: transactionResult.data,
+      };
     }
 
-    if (booking.turf.owner.authId !== ownerAuthId) {
-      throw new ForbiddenException('You do not own the turf for this booking');
+    if (transactionResult.type === 'CROSS_ACTOR_LOCKED') {
+      return {
+        success: true,
+        bookingStatus: transactionResult.bookingStatus,
+        refundStatus: transactionResult.refundStatus,
+        resolvedBy: transactionResult.resolvedBy,
+        message: transactionResult.message,
+      };
     }
 
-    if (booking.bookingStatus !== 'PENDING_APPROVAL') {
-      throw new BadRequestException('Booking is not in PENDING_APPROVAL state');
-    }
-
-    // Reuse the refund logic: 100% refund of turf/advance portion on rejection
-    let refundAmount = 0;
-    let newPaymentStatus: PaymentStatus =
-      booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
-    let newRefundStatus: RefundStatus = 'NONE';
+    // Phase 2: Call Razorpay *outside* the transaction lock
+    const { booking, updated, refundAmount, newRefundStatus, hasPaidOnline } = transactionResult;
+    let finalRefundStatus: RefundStatus = newRefundStatus;
+    let finalPaymentStatus: PaymentStatus = booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
     let razorpayRefundId: string | null = null;
+    let finalBooking = updated;
 
-    const hasPaidOnline =
-      booking.razorpayPaymentId &&
-      (booking.paymentStatus === 'SUCCESS' ||
-        (booking.paymentType === 'HALF_ONLINE_HALF_CASH' &&
-          booking.paymentStatus === 'PENDING'));
-
-    if (hasPaidOnline) {
-      const platformFee = booking.platformFee ?? 0;
-      refundAmount = Math.max(0, booking.depositAmount - platformFee);
-      refundAmount = Math.floor(refundAmount);
-
-      if (refundAmount > 0) {
-        try {
-          const refund = (await this.razorpay.payments.refund(
-            booking.razorpayPaymentId!,
-            {
-              amount: refundAmount * 100, // paise
-              speed: 'normal',
-              notes: {
-                bookingId,
-                reason: 'Booking request rejected by owner',
-              },
+    if (hasPaidOnline && refundAmount > 0) {
+      try {
+        const refund = (await this.razorpay.payments.refund(
+          booking.razorpayPaymentId!,
+          {
+            amount: refundAmount * 100, // paise
+            speed: 'normal',
+            notes: {
+              bookingId,
+              reason: 'Booking request rejected by owner',
             },
-          )) as any;
-          razorpayRefundId = refund.id;
-          newPaymentStatus = 'REFUNDED' as PaymentStatus;
-          newRefundStatus = refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
-        } catch (refundError) {
-          this.logger.error(
-            `[REFUND FAILED] bookingId=${bookingId}`,
-            refundError?.stack || refundError,
-          );
-          this.paymentLogger.alert('Refund API call failed', {
-            bookingId,
-            userId: booking.userId,
-            error: String(refundError),
-          });
-          this.metrics.refundTotal.inc({ status: 'failed' });
-          newPaymentStatus = booking.paymentStatus;
-          newRefundStatus = 'FAILED';
-          refundAmount = 0;
-        }
+          },
+        )) as any;
+
+        razorpayRefundId = refund.id;
+        finalPaymentStatus = 'REFUNDED' as PaymentStatus;
+        finalRefundStatus = refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
+
+        // Update with details outside lock
+        finalBooking = await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            paymentStatus: finalPaymentStatus,
+            refundStatus: finalRefundStatus,
+            razorpayRefundId,
+          },
+        });
+      } catch (refundError) {
+        this.logger.error(
+          `[REFUND FAILED] bookingId=${bookingId}`,
+          refundError?.stack || refundError,
+        );
+        this.paymentLogger.alert('Refund API call failed', {
+          bookingId,
+          userId: booking.userId,
+          error: String(refundError),
+        });
+        this.metrics.refundTotal.inc({ status: 'failed' });
+
+        // Update refund status to FAILED on Razorpay failure
+        finalRefundStatus = 'FAILED';
+        finalBooking = await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            refundStatus: finalRefundStatus,
+          },
+        });
       }
     }
 
-    const updated = await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        bookingStatus: 'REJECTED',
-        paymentStatus: newPaymentStatus,
-        refundStatus: newRefundStatus,
-        razorpayRefundId,
-        cancelledAt: new Date(),
-        cancelReason: 'Rejected by owner',
-      },
-    });
-
-    // Clean up split if exists
-    await this.prisma.bookingSplit.deleteMany({
-      where: { bookingId },
-    });
-
-    // Release Slot Lock
-    await this.releaseSlotLockForBooking(updated);
-
-    // Secure logging
+    // Phase 3: Notifications & Analytics (only run for FRESH rejections)
     this.paymentLogger.log({
       userId: booking.userId,
       bookingId,
@@ -4162,7 +4340,7 @@ export class BookingService {
     return {
       success: true,
       message: 'Booking rejected successfully',
-      data: updated,
+      data: finalBooking,
     };
   }
 
