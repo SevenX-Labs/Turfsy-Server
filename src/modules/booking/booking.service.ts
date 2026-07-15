@@ -2598,6 +2598,7 @@ export class BookingService {
             booking.razorpayPaymentId!,
             {
               amount: refundAmount * 100, // paise
+              speed: 'normal',
               notes: {
                 bookingId,
                 reason: sanitizedReason || 'User cancellation',
@@ -3951,6 +3952,7 @@ export class BookingService {
             booking.razorpayPaymentId!,
             {
               amount: refundAmount * 100, // paise
+              speed: 'normal',
               notes: {
                 bookingId,
                 reason: 'Booking request rejected by owner',
