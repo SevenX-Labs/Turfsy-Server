@@ -2536,12 +2536,13 @@ export class BookingService {
     // ── Layer 5: State Machine ──
     if (
       booking.bookingStatus !== 'CONFIRMED' &&
-      booking.bookingStatus !== 'PENDING'
+      booking.bookingStatus !== 'PENDING' &&
+      booking.bookingStatus !== 'PENDING_APPROVAL'
     ) {
       throw new BadRequestException('Invalid booking state');
     }
 
-    // ── 2-hour cancellation window ──
+    // ── Check if slot has already started ──
     const slotDateTime = this.buildSlotDateTime(
       booking.bookingDate.toISOString().split('T')[0],
       booking.startTime,
@@ -2549,10 +2550,8 @@ export class BookingService {
     const hoursUntilSlot =
       (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
 
-    if (hoursUntilSlot <= booking.turf.cancellationAllowedBeforeHours) {
-      throw new BadRequestException(
-        `Cannot cancel within ${booking.turf.cancellationAllowedBeforeHours} hours of slot`,
-      );
+    if (hoursUntilSlot <= 0) {
+      throw new BadRequestException('Cannot cancel booking after slot start time');
     }
 
     // ══════════════════════════════════════════════════
@@ -2563,17 +2562,40 @@ export class BookingService {
       booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
     let razorpayRefundId: string | null = null;
 
-    // Only refund if payment was actually successful
-    if (booking.paymentStatus === 'SUCCESS' && booking.razorpayPaymentId) {
-      refundAmount = Math.floor(
-        booking.depositAmount *
-          (booking.turf.cancellationRefundPercentage / 100),
-      );
+    // Check if customer paid online (captured via Razorpay)
+    const hasPaidOnline =
+      booking.razorpayPaymentId &&
+      (booking.paymentStatus === 'SUCCESS' ||
+        (booking.paymentType === 'HALF_ONLINE_HALF_CASH' &&
+          booking.paymentStatus === 'PENDING'));
+
+    if (hasPaidOnline) {
+      const platformFee = booking.platformFee ?? 0;
+      const turfPortion = Math.max(0, booking.depositAmount - platformFee);
+
+      if (booking.bookingStatus === 'PENDING_APPROVAL') {
+        // Booking was never confirmed, so 100% refund of turf/advance portion
+        refundAmount = turfPortion;
+      } else {
+        // Booking was CONFIRMED, apply time-based refund matrix
+        if (hoursUntilSlot > 72) {
+          // More than 72 Hours: 100% refund of turf/advance portion
+          refundAmount = turfPortion;
+        } else if (hoursUntilSlot >= 24) {
+          // 24–72 Hours: 50% refund of turf/advance portion
+          refundAmount = turfPortion * 0.5;
+        } else {
+          // Less than 24 Hours: No Refund
+          refundAmount = 0;
+        }
+      }
+
+      refundAmount = Math.floor(refundAmount);
 
       if (refundAmount > 0) {
         try {
-          const refund = await this.razorpay.payments.refund(
-            booking.razorpayPaymentId,
+          const refund = (await this.razorpay.payments.refund(
+            booking.razorpayPaymentId!,
             {
               amount: refundAmount * 100, // paise
               notes: {
@@ -2581,7 +2603,7 @@ export class BookingService {
                 reason: sanitizedReason || 'User cancellation',
               },
             },
-          );
+          )) as any;
 
           razorpayRefundId = refund.id;
           newPaymentStatus = 'REFUNDED' as PaymentStatus;
@@ -2674,7 +2696,7 @@ export class BookingService {
       success: true,
       message:
         refundAmount > 0
-          ? `Booking cancelled. ${booking.turf.cancellationRefundPercentage}% refund of ₹${booking.depositAmount} → ₹${refundAmount} will be processed.`
+          ? `Booking cancelled. Refund of ₹${refundAmount} will be processed.`
           : 'Booking cancelled successfully.',
       data: {
         ...updated,
@@ -3906,19 +3928,27 @@ export class BookingService {
       throw new BadRequestException('Booking is not in PENDING_APPROVAL state');
     }
 
-    // Reuse the refund logic: 100% refund on rejection
+    // Reuse the refund logic: 100% refund of turf/advance portion on rejection
     let refundAmount = 0;
     let newPaymentStatus: PaymentStatus =
       booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
     let razorpayRefundId: string | null = null;
 
-    if (booking.paymentStatus === 'SUCCESS' && booking.razorpayPaymentId) {
-      refundAmount = booking.depositAmount;
+    const hasPaidOnline =
+      booking.razorpayPaymentId &&
+      (booking.paymentStatus === 'SUCCESS' ||
+        (booking.paymentType === 'HALF_ONLINE_HALF_CASH' &&
+          booking.paymentStatus === 'PENDING'));
+
+    if (hasPaidOnline) {
+      const platformFee = booking.platformFee ?? 0;
+      refundAmount = Math.max(0, booking.depositAmount - platformFee);
+      refundAmount = Math.floor(refundAmount);
 
       if (refundAmount > 0) {
         try {
-          const refund = await this.razorpay.payments.refund(
-            booking.razorpayPaymentId,
+          const refund = (await this.razorpay.payments.refund(
+            booking.razorpayPaymentId!,
             {
               amount: refundAmount * 100, // paise
               notes: {
@@ -3926,7 +3956,7 @@ export class BookingService {
                 reason: 'Booking request rejected by owner',
               },
             },
-          );
+          )) as any;
           razorpayRefundId = refund.id;
           newPaymentStatus = 'REFUNDED' as PaymentStatus;
         } catch (refundError) {
@@ -3994,6 +4024,7 @@ export class BookingService {
       data: updated,
     };
   }
+
 
   private async triggerPushNotification(
     userId: string,

@@ -725,4 +725,167 @@ describe('BookingService - Platform Fee Slabs', () => {
       );
     });
   });
+
+  describe('Customer & Owner Cancellation Refund Logic', () => {
+    let mockBooking: any;
+
+    beforeEach(() => {
+      mockPrisma.bookingSplit = {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      };
+      (service as any).razorpay = {
+        payments: {
+          refund: jest.fn().mockResolvedValue({ id: 'rfnd_test_123' }),
+        },
+        orders: { create: jest.fn(), fetch: jest.fn() },
+      };
+      // Mock system time to controlled value: 2026-07-15T12:00:00.000Z
+      jest.useFakeTimers({ legacyFakeTimers: false });
+      jest.setSystemTime(new Date('2026-07-15T12:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should refund 100% of turfPortion (excluding platform fee) when customer cancels >72 hours before slot', async () => {
+      // Slot is 80 hours in the future
+      const futureDate = new Date('2026-07-18T20:00:00.000Z');
+
+      mockBooking = {
+        id: 'booking-uuid',
+        userId: 'user-id',
+        bookingDate: futureDate,
+        startTime: '20:00',
+        endTime: '21:00',
+        bookingStatus: 'CONFIRMED',
+        paymentStatus: 'SUCCESS',
+        paymentType: 'FULL_ONLINE',
+        depositAmount: 1000,
+        platformFee: 50,
+        razorpayPaymentId: 'pay_123',
+        turf: {
+          name: 'Airoli Kickoff Turf',
+          owner: { authId: 'owner-auth-id' },
+        },
+      };
+
+      mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(mockBooking);
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
+        ...mockBooking,
+        ...data,
+      }));
+
+      const response = await service.cancelBooking('user-id', 'booking-uuid');
+      expect(response.success).toBe(true);
+      expect(response.data.bookingStatus).toBe('CANCELLED');
+      expect(response.data.paymentStatus).toBe('REFUNDED');
+      expect(response.data.refundAmount).toBe(950); // 1000 - 50 = 950
+    });
+
+    it('should refund 50% of turfPortion when customer cancels between 24 and 72 hours before slot', async () => {
+      // Slot is 48 hours in the future
+      const futureDate = new Date('2026-07-17T12:00:00.000Z');
+
+      mockBooking = {
+        id: 'booking-uuid',
+        userId: 'user-id',
+        bookingDate: futureDate,
+        startTime: '12:00',
+        endTime: '13:00',
+        bookingStatus: 'CONFIRMED',
+        paymentStatus: 'SUCCESS',
+        paymentType: 'FULL_ONLINE',
+        depositAmount: 1000,
+        platformFee: 50,
+        razorpayPaymentId: 'pay_123',
+        turf: {
+          name: 'Airoli Kickoff Turf',
+          owner: { authId: 'owner-auth-id' },
+        },
+      };
+
+      mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(mockBooking);
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
+        ...mockBooking,
+        ...data,
+      }));
+
+      const response = await service.cancelBooking('user-id', 'booking-uuid');
+      expect(response.success).toBe(true);
+      expect(response.data.bookingStatus).toBe('CANCELLED');
+      expect(response.data.paymentStatus).toBe('REFUNDED');
+      expect(response.data.refundAmount).toBe(475); // (1000 - 50) * 0.5 = 475
+    });
+
+    it('should refund 0 when customer cancels <24 hours before slot', async () => {
+      // Slot is 10 hours in the future
+      const futureDate = new Date('2026-07-15T22:00:00.000Z');
+
+      mockBooking = {
+        id: 'booking-uuid',
+        userId: 'user-id',
+        bookingDate: futureDate,
+        startTime: '22:00',
+        endTime: '23:00',
+        bookingStatus: 'CONFIRMED',
+        paymentStatus: 'SUCCESS',
+        paymentType: 'FULL_ONLINE',
+        depositAmount: 1000,
+        platformFee: 50,
+        razorpayPaymentId: 'pay_123',
+        turf: {
+          name: 'Airoli Kickoff Turf',
+          owner: { authId: 'owner-auth-id' },
+        },
+      };
+
+      mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(mockBooking);
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
+        ...mockBooking,
+        ...data,
+      }));
+
+      const response = await service.cancelBooking('user-id', 'booking-uuid');
+      expect(response.success).toBe(true);
+      expect(response.data.bookingStatus).toBe('CANCELLED');
+      expect(response.data.paymentStatus).toBe('SUCCESS');
+      expect(response.data.refundAmount).toBe(0);
+    });
+
+    it('should refund 100% of turf/advance portion when customer cancels a PENDING_APPROVAL booking', async () => {
+      // Slot is 10 hours in the future
+      const futureDate = new Date('2026-07-15T22:00:00.000Z');
+
+      mockBooking = {
+        id: 'booking-uuid',
+        userId: 'user-id',
+        bookingDate: futureDate,
+        startTime: '22:00',
+        endTime: '23:00',
+        bookingStatus: 'PENDING_APPROVAL',
+        paymentStatus: 'SUCCESS',
+        paymentType: 'FULL_ONLINE',
+        depositAmount: 1000,
+        platformFee: 50,
+        razorpayPaymentId: 'pay_123',
+        turf: {
+          name: 'Airoli Kickoff Turf',
+          owner: { authId: 'owner-auth-id' },
+        },
+      };
+
+      mockPrisma.booking.findUnique = jest.fn().mockResolvedValue(mockBooking);
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
+        ...mockBooking,
+        ...data,
+      }));
+
+      const response = await service.cancelBooking('user-id', 'booking-uuid');
+      expect(response.success).toBe(true);
+      expect(response.data.bookingStatus).toBe('CANCELLED');
+      expect(response.data.paymentStatus).toBe('REFUNDED');
+      expect(response.data.refundAmount).toBe(950); // 100% refund of turfPortion since it was never confirmed
+    });
+  });
 });

@@ -243,6 +243,7 @@ export class BookingController {
     return this.bookingService.rejectBooking(req.user.authId, bookingId);
   }
 
+
   // ──────────────────────────────────────────────
   // 6.1 OWNER: GET ALL BOOKINGS
   // GET /api/v3/booking/owner/bookings
