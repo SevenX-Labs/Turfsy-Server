@@ -61,10 +61,16 @@ export class AdminBookingsService {
       }),
     ]);
 
+    // Apply computed status (same logic as customer app)
+    const mappedBookings = bookings.map((b) => ({
+      ...b,
+      bookingStatus: this.mapBookingStatus(b),
+    }));
+
     return {
       success: true,
       data: {
-        bookings,
+        bookings: mappedBookings,
         pagination: {
           total,
           page,
@@ -87,7 +93,13 @@ export class AdminBookingsService {
 
     if (!booking) throw new NotFoundException('Booking not found');
 
-    return { success: true, data: booking };
+    return {
+      success: true,
+      data: {
+        ...booking,
+        bookingStatus: this.mapBookingStatus(booking),
+      },
+    };
   }
 
   async markAsNoShow(id: string, adminId: string, ipAddress: string) {
@@ -265,5 +277,25 @@ export class AdminBookingsService {
       success: true,
       data: statsMap,
     };
+  }
+
+  /**
+   * Compute display status based on time — mirrors BookingService.mapBookingStatus().
+   * If a CONFIRMED booking's slot has passed, show it as NO_SHOW in the admin UI.
+   */
+  private mapBookingStatus(booking: any): string {
+    if (booking.bookingStatus !== 'CONFIRMED') {
+      return booking.bookingStatus;
+    }
+
+    const now = new Date();
+    const dateStr = new Date(booking.bookingDate).toISOString().split('T')[0];
+    const slotEnd = new Date(`${dateStr}T${booking.endTime}:00+05:30`);
+
+    if (now > slotEnd) {
+      return 'NO_SHOW';
+    }
+
+    return booking.bookingStatus;
   }
 }
