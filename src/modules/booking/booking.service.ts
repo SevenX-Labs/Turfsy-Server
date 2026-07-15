@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentLoggerService } from '../../common/services/payment-logger.service';
@@ -3011,10 +3012,21 @@ export class BookingService {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 6.5 CRON: MARK NO SHOWS (15 min after slot start)
-  //     Cron endpoints protected by CronGuard (Layer 1)
-  //     Layer 6: Rate Limiting (1/endpoint/4min)
+  // 6.5 CRON: MARK NO SHOWS (20 min after slot end)
+  //     Runs automatically every 15 minutes via @Cron
+  //     Also callable via POST /cron/no-shows (CronGuard)
   // ═══════════════════════════════════════════════════════
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async handleNoShowCron() {
+    this.logger.log('[CRON] Auto-running markNoShows scheduler');
+    try {
+      const result = await this.markNoShows('cron-scheduler');
+      this.logger.log(`[CRON] markNoShows completed: ${result.message}`);
+    } catch (err) {
+      this.logger.error(`[CRON] markNoShows failed: ${err.message}`);
+    }
+  }
+
   async markNoShows(ip?: string) {
     await this.rateLimiter.check(
       `cron:no-shows:${ip || 'system'}`,
@@ -3268,7 +3280,7 @@ export class BookingService {
 
     const mapped = bookings.map((b) => ({
       ...b,
-      bookingStatus: this.mapBookingStatus(b),
+      bookingStatus: b.bookingStatus,
       displayId: this.formatBookingId(b.id),
       // Layer 11: Strip sensitive fields
     }));
@@ -3371,7 +3383,7 @@ export class BookingService {
       success: true,
       data: {
         ...booking,
-        bookingStatus: this.mapBookingStatus(booking),
+        bookingStatus: booking.bookingStatus,
         displayId: this.formatBookingId(booking.id),
         qrStatus,
         qrMessage,
@@ -3416,7 +3428,7 @@ export class BookingService {
       count: bookings.length,
       data: bookings.map((b) => ({
         ...b,
-        bookingStatus: this.mapBookingStatus(b),
+        bookingStatus: b.bookingStatus,
         displayId: this.formatBookingId(b.id),
       })),
     };
@@ -3481,7 +3493,7 @@ export class BookingService {
 
     const mapped = filtered.map((b) => ({
       ...b,
-      bookingStatus: this.mapBookingStatus(b),
+      bookingStatus: b.bookingStatus,
       displayId: this.formatBookingId(b.id),
     }));
 
@@ -3550,7 +3562,7 @@ export class BookingService {
 
     const mapped = bookings.map((b) => ({
       ...b,
-      bookingStatus: this.mapBookingStatus(b),
+      bookingStatus: b.bookingStatus,
       displayId: this.formatBookingId(b.id),
     }));
 
@@ -3973,28 +3985,7 @@ export class BookingService {
     return new Date(`${dateStr}T${timeStr}:00+05:30`);
   }
 
-  /**
-   * Helper to map status based on time (synthetic status for UI)
-   */
-  private mapBookingStatus(booking: any): string {
-    if (booking.bookingStatus !== 'CONFIRMED') {
-      return booking.bookingStatus;
-    }
 
-    const now = new Date();
-    const slotEnd = this.buildSlotDateTime(
-      booking.bookingDate,
-      booking.endTime,
-      0,
-    );
-
-    // If current time exceeds slot end time, show as NO_SHOW
-    if (now > slotEnd) {
-      return 'NO_SHOW';
-    }
-
-    return booking.bookingStatus;
-  }
 
   /**
    * Layer 10: Strip HTML tags from user input to prevent XSS

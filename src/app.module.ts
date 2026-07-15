@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import * as crypto from 'crypto';
 import { MetricsModule } from './common/metrics/metrics.module';
@@ -87,6 +88,7 @@ import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
         limit: 60, // 60 req/min — general endpoints
       },
     ]),
+    ScheduleModule.forRoot(),
     MetricsModule,
     PrismaModule,
     AuthModule,
