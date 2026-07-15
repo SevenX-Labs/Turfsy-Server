@@ -564,4 +564,12 @@ export class BookingController {
   async testEmail(@Req() req: any) {
     return this.bookingService.sendTestEmail(req.user.authId);
   }
+
+
+  @Get('customer/full-cash-status')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getFullCashStatus(@Req() req: any) {
+    return this.bookingService.getFullCashStatus(req.user.authId);
+  }
 }
