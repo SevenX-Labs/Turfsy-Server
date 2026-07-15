@@ -22,6 +22,7 @@ import {
   PaymentStatus,
   PaymentType,
   BookingStatus,
+  RefundStatus,
 } from '@prisma/client';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
@@ -1498,6 +1499,29 @@ export class BookingService {
     if (event === 'refund.created') {
       const refundEntity = payload?.payload?.refund?.entity;
       if (refundEntity) {
+        const bookingId = refundEntity.notes?.bookingId;
+        const paymentId = refundEntity.payment_id;
+
+        const isValidUuid = typeof bookingId === 'string' && bookingId.length === 36;
+        const booking = await this.prisma.booking.findFirst({
+          where: {
+            OR: [
+              ...(isValidUuid ? [{ id: bookingId }] : []),
+              ...(paymentId ? [{ razorpayPaymentId: paymentId }] : []),
+            ],
+          },
+        });
+
+        if (booking) {
+          await this.prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+              refundStatus: 'INITIATED',
+              razorpayRefundId: refundEntity.id,
+            },
+          });
+        }
+
         this.logger.log({
           event: 'razorpay_refund_created_webhook',
           refundId: refundEntity.id,
@@ -1529,6 +1553,7 @@ export class BookingService {
             where: { id: booking.id },
             data: {
               paymentStatus: 'REFUNDED',
+              refundStatus: 'PROCESSED',
               razorpayRefundId: refundEntity.id,
             },
           });
@@ -1578,6 +1603,7 @@ export class BookingService {
             where: { id: booking.id },
             data: {
               paymentStatus: targetStatus,
+              refundStatus: 'FAILED',
             },
           });
 
@@ -2665,6 +2691,7 @@ export class BookingService {
     let refundAmount = 0;
     let newPaymentStatus: PaymentStatus =
       booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
+    let newRefundStatus: RefundStatus = 'NONE';
     let razorpayRefundId: string | null = null;
 
     // Check if customer paid online (captured via Razorpay)
@@ -2713,6 +2740,7 @@ export class BookingService {
 
           razorpayRefundId = refund.id;
           newPaymentStatus = 'REFUNDED' as PaymentStatus;
+          newRefundStatus = refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
         } catch (refundError) {
           // Razorpay failed → cancel booking but DON'T mark as refunded
           this.logger.error(
@@ -2727,6 +2755,7 @@ export class BookingService {
           this.metrics.refundTotal.inc({ status: 'failed' });
           // Keep payment status as-is, just cancel the booking
           newPaymentStatus = booking.paymentStatus;
+          newRefundStatus = 'FAILED';
           refundAmount = 0;
         }
       }
@@ -2738,6 +2767,7 @@ export class BookingService {
       data: {
         bookingStatus: 'CANCELLED',
         paymentStatus: newPaymentStatus,
+        refundStatus: newRefundStatus,
         cancelledAt: new Date(),
         cancelReason: sanitizedReason || null,
         razorpayRefundId,
@@ -4038,6 +4068,7 @@ export class BookingService {
     let refundAmount = 0;
     let newPaymentStatus: PaymentStatus =
       booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
+    let newRefundStatus: RefundStatus = 'NONE';
     let razorpayRefundId: string | null = null;
 
     const hasPaidOnline =
@@ -4066,6 +4097,7 @@ export class BookingService {
           )) as any;
           razorpayRefundId = refund.id;
           newPaymentStatus = 'REFUNDED' as PaymentStatus;
+          newRefundStatus = refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
         } catch (refundError) {
           this.logger.error(
             `[REFUND FAILED] bookingId=${bookingId}`,
@@ -4078,6 +4110,7 @@ export class BookingService {
           });
           this.metrics.refundTotal.inc({ status: 'failed' });
           newPaymentStatus = booking.paymentStatus;
+          newRefundStatus = 'FAILED';
           refundAmount = 0;
         }
       }
@@ -4088,6 +4121,7 @@ export class BookingService {
       data: {
         bookingStatus: 'REJECTED',
         paymentStatus: newPaymentStatus,
+        refundStatus: newRefundStatus,
         razorpayRefundId,
         cancelledAt: new Date(),
         cancelReason: 'Rejected by owner',

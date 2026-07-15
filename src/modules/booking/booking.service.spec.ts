@@ -942,6 +942,7 @@ describe('BookingService - Platform Fee Slabs', () => {
           where: { id: 'booking-uuid' },
           data: {
             paymentStatus: 'REFUNDED',
+            refundStatus: 'PROCESSED',
             razorpayRefundId: 'rfnd_123',
           },
         }),
@@ -975,6 +976,7 @@ describe('BookingService - Platform Fee Slabs', () => {
           where: { id: 'booking-uuid' },
           data: {
             paymentStatus: 'SUCCESS',
+            refundStatus: 'FAILED',
           },
         }),
       );
@@ -988,6 +990,9 @@ describe('BookingService - Platform Fee Slabs', () => {
             entity: {
               id: 'rfnd_123',
               payment_id: 'pay_123',
+              notes: {
+                bookingId: 'booking-uuid',
+              },
             },
           },
         },
@@ -998,6 +1003,15 @@ describe('BookingService - Platform Fee Slabs', () => {
       const response = await service.handleRazorpayWebhook(payload, signature, rawBody);
       expect(response.success).toBe(true);
       expect(response.message).toBe('Refund creation logged');
+      expect(mockPrisma.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'booking-uuid' },
+          data: {
+            refundStatus: 'INITIATED',
+            razorpayRefundId: 'rfnd_123',
+          },
+        }),
+      );
     });
   });
 });

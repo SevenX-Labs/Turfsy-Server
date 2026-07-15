@@ -63,6 +63,14 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum RefundStatus {
+  NONE
+  INITIATED
+  PROCESSED
+  FAILED
+}
+
+
 enum PaymentType {
   FULL_ONLINE
   HALF_ONLINE_HALF_CASH
@@ -492,6 +500,7 @@ model Booking {
   durationMins       Int           @map("duration_mins")
   bookingStatus      BookingStatus @default(PENDING) @map("booking_status")
   paymentStatus      PaymentStatus @default(PENDING) @map("payment_status")
+  refundStatus       RefundStatus  @default(NONE) @map("refund_status")
   paymentType        PaymentType   @map("payment_type")
   amount             Float
   groundCharge       Float         @default(0) @map("ground_charge")
