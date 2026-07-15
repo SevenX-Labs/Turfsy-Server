@@ -2989,6 +2989,27 @@ export class BookingService {
     };
   }
 
+  async getFullCashStatus(authId: string) {
+    const user = await this.prisma.auth.findUnique({
+      where: { id: authId },
+      select: { fullCashDisabledUntil: true },
+    });
+
+    if (user?.fullCashDisabledUntil && user.fullCashDisabledUntil > new Date()) {
+      return {
+        fullCashEnabled: false,
+        disabledUntil: user.fullCashDisabledUntil.toISOString(),
+        reason: 'Due to 3 late cancellations within 90 days, your Full Cash payment option has been disabled for 30 days.',
+      };
+    }
+
+    return {
+      fullCashEnabled: true,
+      disabledUntil: null,
+      reason: null,
+    };
+  }
+
   // ═══════════════════════════════════════════════════════
   // 6.5 CRON: MARK NO SHOWS (15 min after slot start)
   //     Cron endpoints protected by CronGuard (Layer 1)
