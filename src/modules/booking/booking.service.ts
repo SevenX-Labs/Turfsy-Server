@@ -223,6 +223,21 @@ export class BookingService {
       // (Consolidated all time-range checks after turf fetch)
       this.validateBasicInputs(dto);
 
+      // ── Full Cash Restriction Check ──
+      if (dto.paymentType === PaymentType.FULL_CASH) {
+        const user = await this.prisma.auth.findUnique({
+          where: { id: authId },
+          select: { fullCashDisabledUntil: true },
+        });
+        if (user?.fullCashDisabledUntil && user.fullCashDisabledUntil > new Date()) {
+          throw new ForbiddenException({
+            success: false,
+            code: 'FULL_CASH_DISABLED',
+            message: 'Your Full Cash payment option is temporarily disabled due to repeated late cancellations. Please use an online payment method.',
+          });
+        }
+      }
+
       // ── Strip HTML tags from notes ──
       const sanitizedNotes = dto.notes ? this.stripHtml(dto.notes) : undefined;
 
@@ -2750,6 +2765,47 @@ export class BookingService {
         }
       }
 
+      let lateCancellation = false;
+      let fullCashDisabled = false;
+      let disabledUntil: Date | null = null;
+      let remainingBeforeRestriction = 3;
+
+      if (booking.paymentType === 'FULL_CASH' && hoursUntilSlot < 24) {
+        lateCancellation = true;
+        // 1. Record the late cancellation
+        await tx.lateCancellationHistory.create({
+          data: {
+            userId: authId,
+            bookingId: bookingId,
+            cancelledAt: new Date(),
+          },
+        });
+
+        // 2. Count late cancellations in the last 90 days
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        const lateCancellationCount = await tx.lateCancellationHistory.count({
+          where: {
+            userId: authId,
+            cancelledAt: { gte: ninetyDaysAgo },
+          },
+        });
+
+        remainingBeforeRestriction = Math.max(0, 3 - lateCancellationCount);
+
+        if (lateCancellationCount >= 3) {
+          fullCashDisabled = true;
+          disabledUntil = new Date();
+          disabledUntil.setDate(disabledUntil.getDate() + 30);
+
+          await tx.auth.update({
+            where: { id: authId },
+            data: { fullCashDisabledUntil: disabledUntil },
+          });
+          remainingBeforeRestriction = 0;
+        }
+      }
+
       // Write changes to DB *inside* the transaction to commit state before calling Razorpay (Section 2)
       const updated = await tx.booking.update({
         where: { id: bookingId },
@@ -2778,6 +2834,10 @@ export class BookingService {
         refundAmount,
         newRefundStatus,
         hasPaidOnline,
+        lateCancellation,
+        fullCashDisabled,
+        disabledUntil,
+        remainingBeforeRestriction,
       };
     });
 
@@ -2905,12 +2965,22 @@ export class BookingService {
       );
     }
 
+    let finalMessage = 'Booking cancelled successfully.';
+    if (transactionResult.fullCashDisabled) {
+      finalMessage = `Due to 3 late cancellations within 90 days, your Full Cash payment option has been disabled for 30 days.`;
+    } else if (transactionResult.lateCancellation) {
+      finalMessage = `This cancellation has been recorded as a late cancellation. After 3 late cancellations within 90 days, Full Cash payment will be disabled for 30 days.`;
+    } else if (refundAmount > 0) {
+      finalMessage = `Booking cancelled. Refund of ₹${refundAmount} will be processed.`;
+    }
+
     return {
       success: true,
-      message:
-        refundAmount > 0
-          ? `Booking cancelled. Refund of ₹${refundAmount} will be processed.`
-          : 'Booking cancelled successfully.',
+      message: finalMessage,
+      lateCancellation: transactionResult.lateCancellation || undefined,
+      remainingBeforeRestriction: transactionResult.lateCancellation ? transactionResult.remainingBeforeRestriction : undefined,
+      fullCashDisabled: transactionResult.fullCashDisabled || undefined,
+      disabledUntil: transactionResult.disabledUntil ? transactionResult.disabledUntil.toISOString() : undefined,
       data: {
         ...finalBooking,
         displayId: this.formatBookingId(bookingId),

@@ -287,9 +287,10 @@ model Auth {
   mpinCreatedAt      DateTime?
   mpinUpdatedAt      DateTime?
   failedMpinAttempts Int               @default(0)
-  mpinLockedUntil    DateTime?
-  otpEntries         OtpEntry[]
-  ownerProfile       OwnerProfile?
+  mpinLockedUntil       DateTime?
+  fullCashDisabledUntil DateTime?                 @map("full_cash_disabled_until")
+  otpEntries            OtpEntry[]
+  ownerProfile          OwnerProfile?
   payment            Payment?
   sessions           Session[]
   userProfile        UserProfile?
@@ -301,6 +302,7 @@ model Auth {
   ownerSettings      OwnerSettings?
   recentViews        RecentView[]
   notifications      Notification[]
+  lateCancellations  LateCancellationHistory[]
 
   @@index([phone])
   @@index([role])
@@ -528,6 +530,7 @@ model Booking {
   user               Auth          @relation(fields: [userId], references: [id], onDelete: Cascade)
   rating             TurfRating?
   bookingSplit       BookingSplit?
+  lateCancellations  LateCancellationHistory[]
 
   @@index([turfId, bookingDate, startTime])
   @@index([userId])
@@ -751,4 +754,20 @@ model Settlement {
   @@index([ownerProfileId])
   @@index([status])
   @@map("settlements")
+}
+
+model LateCancellationHistory {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  bookingId   String   @map("booking_id")
+  cancelledAt DateTime @default(now()) @map("cancelled_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        Auth     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([cancelledAt])
+  @@map("late_cancellation_history")
 }

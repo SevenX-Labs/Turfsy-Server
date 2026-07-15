@@ -37,6 +37,18 @@ describe('BookingService - Platform Fee Slabs', () => {
     },
     booking: {
       create: jest.fn(),
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    auth: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    lateCancellationHistory: {
+      create: jest.fn(),
+      count: jest.fn(),
     },
     turfMaintenance: {
       findFirst: jest.fn(),
@@ -1150,6 +1162,122 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       // Only one refund call made total
       expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Full Cash Late Cancellation & Restriction Policy', () => {
+    let mockBooking: any;
+
+    beforeEach(() => {
+      // Mock basic user profile fetch
+      mockPrisma.auth.findUnique = jest.fn().mockResolvedValue({
+        fullCashDisabledUntil: null,
+      });
+      mockPrisma.auth.update = jest.fn().mockResolvedValue({
+        fullCashDisabledUntil: null,
+      });
+      mockPrisma.lateCancellationHistory.create = jest.fn().mockResolvedValue({});
+      mockPrisma.lateCancellationHistory.count = jest.fn().mockResolvedValue(0);
+
+      // Make sure slot lock doesn't conflict
+      mockPrisma.slotLock.create = jest.fn().mockResolvedValue({ id: 'lock-1' });
+      mockPrisma.slotLock.deleteMany = jest.fn().mockResolvedValue({ count: 1 });
+      mockPrisma.slotLock.update = jest.fn().mockResolvedValue({ id: 'lock-1' });
+      mockPrisma.booking.create = jest.fn().mockResolvedValue({
+        id: 'booking-uuid',
+        bookingStatus: 'CONFIRMED',
+        paymentType: 'FULL_CASH',
+        amount: 1000,
+        depositAmount: 0,
+      });
+
+      // Default mockBooking values
+      mockBooking = {
+        id: 'booking-uuid',
+        userId: 'user-id',
+        bookingDate: new Date(),
+        startTime: '10:00',
+        endTime: '11:00',
+        bookingStatus: 'CONFIRMED',
+        paymentStatus: 'PENDING',
+        paymentType: 'FULL_CASH',
+        depositAmount: 0,
+        platformFee: 50,
+        turf: {
+          id: 'turf-1',
+          name: 'Airoli Kickoff Turf',
+          owner: { authId: 'owner-auth-id' },
+        },
+      };
+
+      mockPrisma.booking.findUnique = jest.fn().mockImplementation(() => Promise.resolve(mockBooking));
+      mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => {
+        mockBooking = { ...mockBooking, ...data };
+        return mockBooking;
+      });
+    });
+
+    it('should prevent creating a FULL_CASH booking if user has an active restriction', async () => {
+      const restrictedUntil = new Date();
+      restrictedUntil.setDate(restrictedUntil.getDate() + 15); // Active restriction
+
+      mockPrisma.auth.findUnique = jest.fn().mockResolvedValue({
+        fullCashDisabledUntil: restrictedUntil,
+      });
+
+      await expect(
+        service.createBooking('user-id', {
+          turfId: 'turf-1',
+          bookingDate: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString().split('T')[0],
+          startTime: '10:00',
+          endTime: '11:00',
+          durationMins: 60,
+          paymentType: 'FULL_CASH',
+        })
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should allow cancellation of FULL_CASH booking > 24 hours without penalty', async () => {
+      const farFuture = new Date(Date.now() + 48 * 3600 * 1000);
+      mockBooking.bookingDate = farFuture;
+
+      const res = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel');
+      expect(res.success).toBe(true);
+      expect(res.lateCancellation).toBeUndefined();
+      expect(mockPrisma.lateCancellationHistory.create).not.toHaveBeenCalled();
+    });
+
+    it('should record a late cancellation penalty if FULL_CASH booking cancelled < 24 hours before slot', async () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      mockBooking.bookingDate = tomorrow;
+
+      // Mock count to return 1 (less than 3 restriction threshold)
+      mockPrisma.lateCancellationHistory.count = jest.fn().mockResolvedValue(1);
+
+      const res = await service.cancelBooking('user-id', 'booking-uuid', 'Late Cancel');
+      expect(res.success).toBe(true);
+      expect(res.lateCancellation).toBe(true);
+      expect(res.remainingBeforeRestriction).toBe(2);
+      expect(mockPrisma.lateCancellationHistory.create).toHaveBeenCalled();
+      expect(mockPrisma.auth.update).not.toHaveBeenCalled();
+    });
+
+    it('should disable FULL_CASH payment option for 30 days if user reaches 3 late cancellations', async () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      mockBooking.bookingDate = tomorrow;
+
+      // Mock count to return 3 (threshold reached)
+      mockPrisma.lateCancellationHistory.count = jest.fn().mockResolvedValue(3);
+
+      const res = await service.cancelBooking('user-id', 'booking-uuid', 'Limit reached');
+      expect(res.success).toBe(true);
+      expect(res.lateCancellation).toBe(true);
+      expect(res.fullCashDisabled).toBe(true);
+      expect(res.disabledUntil).toBeDefined();
+      expect(mockPrisma.lateCancellationHistory.create).toHaveBeenCalled();
+      expect(mockPrisma.auth.update).toHaveBeenCalled();
     });
   });
 });
