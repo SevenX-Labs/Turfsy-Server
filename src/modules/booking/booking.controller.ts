@@ -249,6 +249,7 @@ export class BookingController {
   // GET /api/v3/booking/owner/bookings
   // ──────────────────────────────────────────────
   @Get('owner/bookings')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   @HttpCode(HttpStatus.OK)
@@ -261,6 +262,7 @@ export class BookingController {
   // GET /api/v3/booking/owner/bookings-filtered
   // ──────────────────────────────────────────────
   @Get('owner/bookings-filtered')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   @HttpCode(HttpStatus.OK)
@@ -293,6 +295,7 @@ export class BookingController {
   // GET /api/v3/booking/owner/bookings/:bookingId
   // ──────────────────────────────────────────────
   @Get('owner/bookings/:bookingId')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   @HttpCode(HttpStatus.OK)
@@ -311,6 +314,7 @@ export class BookingController {
   // GET /api/v3/booking/owner/bookings/active
   // ──────────────────────────────────────────────
   @Get('owner/bookings/active')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   @HttpCode(HttpStatus.OK)
@@ -322,6 +326,7 @@ export class BookingController {
   // 6.5 OWNER: ANALYTICS & REPORTS
   // ──────────────────────────────────────────────
   @Get('owner/analytics')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   @HttpCode(HttpStatus.OK)
@@ -330,6 +335,7 @@ export class BookingController {
   }
 
   @Get('owner/analytics/csv')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async exportAnalyticsCsv(@Req() req: any, @Res() res: any) {
@@ -340,6 +346,7 @@ export class BookingController {
   }
 
   @Get('owner/analytics/pdf')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async exportAnalyticsPdf(@Req() req: any, @Res() res: any) {
@@ -448,6 +455,7 @@ export class BookingController {
   // GET /api/v3/booking/my-bookings/bookings
   // ──────────────────────────────────────────────
   @Get('my-bookings/bookings')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getBookingsFiltered(
@@ -484,6 +492,7 @@ export class BookingController {
   // GET /api/v3/booking/transaction-history
   // ──────────────────────────────────────────────
   @Get('transaction-history')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getTransactionHistory(@Req() req: any) {
@@ -495,6 +504,7 @@ export class BookingController {
   // GET /api/v3/booking/my-bookings/:bookingId/invoice
   // ──────────────────────────────────────────────
   @Get('my-bookings/:bookingId/invoice')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getInvoice(
@@ -505,6 +515,7 @@ export class BookingController {
   }
 
   @Get('my-bookings/:bookingId/invoice/pdf')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   async downloadInvoicePdf(
     @Req() req: any,
@@ -540,6 +551,7 @@ export class BookingController {
   // GET /api/v3/booking/availability/:turfId
   // ──────────────────────────────────────────────
   @Get('availability/:turfId')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getAvailability(
@@ -559,6 +571,7 @@ export class BookingController {
   }
 
   @Get('email-test')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async testEmail(@Req() req: any) {
@@ -567,6 +580,7 @@ export class BookingController {
 
 
   @Get('customer/full-cash-status')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getFullCashStatus(@Req() req: any) {

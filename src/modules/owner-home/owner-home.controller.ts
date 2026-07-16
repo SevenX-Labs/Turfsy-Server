@@ -1,4 +1,5 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -12,6 +13,7 @@ export class OwnerHomeController {
   constructor(private readonly ownerHomeService: OwnerHomeService) {}
 
   @Get('dashboard')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getDashboard(@Req() req: any) {
@@ -19,6 +21,7 @@ export class OwnerHomeController {
   }
 
   @Get('revenue-summary')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getRevenueSummary(@Req() req: any) {
@@ -26,6 +29,7 @@ export class OwnerHomeController {
   }
 
   @Get('booking-statistics')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getBookingStatistics(@Req() req: any) {
@@ -33,6 +37,7 @@ export class OwnerHomeController {
   }
 
   @Get('recent-activity')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getRecentActivity(@Req() req: any) {
@@ -40,6 +45,7 @@ export class OwnerHomeController {
   }
 
   @Get('trends')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getTrends(@Req() req: any) {
@@ -47,6 +53,7 @@ export class OwnerHomeController {
   }
 
   @Get('payment-distribution')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getPaymentDistribution(@Req() req: any) {
@@ -54,6 +61,7 @@ export class OwnerHomeController {
   }
 
   @Get('turf-performance')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getTurfPerformance(@Req() req: any) {
