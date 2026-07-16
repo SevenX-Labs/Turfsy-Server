@@ -1,34 +1,61 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
+import * as dns from 'dns';
+import * as nodemailerShared from 'nodemailer/lib/shared';
+
+// Force Nodemailer to ignore IPv6 globally by removing IPv6 interfaces from its cached networkInterfaces.
+// Nodemailer uses c-ares for resolve4/resolve6, checking if any interface supports IPv6.
+// Filtering out IPv6 entries here forces it to fallback/resolve only IPv4.
+const sharedAny = nodemailerShared as any;
+if (sharedAny.networkInterfaces) {
+  for (const key of Object.keys(sharedAny.networkInterfaces)) {
+    sharedAny.networkInterfaces[key] = sharedAny.networkInterfaces[key].filter(
+      (iface: any) => iface.family !== 'IPv6' && iface.family !== 6,
+    );
+  }
+}
 
 @Injectable()
-export class EmailService {
+export class EmailService implements OnModuleInit {
   private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(EmailService.name);
 
   constructor(private configService: ConfigService) {
-    // Force IPv4 DNS resolution — Render does not support outbound IPv6.
-    // Without this, smtp.gmail.com resolves to an IPv6 address (2607:f8b0:...)
-    // which causes "connect ENETUNREACH" on Render's network.
     const smtpOptions: SMTPTransport.Options = {
       host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // SSL on port 465
+      port: 587,
+      secure: false, // port 587 uses STARTTLS
+      requireTLS: true,
       auth: {
-        user: this.configService.get<string>('MAIL_USER'),
-        pass: this.configService.get<string>('MAIL_PASS'),
+        user: this.configService.get<string>('MAIL_USER') || this.configService.get<string>('GMAIL_USER'),
+        pass: this.configService.get<string>('MAIL_PASS') || this.configService.get<string>('GMAIL_APP_PASSWORD'),
       },
       connectionTimeout: 10000, // 10s connect timeout
       socketTimeout: 15000, // 15s socket timeout
     };
 
-    // 'family' is a valid Node.js net.connect() option that Nodemailer passes through,
-    // but @types/nodemailer does not declare it. Force IPv4 (family=4) at runtime.
-    (smtpOptions as any).family = 4;
+    // Cast only the dnsLookup property to satisfy user's instruction
+    (smtpOptions as { dnsLookup?: any }).dnsLookup = (
+      hostname: string,
+      options: dns.LookupOneOptions,
+      callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
+    ) => {
+      dns.lookup(hostname, { ...options, family: 4 }, callback);
+    };
 
     this.transporter = nodemailer.createTransport(smtpOptions);
+  }
+
+  async onModuleInit() {
+    this.logger.log('Testing SMTP connectivity at startup...');
+    try {
+      await this.transporter.verify();
+      this.logger.log('SMTP connection verified successfully!');
+    } catch (err: any) {
+      this.logger.error(`SMTP connection verification failed: ${err.message}`);
+    }
   }
 
   private getBaseTemplate(content: string, title: string) {
