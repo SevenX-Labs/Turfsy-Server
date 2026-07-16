@@ -209,6 +209,7 @@ export class OwnerHomeService {
     const bookingsCompleted = bookings.filter((b) => b.bookingStatus === 'COMPLETED').length;
     const bookingsCancelled = bookings.filter((b) => b.bookingStatus === 'CANCELLED').length;
     const bookingsNoShow = bookings.filter((b) => b.bookingStatus === 'NO_SHOW').length;
+    const bookingsPending = bookings.filter((b) => b.bookingStatus === 'PENDING_APPROVAL').length;
 
     // 3. Quick Stats
     const completedBookingsList = bookings.filter((b) => b.bookingStatus === 'COMPLETED');
@@ -315,6 +316,7 @@ export class OwnerHomeService {
             completed: bookingsCompleted,
             cancelled: bookingsCancelled,
             noShow: bookingsNoShow,
+            pending: bookingsPending,
           },
           quickStats: {
             avgBookingValue,
