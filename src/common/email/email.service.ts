@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 @Injectable()
 export class EmailService {
@@ -8,13 +9,26 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
   constructor(private configService: ConfigService) {
-    this.transporter = nodemailer.createTransport({
-      service: 'gmail',
+    // Force IPv4 DNS resolution — Render does not support outbound IPv6.
+    // Without this, smtp.gmail.com resolves to an IPv6 address (2607:f8b0:...)
+    // which causes "connect ENETUNREACH" on Render's network.
+    const smtpOptions: SMTPTransport.Options = {
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true, // SSL on port 465
       auth: {
         user: this.configService.get<string>('MAIL_USER'),
         pass: this.configService.get<string>('MAIL_PASS'),
       },
-    });
+      connectionTimeout: 10000, // 10s connect timeout
+      socketTimeout: 15000, // 15s socket timeout
+    };
+
+    // 'family' is a valid Node.js net.connect() option that Nodemailer passes through,
+    // but @types/nodemailer does not declare it. Force IPv4 (family=4) at runtime.
+    (smtpOptions as any).family = 4;
+
+    this.transporter = nodemailer.createTransport(smtpOptions);
   }
 
   private getBaseTemplate(content: string, title: string) {
