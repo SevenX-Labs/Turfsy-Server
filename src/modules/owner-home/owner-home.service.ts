@@ -15,7 +15,19 @@ export class OwnerHomeService {
     const turfIds = owner.turfs.map((t) => t.id);
     const bookings = await this.prisma.booking.findMany({
       where: { turfId: { in: turfIds } },
-      include: { turf: { select: { name: true } } },
+      include: {
+        turf: { select: { name: true, sportsType: true } },
+        user: {
+          select: {
+            phone: true,
+            userProfile: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
     return { owner, bookings };
   }
@@ -290,13 +302,19 @@ export class OwnerHomeService {
       .map((b) => ({
         id: b.id,
         displayId: `TRF-${b.id.slice(0, 7).toUpperCase()}`,
+        userName: b.user?.userProfile?.name || 'Customer',
+        userPhone: b.user?.phone || 'N/A',
         turfName: b.turf?.name || 'Unknown Turf',
+        sport: b.turf?.sportsType || 'Sports',
         amount: b.amount,
         status: b.bookingStatus,
         paymentType: b.paymentType,
         paymentStatus: b.paymentStatus,
         balanceAmount: b.amount - (b.depositAmount || 0),
         depositAmount: b.depositAmount,
+        bookingDate: b.bookingDate.toISOString(),
+        startTime: b.startTime,
+        endTime: b.endTime,
         createdAt: b.createdAt.toISOString(),
       }));
 
