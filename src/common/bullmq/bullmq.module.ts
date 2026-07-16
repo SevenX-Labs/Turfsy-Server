@@ -3,10 +3,10 @@ import {
   Global,
   forwardRef,
   OnApplicationShutdown,
+  Inject,
   Logger,
 } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
 import { BookingWorker } from './workers/booking.worker';
@@ -23,22 +23,23 @@ import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { BookingModule } from '../../modules/booking/booking.module';
 
-const logger = new Logger('BullMqRedis');
+import { BULLMQ_CONNECTION } from './bullmq-connection.provider';
+import { BullMqConnectionModule } from './bullmq-connection.module';
 
 /**
- * Module-level reference to the shared ioredis connection used by BullMQ.
+ * Global BullMQ module.
  *
- * By passing a single ioredis *instance* (instead of connection options) to
- * BullModule.forRootAsync, all 8 registered Queues reuse this one socket
- * (sharedConnection = true) while each Worker only creates ONE additional
- * blocking connection via `connection.duplicate()`.
+ * Connection architecture (DI-managed):
+ * ─────────────────────────────────────
+ * 1. BullMqConnectionModule registers a single ioredis instance as BULLMQ_CONNECTION global provider.
+ * 2. BullModule.forRootAsync receives it via inject: [BULLMQ_CONNECTION].
+ * 3. All 8 queues reuse the shared socket (sharedConnection = true in BullMQ internals)
+ * 4. Each of the 8 workers duplicates it once for blocking BRPOPLPUSH
+ * 5. OnApplicationShutdown closes the shared connection (workers' blocking
+ *    connections are closed by @nestjs/bullmq WorkerHost.onModuleDestroy)
  *
- * Connection count:
- *   Before: 8 queues × 1 + 8 workers × 2 = 24 ioredis connections
- *   After:  1 shared + 8 worker blocking   =  9 ioredis connections
+ * Total connections: 1 shared + 8 worker blocking = 9 ioredis connections
  */
-let sharedConnection: Redis | null = null;
-
 @Global()
 @Module({
   imports: [
@@ -46,42 +47,10 @@ let sharedConnection: Redis | null = null;
     EmailModule,
     PrismaModule,
     forwardRef(() => BookingModule),
+    BullMqConnectionModule, // Imports the global connection singleton
     BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const redisUrl = configService.get<string>('REDIS_URL');
-
-        sharedConnection = new Redis(redisUrl!, {
-          maxRetriesPerRequest: null, // Required by BullMQ for blocking commands
-          enableReadyCheck: false, // Avoids extra READY check round-trip
-          retryStrategy: (times: number) => {
-            if (times > 20) {
-              logger.error('BullMQ Redis max reconnection attempts reached');
-              return null; // Stop reconnecting
-            }
-            const delay = Math.min(times * 500, 5000);
-            logger.warn(
-              `BullMQ Redis reconnecting in ${delay}ms (attempt ${times})`,
-            );
-            return delay;
-          },
-        });
-
-        sharedConnection.on('connect', () => {
-          logger.log('BullMQ shared Redis connection established');
-        });
-
-        sharedConnection.on('error', (err: Error) => {
-          logger.error(`BullMQ shared Redis error: ${err.message}`);
-        });
-
-        sharedConnection.on('close', () => {
-          logger.warn('BullMQ shared Redis connection closed');
-        });
-
-        return { connection: sharedConnection };
-      },
+      inject: [BULLMQ_CONNECTION],
+      useFactory: (connection: Redis) => ({ connection }),
     }),
     BullModule.registerQueue(
       { name: 'booking' },
@@ -136,32 +105,30 @@ let sharedConnection: Redis | null = null;
 export class BullMqModule implements OnApplicationShutdown {
   private readonly logger = new Logger(BullMqModule.name);
 
+  constructor(
+    @Inject(BULLMQ_CONNECTION) private readonly connection: Redis,
+  ) {}
+
   /**
-   * Called by NestJS when the application shuts down (SIGTERM, SIGINT, hot-reload).
-   * Closes the shared ioredis connection that BullMQ queues and workers rely on.
+   * Called by NestJS on SIGTERM, SIGINT, hot-reload, or app.close().
    *
-   * Workers' blocking connections are closed automatically by @nestjs/bullmq
-   * when their host providers are destroyed. This hook handles the remaining
-   * shared connection that BullMQ deliberately does NOT close (sharedConnection flag).
+   * Closes the shared ioredis connection. Workers' blocking connections
+   * are already closed by @nestjs/bullmq's WorkerHost.onModuleDestroy
+   * which fires before OnApplicationShutdown.
    */
   async onApplicationShutdown(signal?: string) {
     this.logger.log(
       `Shutting down BullMQ connections (signal: ${signal || 'none'})...`,
     );
 
-    if (sharedConnection) {
-      try {
-        // quit() sends the QUIT command and waits for the server to acknowledge
-        await sharedConnection.quit();
-        this.logger.log('BullMQ shared Redis connection closed gracefully');
-      } catch (err: any) {
-        this.logger.error(
-          `Error during BullMQ Redis quit: ${err.message}. Force-disconnecting.`,
-        );
-        // disconnect() forcefully drops the TCP socket without waiting
-        sharedConnection.disconnect();
-      }
-      sharedConnection = null;
+    try {
+      await this.connection.quit();
+      this.logger.log('BullMQ shared Redis connection closed gracefully');
+    } catch (err: any) {
+      this.logger.error(
+        `Error during BullMQ Redis quit: ${err.message}. Force-disconnecting.`,
+      );
+      this.connection.disconnect();
     }
   }
 }
