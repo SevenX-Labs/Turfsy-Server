@@ -9,6 +9,15 @@ All split routes are mounted under:
 Authentication: **Required** (`Bearer Token` / `JwtAuthGuard`)
 Rate limited: **Yes** (strict 15req/min for modifications to prevent abuse)
 
+## Booking Dependency
+
+The split feature is attached to a real booking record.
+
+- If the booking is cancelled by the customer, the split record is removed.
+- If the booking is rejected by the owner, the split record is also removed.
+- If a refund is triggered on cancellation, the split data does not control the refund amount; cancellation and Razorpay do.
+- The split page should always refresh from the booking first, then render the split state.
+
 ---
 
 ## 📱 Frontend Integration Flow 
@@ -50,6 +59,11 @@ Here is the exact step-by-step workflow for integrating the Split system into th
 2. The frontend fires `POST /api/v3/booking/:bookingId/split/trigger`.
 3. The backend locks the split (`isSplitDone = true`), rendering it finalized and blocking further structural additions.
 4. **Final Result**: The system officially maps who owes what to the Lead User. The other users can now view their pending debt and manually pay their exact split amount to the Lead User in real life. (Lead can mark statuses as PAID later when settling up in cash/UPI).
+
+### Step 6: Cancellation Awareness
+1. If the booking gets cancelled after the split is created, the split should be treated as invalid.
+2. The frontend should hide the split page and return the user to booking history.
+3. Any refund is handled by the booking cancellation flow, not by split settlement.
 
 ---
 
@@ -145,3 +159,10 @@ All endpoints require `Bearer Token`.
 }
 ```
 
+---
+
+## Notes on Amount Logic
+
+- The split amount is based on the booking total that already exists in the booking record.
+- The split feature does not recalculate turf price, platform fee, or refund amount.
+- If the booking is `FULL_CASH`, the split can still be used for internal settlement, but no Razorpay refund is involved.

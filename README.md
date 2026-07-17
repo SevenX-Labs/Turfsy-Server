@@ -120,12 +120,16 @@ Base API routes are listed exactly as implemented.
 ### Booking (`/api/v3/booking`)
 
 - `POST /api/v3/booking/`
+- `POST /api/v3/booking/pay-at-turf`
+- `POST /api/v3/booking/:bookingId/rebook`
 - `POST /api/v3/booking/:bookingId/create-order`
 - `POST /api/v3/booking/:bookingId/confirm-payment`
 - `POST /api/v3/booking/razorpay/webhook`
 - `POST /api/v3/booking/:bookingId/payment-failed`
 - `POST /api/v3/booking/verify-qr`
-- `PATCH /api/v3/booking/:bookingId/complete`
+- `POST /api/v3/booking/:bookingId/manual-checkin`
+- `POST /api/v3/booking/owner/bookings/:bookingId/approve`
+- `POST /api/v3/booking/owner/bookings/:bookingId/reject`
 - `GET /api/v3/booking/owner/bookings`
 - `GET /api/v3/booking/owner/bookings-filtered`
 - `GET /api/v3/booking/owner/bookings/:bookingId`
@@ -135,7 +139,7 @@ Base API routes are listed exactly as implemented.
 - `GET /api/v3/booking/owner/analytics/pdf`
 - `PATCH /api/v3/booking/:bookingId/cancel`
 - `POST /api/v3/booking/cron/no-shows`
-- `POST /api/v3/booking/cron/auto-complete`
+- `POST /api/v3/booking/cron/upcoming-checkins`
 - `POST /api/v3/booking/my-bookings/:bookingId/rateTurf`
 - `GET /api/v3/booking/my-bookings/active`
 - `GET /api/v3/booking/my-bookings`
@@ -145,6 +149,8 @@ Base API routes are listed exactly as implemented.
 - `GET /api/v3/booking/my-bookings/:bookingId/invoice/pdf`
 - `GET /api/v3/booking/my-bookings/:bookingId`
 - `GET /api/v3/booking/availability/:turfId`
+- `GET /api/v3/booking/email-test`
+- `GET /api/v3/booking/customer/full-cash-status`
 
 ### User Settings (`/api/v3/user-settings`)
 
@@ -215,3 +221,4 @@ Base API routes are listed exactly as implemented.
 - `/health` and `/api/v3/health` return grouped module + endpoint count status.
 - Detailed payload examples remain in `/docs/*.md`.
 - Owner settings payment/payout uses dedicated `owner-settings` model.
+- Booking cancellations handle refunds in the cancel flow; Razorpay webhook events keep `refundStatus` in sync.

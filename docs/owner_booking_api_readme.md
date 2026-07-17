@@ -8,7 +8,7 @@ This documentation covers the endpoints available to **Turf Owners** for managin
 ---
 
 ## 🧠 Brain Recall Line
-> **“List → Filter → Active → Detail → Analytics → Verify PIN → Complete”**
+> **“List → Filter → Active → Detail → Analytics → Verify QR → Manual Check-In”**
 
 ---
 
@@ -110,31 +110,31 @@ Quickly see all bookings for today that are confirmed or pending.
 
 ---
 
-## 🔢 7. Verify PIN (CASH)
-Used to verify a customer's check-in PIN for CASH-type bookings (Pay-at-Turf) when they arrive.
+## 🔢 7. Verify Check-In QR
+Used to verify a customer's signed QR payload when they arrive at the turf.
 
-- **Endpoint**: `POST /:bookingId/verify-pin`
-- **Security**: OWNER role, PIN rate-limiting, Constant-time comparison.
+- **Endpoint**: `POST /verify-qr`
+- **Security**: OWNER role, rate-limiting, constant-time comparison.
 - **Rules**:
   - Window: Slot start - 10 min to Slot end + 10 min.
-  - Max 5 wrong attempts before the booking is locked.
+  - QR expires after the check-in window.
 - **Request Body**:
 ```json
 {
-  "pin": "1234"
+  "qrData": "{...signed QR payload...}"
 }
 ```
 - **Success Response**: `200 OK`
 
 ---
 
-## ✅ 8. Manual Complete (Fallback)
-Used to mark a booking as COMPLETED manually. For CASH bookings, this is available ONLY after the slot ends.
+## ✅ 8. Manual Check-In (Fallback)
+Used to mark a booking as COMPLETED manually when QR scanning is not possible.
 
-- **Endpoint**: `PATCH /:bookingId/complete`
+- **Endpoint**: `POST /:bookingId/manual-checkin`
 - **Rules**:
-  - For `ONLINE` bookings: Can be marked completed anytime after they are confirmed.
-  - For `CASH` bookings: Only available **after the PIN window expires**.
+  - Only available to the owning turf owner.
+  - Uses the same check-in window as QR verification.
 - **Success Response**: `200 OK`
 
 ---

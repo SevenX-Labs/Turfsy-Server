@@ -44,7 +44,7 @@ Confirm Payment (POST :bookingId/confirm-payment with signature)
 HALF_ONLINE or FULL_CASH Booking:
 Booking Confirmed -> 4-digit checkInPin Generated (e.g. 4821)
 User arrives at Turf -> Shows PIN -> Pays any remaining amount
-Owner verifies PIN (POST :bookingId/verify-pin) -> Booking marked as COMPLETED
+Owner verifies QR (POST /api/v3/booking/verify-qr) -> Booking marked as COMPLETED
 ```
 
 ### 3. Payment Types & Deposit Rules
@@ -54,6 +54,34 @@ Owner verifies PIN (POST :bookingId/verify-pin) -> Booking marked as COMPLETED
 | `FULL_ONLINE` | 100% | 0% |
 | `HALF_ONLINE_HALF_CASH` | 50% | 50% |
 | `FULL_CASH` | 0% | 100% |
+
+### 4. Slot, Time, and Booking Window Rules
+
+- Booking dates are accepted only in `YYYY-MM-DD`.
+- Start and end times must be `HH:MM` in 24-hour format.
+- The backend rejects bookings in the past.
+- The booking window is limited to 90 days from today.
+- Same-day bookings must be made at least 30 minutes before the slot start time.
+- The slot must fall inside the turf operating window.
+- Overnight turfs are supported, but the slot still must not cross a closed period.
+- Duration must match `startTime` and `endTime`, and it must be between 60 and 360 minutes in 30-minute steps.
+
+### 5. Slot Lock and Availability Logic
+
+- When a booking is created, the slot is locked for 5 minutes.
+- If online payment is not confirmed within that window, the expiry worker marks the booking expired and frees the slot.
+- The availability endpoint shows already booked slots plus a synthetic blocked slot for the current same-day cutoff window.
+- For same-day bookings, the API returns `minBookableTime` so the frontend can disable earlier slots.
+- Slot conflict checks happen both through the temporary Redis lock and through the database transaction to avoid double booking.
+
+### 6. Razorpay Payment Flow
+
+- `POST /api/v3/booking/:bookingId/create-order` creates a Razorpay order using the booking deposit amount from the database.
+- `POST /api/v3/booking/:bookingId/confirm-payment` verifies the Razorpay signature with HMAC before confirming the booking.
+- The backend also checks that the Razorpay order amount matches the stored booking amount.
+- `POST /api/v3/booking/razorpay/webhook` acts as the server-to-server fallback when client confirmation is skipped or fails.
+- If payment succeeds, the booking becomes `CONFIRMED` and the slot lock is released.
+- If payment fails, the booking remains retryable while still in `PENDING`.
 
 ---
 
@@ -75,6 +103,24 @@ Owner verifies PIN (POST :bookingId/verify-pin) -> Booking marked as COMPLETED
 | `SUCCESS` | Online payment received |
 | `FAILED` | Online payment attempt failed |
 | `REFUNDED` | Online payment refunded after cancellation |
+
+### Refund and Cancellation Matrix
+
+The cancellation flow calculates the refund from the paid online amount, not from the raw booking total.
+
+| Scenario | Refund Result |
+|---------|---------------|
+| `PENDING_APPROVAL` booking cancelled before owner approval | Refund the turf/advance portion if the booking was paid online. |
+| `CONFIRMED` booking cancelled more than 72 hours before slot | 100% of the turf/advance portion is refundable. |
+| `CONFIRMED` booking cancelled between 24 and 72 hours before slot | 50% of the turf/advance portion is refundable. |
+| `CONFIRMED` booking cancelled less than 24 hours before slot | No refund. |
+| `FULL_CASH` late cancellation within 24 hours | No online refund applies, but the user is tracked for late-cancellation limits. |
+
+Important details:
+- Refunds only apply when a Razorpay payment exists.
+- The platform fee is excluded from the refunded turf portion.
+- `refundStatus` flows through `NONE -> INITIATED -> PROCESSED` or `FAILED`.
+- `paymentStatus` becomes `REFUNDED` only when Razorpay processes the refund successfully.
 
 ---
 
@@ -208,7 +254,31 @@ POST /api/v3/booking/:bookingId/confirm-payment
 
 ---
 
-### 7. Splitwise (Split Payment)
+### 7. Refunds and Cancellation
+
+There is no separate manual refund endpoint in the booking controller. Refunds are handled through cancellation and the Razorpay webhook flow.
+
+#### Cancel Booking
+```
+PATCH /api/v3/booking/:bookingId/cancel
+```
+**Request Body:** `{ "reason": "Weather issues" }`
+**Behavior:**
+- If an online payment was captured, the service calculates the refundable turf portion and calls Razorpay.
+- `refundStatus` is updated to `INITIATED`, `PROCESSED`, or `FAILED`.
+- `paymentStatus` becomes `REFUNDED` when Razorpay confirms the refund.
+- Webhook events `refund.created`, `refund.processed`, and `refund.failed` keep the booking record in sync.
+- If the refund API fails, the booking remains cancelled but `refundStatus` becomes `FAILED` so support can reconcile it.
+
+#### Payment Failed
+```
+POST /api/v3/booking/:bookingId/payment-failed
+```
+Marks the payment attempt as failed while keeping the booking available for retry.
+
+---
+
+### 8. Splitwise (Split Payment)
 
 Split the booking `amount` across multiple players (like Splitwise). Only the **booking creator** (lead user) can manage the split.
 
@@ -240,15 +310,6 @@ PATCH  /api/v3/booking/split/players/:playerId/status
 
 ---
 
-### 8. Cancel Booking
-```
-PATCH /api/v3/booking/:bookingId/cancel
-```
-**Request Body:** `{ "reason": "Weather issues" }`
-**Refund Logic:** Automated partial refund (e.g., 75%) if payment was `SUCCESS`.
-
----
-
 ### 9. My Bookings
 ```
 GET /api/v3/booking/my-bookings
@@ -276,20 +337,20 @@ GET /api/v3/booking/my-bookings/:bookingId/invoice/pdf
 
 ## 🏢 OWNER API ENDPOINTS
 
-### 1. Verify Check-in PIN
+### 1. Verify Check-in QR
 ```
-POST /api/v3/booking/:bookingId/verify-pin
+POST /api/v3/booking/verify-qr
 ```
-**Body:** `{ "pin": "1234" }`
-**Result:** Marks booking as `COMPLETED`. Required for CASH and HALF_CASH.
+**Body:** `{ "qrData": "{...signed payload...}" }`
+**Result:** Marks booking as `COMPLETED` when the QR is valid and within the check-in window.
 
 ---
 
-### 2. Mark Completed (Online Only)
+### 2. Manual Check-In
 ```
-PATCH /api/v3/booking/:bookingId/complete
+POST /api/v3/booking/:bookingId/manual-checkin
 ```
-**Description:** For Fully Online bookings where owner confirms user arrived without PIN.
+**Description:** Owner override for cases where QR scanning is not possible.
 
 ---
 
@@ -313,9 +374,13 @@ Validates signature and confirms booking if the client-side confirmation fails o
 `POST /api/v3/booking/cron/no-shows`
 Auto-marks `CONFIRMED` bookings as `NO_SHOW` if 15 minutes have passed since the slot started without a PIN verification.
 
-### 3. Auto-Complete Cron
-`POST /api/v3/booking/cron/auto-complete`
-Auto-marks `CONFIRMED` fully-online bookings as `COMPLETED` 2 hours after the slot ends.
+### 3. Upcoming Check-In Cron
+`POST /api/v3/booking/cron/upcoming-checkins`
+Sends a notification to owners when the check-in window is about to open.
 
 ### 4. Slot Lock
 When a booking is created (PENDING), the slot is locked for **5 minutes**. If payment is not confirmed within this window, the lock expires and the slot becomes available again for others.
+
+### 5. Utility Endpoints
+`GET /api/v3/booking/email-test` sends a test booking email.
+`GET /api/v3/booking/customer/full-cash-status` returns whether the user can still use the Full Cash option.
