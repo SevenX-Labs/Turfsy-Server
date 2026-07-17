@@ -36,14 +36,30 @@ async function bootstrap() {
   );
 
   // ── Layer 2: Cross-Origin Resource Sharing ──
+  const allowedOrigins = (process.env.FRONTEND_URL ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const fallbackOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8081',
+  ];
+
+  const corsOrigins = allowedOrigins.length > 0 ? allowedOrigins : fallbackOrigins;
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL
-      ? process.env.FRONTEND_URL.split(',')
-      : [
-          'http://localhost:3000',
-          'http://localhost:5173',
-          'http://localhost:8081',
-        ],
+    origin: (requestOrigin, callback) => {
+      if (!requestOrigin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = requestOrigin.trim();
+      const isAllowed = corsOrigins.includes(normalizedOrigin);
+
+      return callback(null, isAllowed);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
