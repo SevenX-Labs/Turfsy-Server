@@ -1914,8 +1914,12 @@ export class BookingService {
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
       data: {
+        bookingStatus: 'CANCELLED',
         paymentStatus: 'FAILED',
         razorpayPaymentId: null,
+        cancelledAt: new Date(),
+        cancelReason: 'Payment cancelled or closed before completion',
+        resolvedBy: 'CUSTOMER',
       },
     });
 
@@ -1937,7 +1941,7 @@ export class BookingService {
     return {
       success: true,
       message:
-        'Payment failed. Booking is still pending—retry payment to confirm.',
+        'Payment not completed. Booking has been cancelled and the slot is released.',
       data: { ...updated, displayId: this.formatBookingId(updated.id) },
     };
   }
