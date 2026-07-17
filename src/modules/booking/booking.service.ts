@@ -661,17 +661,9 @@ export class BookingService {
 
   // ═══════════════════════════════════════════════════════
   // 1.5 GET BOOKED SLOTS (Availability)
-  //     Layer 6: Rate Limiting (30/user/1min)
+  //     Layer 6: No rate limiting here because the controller already skips throttle
   // ═══════════════════════════════════════════════════════
   async getBookedSlots(turfId: string, date: string, authId?: string) {
-    // ── Layer 6: Rate Limiting ──
-    if (authId) {
-      await this.rateLimiter.check(
-        `user:${authId}:availability`,
-        RATE_LIMITS.AVAILABILITY,
-      );
-    }
-
     const turf = await this.prisma.turf.findUnique({
       where: { id: turfId },
       select: {
