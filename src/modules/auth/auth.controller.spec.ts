@@ -5,6 +5,7 @@ import { Role } from '@prisma/client';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RateLimiterService } from '../../common/services/rate-limiter.service';
 
 const mockAuthService = {
   login: jest.fn(),
@@ -15,6 +16,10 @@ const mockAuthService = {
   getMe: jest.fn(),
 };
 
+const mockRateLimiterService = {
+  check: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('AuthController', () => {
   let controller: AuthController;
 
@@ -23,6 +28,7 @@ describe('AuthController', () => {
       controllers: [AuthController],
       providers: [
         { provide: AuthService, useValue: mockAuthService },
+        { provide: RateLimiterService, useValue: mockRateLimiterService },
         { provide: JwtService, useValue: { verify: jest.fn() } },
         {
           provide: PrismaService,
