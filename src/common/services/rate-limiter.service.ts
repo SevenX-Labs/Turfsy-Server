@@ -64,6 +64,9 @@ export class RateLimiterService {
  * Rate limit configurations per endpoint (Layer 6 spec)
  */
 export const RATE_LIMITS = {
+  OTP_LOGIN: { limit: 10, windowMs: 10 * 60 * 1000 }, // 10 req/phone/10min
+  OTP_VERIFY: { limit: 10, windowMs: 10 * 60 * 1000 }, // 10 req/phone/10min
+  OTP_RESEND: { limit: 3, windowMs: 10 * 60 * 1000 }, // 3 req/phone/10min
   CREATE_BOOKING: { limit: 5, windowMs: 10 * 60 * 1000 }, // 5 req/user/10min
   CREATE_ORDER: { limit: 10, windowMs: 5 * 60 * 1000 }, // 10 req/booking/5min
   CONFIRM_PAYMENT: { limit: 10, windowMs: 5 * 60 * 1000 }, // 10 req/booking/5min

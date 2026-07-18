@@ -16,7 +16,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import {
   FileFieldsInterceptor,
@@ -115,7 +115,6 @@ export class TurfsController {
   }
 
   @Get()
-  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async listTurfs(
     @Query('page') page?: string,
@@ -129,7 +128,6 @@ export class TurfsController {
   // 2. Search Nearby Turfs (by current location or manual map pin)
   // GET /api/v3/turfs/nearby?lat=19.07&lng=72.87&radiusKm=10
   @Get('nearby')
-  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async getNearbyTurfs(
     @Query('lat') lat: string,
@@ -188,7 +186,6 @@ export class TurfsController {
 
   // 4. Basic Search (Text based)
   @Get('search')
-  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async searchTurfs(
     @Query('q') q: string,
@@ -203,7 +200,6 @@ export class TurfsController {
 
   // 5. Advanced Filtration & Sorting
   @Get('filter')
-  @SkipThrottle({ default: true, strict: true, medium: true })
   @HttpCode(HttpStatus.OK)
   async filterTurfs(
     @Query('city') city?: string,

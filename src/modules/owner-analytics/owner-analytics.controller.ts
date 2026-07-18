@@ -1,5 +1,4 @@
 import { Controller, Get, Req, Query, UseGuards } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -13,7 +12,6 @@ export class OwnerAnalyticsController {
   constructor(private readonly ownerAnalyticsService: OwnerAnalyticsService) {}
 
   @Get('overall')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getOverall(@Req() req: any) {
@@ -21,7 +19,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('total-revenue')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getTotalRevenue(@Req() req: any) {
@@ -29,7 +26,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('total-bookings')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getTotalBookings(@Req() req: any) {
@@ -37,7 +33,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('completed-bookings')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getCompletedBookings(@Req() req: any) {
@@ -45,7 +40,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('cancelled-bookings')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getCancelledBookings(@Req() req: any) {
@@ -53,7 +47,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('revenue-by-date')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getRevenueByDate(@Req() req: any) {
@@ -61,7 +54,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('bookings-by-date')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getBookingsByDate(@Req() req: any) {
@@ -69,7 +61,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('cash-vs-online')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getCashVsOnline(@Req() req: any) {
@@ -77,7 +68,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('peak-hours')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getPeakHours(@Req() req: any) {
@@ -85,7 +75,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('cancellation-rate')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getCancellationRate(@Req() req: any) {
@@ -93,7 +82,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('no-show-rate')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getNoShowRate(@Req() req: any) {
@@ -101,7 +89,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('reviews-ratings')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getReviewsAndRatings(@Req() req: any) {
@@ -109,7 +96,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('total-venues')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getTotalVenues(@Req() req: any) {
@@ -117,7 +103,6 @@ export class OwnerAnalyticsController {
   }
 
   @Get('venues-ratings-summary')
-  @SkipThrottle()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   async getVenuesAndRatingsSummary(

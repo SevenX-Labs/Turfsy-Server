@@ -7,7 +7,6 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
 import { Request } from 'express';
 import { UserHomeService } from './user-home.service';
 import { UserHomeResponseDto } from './dto/user-home-response.dto';
@@ -25,7 +24,6 @@ interface AuthenticatedRequest extends Request {
 
 @ApiTags('Users')
 @ApiBearerAuth('JWT-auth')
-@SkipThrottle()
 @Controller('api/v3/user-home')
 export class UserHomeController {
   constructor(private readonly userHomeService: UserHomeService) {}

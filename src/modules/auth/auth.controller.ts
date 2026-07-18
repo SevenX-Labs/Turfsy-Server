@@ -24,6 +24,10 @@ import { ResetMpinDto } from './dto/reset-mpin.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Role } from '@prisma/client';
 import {
+  RateLimiterService,
+  RATE_LIMITS,
+} from '../../common/services/rate-limiter.service';
+import {
   ApiTags,
   ApiOperation,
   ApiResponse,
@@ -34,7 +38,10 @@ import {
 @ApiTags('Auth')
 @Controller('api/v3/auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly rateLimiter: RateLimiterService,
+  ) {}
 
   // ═══════════════════════════════════════════
   //  USER APP ENDPOINTS — role auto-set to USER
@@ -52,6 +59,10 @@ export class AuthController {
     @Headers('x-forwarded-for') ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
+    await this.rateLimiter.check(
+      `phone:${dto.phone}:login`,
+      RATE_LIMITS.OTP_LOGIN,
+    );
     return this.authService.login(dto, ip, userAgent, Role.USER);
   }
 
@@ -65,6 +76,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Invalid or expired OTP' })
   async userVerifyOtp(@Body() dto: VerifyOtpDto) {
+    await this.rateLimiter.check(
+      `phone:${dto.phone}:verify-otp`,
+      RATE_LIMITS.OTP_VERIFY,
+    );
     return this.authService.verifyOtp(dto, Role.USER);
   }
 
@@ -77,6 +92,10 @@ export class AuthController {
     @Body() dto: ResendOtpDto,
     @Headers('x-forwarded-for') ip: string,
   ) {
+    await this.rateLimiter.check(
+      `phone:${dto.phone}:resend-otp`,
+      RATE_LIMITS.OTP_RESEND,
+    );
     return this.authService.resendOtp(dto, ip);
   }
 
@@ -94,6 +113,10 @@ export class AuthController {
     @Headers('x-forwarded-for') ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
+    await this.rateLimiter.check(
+      `phone:${dto.phone}:login`,
+      RATE_LIMITS.OTP_LOGIN,
+    );
     return this.authService.login(dto, ip, userAgent, Role.OWNER);
   }
 
@@ -106,6 +129,10 @@ export class AuthController {
     description: 'OTP verified, session token generated',
   })
   async ownerVerifyOtp(@Body() dto: VerifyOtpDto) {
+    await this.rateLimiter.check(
+      `phone:${dto.phone}:verify-otp`,
+      RATE_LIMITS.OTP_VERIFY,
+    );
     return this.authService.verifyOtp(dto, Role.OWNER);
   }
 
@@ -118,6 +145,10 @@ export class AuthController {
     @Body() dto: ResendOtpDto,
     @Headers('x-forwarded-for') ip: string,
   ) {
+    await this.rateLimiter.check(
+      `phone:${dto.phone}:resend-otp`,
+      RATE_LIMITS.OTP_RESEND,
+    );
     return this.authService.resendOtp(dto, ip);
   }
 
