@@ -106,15 +106,16 @@ All endpoints are protected and require a valid `Bearer Token` belonging to a `U
 *   Only **one** increment per day (multiple slots in one day count as a single active day).
 *   **5-Day Grace Rule:** 
     *   Played within 1-5 days since last session? → Streak increases.
-    *   Not played for more than 5 days? → Decreases streak by 1 (floor is 0) and reduces points by 5 points progressively (applied every 5 days of inactivity).
+    *   Not played for more than 5 days? → Decreases streak by 1 (floor is 0) progressively (applied every 5 days of inactivity). **No points are deducted.**
 
 ### Points Rules:
 *   Points awarded *only* for **COMPLETED** status bookings.
 *   A flat **10 Points** is awarded per booking completion.
-*   If a user cancels a CONFIRMED or PENDING booking, **2 Points** are deducted.
+*   If a user cancels a CONFIRMED or PENDING booking, **2 Points** are deducted (minimum floor is 0).
+*   If a user misses their slot (**NO SHOW**), **5 Points** are deducted and their streak is reset to 0 (minimum floor is 0).
 
 ### Nudge Logic Priority:
-1.  **Inactivity Penalty Just Applied**: `"Lost X points and Y streak day(s) due to inactivity. Play today to start rebuilding! 🔥"`
+1.  **Inactivity Penalty Just Applied**: `"Lost Y streak day(s) due to inactivity. Play today to start rebuilding! 🔥"`
 2.  **New User (No stats)**: `"Book your first game to start your streak! 🔥"`
 3.  **Not Played Today**: `"Play today to keep your streak 🔥"`
 4.  **Rank 11+**: `"Play more to reach Top 10!"`

@@ -162,7 +162,7 @@ export class UserGamificationService {
       nudge,
       inactivityPenaltyApplied: (gamification as any)?.decayApplied || false,
       penaltyReason: (gamification as any)?.decayApplied
-        ? `Lost ${(gamification as any).pointsDeducted} points and ${(gamification as any).streakDeducted} streak day(s) due to inactivity.`
+        ? `Lost ${(gamification as any).streakDeducted} streak day(s) due to inactivity.`
         : null,
     };
   }
@@ -236,7 +236,7 @@ export class UserGamificationService {
     if (!stats) return 'Book your first game to start your streak! 🔥';
 
     if ((stats as any)?.decayApplied) {
-      return `Lost ${(stats as any).pointsDeducted} points and ${(stats as any).streakDeducted} streak day(s) due to inactivity. Play today to start rebuilding! 🔥`;
+      return `Lost ${(stats as any).streakDeducted} streak day(s) due to inactivity. Play today to start rebuilding! 🔥`;
     }
 
     const lastPlayed = stats.lastPlayedDate;
@@ -262,23 +262,33 @@ export class UserGamificationService {
   }
 
   async handleNoShow(userId: string, bookingId: string) {
-    const pointsToDeduct = 30; // 30 pts penalty
+    const pointsToDeduct = 5; // 5 pts penalty
 
-    const result = await this.prisma.userGamification.upsert({
+    const gamification = await this.prisma.userGamification.findUnique({
       where: { authId: userId },
-      create: {
-        authId: userId,
-        streak: 0,
-        points: -pointsToDeduct,
-        totalMatches: 0,
-        totalHours: 0,
-        lastPlayedDate: new Date(),
-      },
-      update: {
-        streak: 0,
-        points: { decrement: pointsToDeduct },
-      },
     });
+
+    let result;
+    if (!gamification) {
+      result = await this.prisma.userGamification.create({
+        data: {
+          authId: userId,
+          streak: 0,
+          points: 0,
+          totalMatches: 0,
+          totalHours: 0,
+          lastPlayedDate: new Date(),
+        },
+      });
+    } else {
+      result = await this.prisma.userGamification.update({
+        where: { authId: userId },
+        data: {
+          streak: 0,
+          points: Math.max(0, gamification.points - pointsToDeduct),
+        },
+      });
+    }
 
     // ── Push Notification (Penalty) ──
     this.triggerPushNotification(
@@ -313,13 +323,11 @@ export class UserGamificationService {
     if (diffDays > 5) {
       const periods = Math.floor(diffDays / 5);
       if (periods > 0) {
-        const pointsDeduction = periods * 5;
         const streakDeduction = periods;
 
         const updated = await this.prisma.userGamification.update({
           where: { authId: userId },
           data: {
-            points: { decrement: pointsDeduction },
             streak: { set: Math.max(0, gamification.streak - streakDeduction) },
             lastPlayedDate: new Date(lastPlayed.getTime() + periods * 5 * 24 * 60 * 60 * 1000),
           },
@@ -328,18 +336,17 @@ export class UserGamificationService {
         // ── Push Notification (Inactivity Decay) ──
         this.triggerPushNotification(
           userId,
-          'Streak & Points Reduced 😔',
-          `Lost ${pointsDeduction} points and ${streakDeduction} streak day(s) due to inactivity.`,
+          'Streak Reduced 😔',
+          `Lost ${streakDeduction} streak day(s) due to inactivity.`,
           {
             type: 'GAMIFICATION_DECAY',
-            pointsDeducted: pointsDeduction,
             streakDeducted: streakDeduction,
           },
         );
 
         // Attach temporary properties for getOverallStats response
         (updated as any).decayApplied = true;
-        (updated as any).pointsDeducted = pointsDeduction;
+        (updated as any).pointsDeducted = 0;
         (updated as any).streakDeducted = streakDeduction;
 
         return updated;
@@ -351,20 +358,30 @@ export class UserGamificationService {
   async handleBookingCancellation(userId: string) {
     const pointsToDeduct = 2; // 2 pts penalty
 
-    const result = await this.prisma.userGamification.upsert({
+    const gamification = await this.prisma.userGamification.findUnique({
       where: { authId: userId },
-      create: {
-        authId: userId,
-        streak: 0,
-        points: -pointsToDeduct,
-        totalMatches: 0,
-        totalHours: 0,
-        lastPlayedDate: new Date(),
-      },
-      update: {
-        points: { decrement: pointsToDeduct },
-      },
     });
+
+    let result;
+    if (!gamification) {
+      result = await this.prisma.userGamification.create({
+        data: {
+          authId: userId,
+          streak: 0,
+          points: 0,
+          totalMatches: 0,
+          totalHours: 0,
+          lastPlayedDate: new Date(),
+        },
+      });
+    } else {
+      result = await this.prisma.userGamification.update({
+        where: { authId: userId },
+        data: {
+          points: Math.max(0, gamification.points - pointsToDeduct),
+        },
+      });
+    }
 
     // ── Push Notification (Cancellation Penalty) ──
     this.triggerPushNotification(

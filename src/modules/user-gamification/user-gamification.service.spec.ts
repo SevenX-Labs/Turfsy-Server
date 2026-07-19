@@ -61,22 +61,52 @@ describe('UserGamificationService', () => {
   });
 
   describe('handleBookingCancellation', () => {
-    it('should deduct 2 points on cancellation', async () => {
-      mockPrisma.userGamification.upsert.mockImplementation((args) => {
+    it('should deduct 2 points on cancellation but floor at 0', async () => {
+      const mockStats = { authId: 'user-1', points: 1, streak: 5 };
+      mockPrisma.userGamification.findUnique.mockResolvedValue(mockStats);
+      mockPrisma.userGamification.update.mockImplementation((args) => {
         return {
-          authId: args.create.authId,
-          points: args.create.points,
+          authId: 'user-1',
+          points: args.data.points,
         };
       });
 
       const result = await service.handleBookingCancellation('user-1');
 
-      expect(result.points).toBe(-2);
-      expect(mockPrisma.userGamification.upsert).toHaveBeenCalledWith(
+      expect(result.points).toBe(0); // Floored to 0
+      expect(mockPrisma.userGamification.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { authId: 'user-1' },
-          update: {
-            points: { decrement: 2 },
+          data: {
+            points: 0,
+          },
+        }),
+      );
+    });
+  });
+
+  describe('handleNoShow', () => {
+    it('should deduct 5 points and break streak, flooring points at 0', async () => {
+      const mockStats = { authId: 'user-1', points: 4, streak: 5 };
+      mockPrisma.userGamification.findUnique.mockResolvedValue(mockStats);
+      mockPrisma.userGamification.update.mockImplementation((args) => {
+        return {
+          authId: 'user-1',
+          streak: args.data.streak,
+          points: args.data.points,
+        };
+      });
+
+      const result = await service.handleNoShow('user-1', 'booking-1');
+
+      expect(result.streak).toBe(0);
+      expect(result.points).toBe(0); // Floored to 0
+      expect(mockPrisma.userGamification.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { authId: 'user-1' },
+          data: {
+            streak: 0,
+            points: 0,
           },
         }),
       );
@@ -102,7 +132,7 @@ describe('UserGamificationService', () => {
       expect(mockPrisma.userGamification.update).not.toHaveBeenCalled();
     });
 
-    it('should decay points by 5 and streak by 1 for 6 days of inactivity (1 period)', async () => {
+    it('should decay streak by 1 for 6 days of inactivity (1 period) without deducting points', async () => {
       const lastPlayedDate = new Date();
       lastPlayedDate.setDate(lastPlayedDate.getDate() - 6); // 6 days ago
       const mockStats = {
@@ -117,26 +147,25 @@ describe('UserGamificationService', () => {
         return {
           authId: 'user-1',
           streak: Math.max(0, mockStats.streak - 1),
-          points: mockStats.points - 5,
+          points: mockStats.points,
         };
       });
 
       const result = await service.getUserStats('user-1');
 
       expect(result.streak).toBe(4);
-      expect(result.points).toBe(95);
+      expect(result.points).toBe(100); // Unchanged
       expect(mockPrisma.userGamification.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { authId: 'user-1' },
           data: expect.objectContaining({
-            points: { decrement: 5 },
             streak: { set: 4 },
           }),
         }),
       );
     });
 
-    it('should decay progressively for multiple periods (e.g. 12 days -> 2 periods)', async () => {
+    it('should decay streak progressively for multiple periods (e.g. 12 days -> 2 periods) without deducting points', async () => {
       const lastPlayedDate = new Date();
       lastPlayedDate.setDate(lastPlayedDate.getDate() - 12); // 12 days ago
       const mockStats = {
@@ -151,19 +180,18 @@ describe('UserGamificationService', () => {
         return {
           authId: 'user-1',
           streak: Math.max(0, mockStats.streak - 2),
-          points: mockStats.points - 10,
+          points: mockStats.points,
         };
       });
 
       const result = await service.getUserStats('user-1');
 
       expect(result.streak).toBe(3);
-      expect(result.points).toBe(90);
+      expect(result.points).toBe(100); // Unchanged
       expect(mockPrisma.userGamification.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { authId: 'user-1' },
           data: expect.objectContaining({
-            points: { decrement: 10 },
             streak: { set: 3 },
           }),
         }),
