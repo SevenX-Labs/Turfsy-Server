@@ -28,7 +28,9 @@ All endpoints are protected and require a valid `Bearer Token` belonging to a `U
           "points": 450
         }
       },
-      "nudge": "Play today to keep your streak 🔥"
+      "nudge": "Play today to keep your streak 🔥",
+      "inactivityPenaltyApplied": false,
+      "penaltyReason": null
     }
     ```
 
@@ -112,8 +114,28 @@ All endpoints are protected and require a valid `Bearer Token` belonging to a `U
 *   If a user cancels a CONFIRMED or PENDING booking, **2 Points** are deducted.
 
 ### Nudge Logic Priority:
-1.  **New User (No stats)**: "Book your first game to start your streak! 🔥"
-2.  **Not Played Today**: "Play today to keep your streak 🔥"
-3.  **Rank 11+**: "Play more to reach Top 10!"
-4.  **Rank 4-10**: "You are close to the Top 3! Keep going! 🏆"
-5.  **Top 3**: "Great job! You are among the top players! 🌟"
+1.  **Inactivity Penalty Just Applied**: `"Lost X points and Y streak day(s) due to inactivity. Play today to start rebuilding! 🔥"`
+2.  **New User (No stats)**: `"Book your first game to start your streak! 🔥"`
+3.  **Not Played Today**: `"Play today to keep your streak 🔥"`
+4.  **Rank 11+**: `"Play more to reach Top 10!"`
+5.  **Rank 4-10**: `"You are close to the Top 3! Keep going! 🏆"`
+6.  **Top 3**: `"Great job! You are among the top players! 🌟"`
+
+---
+
+## 📱 5. Frontend Integration & UI Guidelines
+
+### Displaying Inactivity Warnings / Popups:
+*   When calling `GET /api/v3/user-gamification/overall`, check the response fields:
+    *   If `inactivityPenaltyApplied` is `true`, display a prominent dialog, toast, or banner to the user.
+    *   Show the text from `penaltyReason` (e.g., *"Lost 5 points and 1 streak day(s) due to inactivity."*).
+    *   This provides transparent feedback so the user knows exactly why their streak/points decreased.
+
+### Handling Booking Cancellations:
+*   Upon a user successfully calling the cancel booking endpoint, display a toast indicating that **2 Points** have been deducted due to the cancellation.
+
+### Push Notifications:
+*   Listen for push notifications with:
+    *   `type`: `GAMIFICATION_DECAY` (contains `pointsDeducted` and `streakDeducted`)
+    *   `type`: `GAMIFICATION_PENALTY` (contains `pointsDeducted`)
+*   Use these payloads to dynamically update local state or trigger a reload of the gamification stats page.

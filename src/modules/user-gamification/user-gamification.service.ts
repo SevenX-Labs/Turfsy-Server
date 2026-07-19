@@ -160,6 +160,10 @@ export class UserGamificationService {
         },
       },
       nudge,
+      inactivityPenaltyApplied: (gamification as any)?.decayApplied || false,
+      penaltyReason: (gamification as any)?.decayApplied
+        ? `Lost ${(gamification as any).pointsDeducted} points and ${(gamification as any).streakDeducted} streak day(s) due to inactivity.`
+        : null,
     };
   }
 
@@ -230,6 +234,10 @@ export class UserGamificationService {
   async getNudgeMessage(userId: string, prefetchedStats?: any) {
     const stats = prefetchedStats || (await this.getUserStats(userId));
     if (!stats) return 'Book your first game to start your streak! 🔥';
+
+    if ((stats as any)?.decayApplied) {
+      return `Lost ${(stats as any).pointsDeducted} points and ${(stats as any).streakDeducted} streak day(s) due to inactivity. Play today to start rebuilding! 🔥`;
+    }
 
     const lastPlayed = stats.lastPlayedDate;
     const now = new Date();
@@ -316,6 +324,24 @@ export class UserGamificationService {
             lastPlayedDate: new Date(lastPlayed.getTime() + periods * 5 * 24 * 60 * 60 * 1000),
           },
         });
+
+        // ── Push Notification (Inactivity Decay) ──
+        this.triggerPushNotification(
+          userId,
+          'Streak & Points Reduced 😔',
+          `Lost ${pointsDeduction} points and ${streakDeduction} streak day(s) due to inactivity.`,
+          {
+            type: 'GAMIFICATION_DECAY',
+            pointsDeducted: pointsDeduction,
+            streakDeducted: streakDeduction,
+          },
+        );
+
+        // Attach temporary properties for getOverallStats response
+        (updated as any).decayApplied = true;
+        (updated as any).pointsDeducted = pointsDeduction;
+        (updated as any).streakDeducted = streakDeduction;
+
         return updated;
       }
     }
