@@ -186,6 +186,7 @@ export class TurfsController {
 
   // 4. Basic Search (Text based)
   @Get('search')
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async searchTurfs(
     @Query('q') q: string,
@@ -200,6 +201,7 @@ export class TurfsController {
 
   // 5. Advanced Filtration & Sorting
   @Get('filter')
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async filterTurfs(
     @Query('city') city?: string,
