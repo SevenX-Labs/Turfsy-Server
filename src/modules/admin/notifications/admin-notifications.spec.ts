@@ -31,7 +31,11 @@ describe('AdminNotifications', () => {
       create: jest.fn().mockResolvedValue({}),
     },
     admin: {
-      findMany: jest.fn().mockResolvedValue([{ id: 'admin1', name: 'Admin Name', email: 'admin@test.com' }]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'admin1', name: 'Admin Name', email: 'admin@test.com' },
+        ]),
     },
     adminActionLog: {
       create: jest.fn().mockResolvedValue({}),
@@ -59,11 +63,13 @@ describe('AdminNotifications', () => {
         },
       ],
     })
-    .overrideGuard(JwtAdminGuard)
-    .useValue({ canActivate: () => true })
-    .compile();
+      .overrideGuard(JwtAdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
-    controller = module.get<AdminNotificationsController>(AdminNotificationsController);
+    controller = module.get<AdminNotificationsController>(
+      AdminNotificationsController,
+    );
     service = module.get<AdminNotificationsService>(AdminNotificationsService);
   });
 

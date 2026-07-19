@@ -9,7 +9,7 @@ import { SecurityExceptionFilter } from './common/filters/security-exception.fil
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const compression = require('compression');
 
 async function bootstrap() {
@@ -47,7 +47,8 @@ async function bootstrap() {
     'http://localhost:8081',
   ];
 
-  const corsOrigins = allowedOrigins.length > 0 ? allowedOrigins : fallbackOrigins;
+  const corsOrigins =
+    allowedOrigins.length > 0 ? allowedOrigins : fallbackOrigins;
 
   app.enableCors({
     origin: (requestOrigin, callback) => {

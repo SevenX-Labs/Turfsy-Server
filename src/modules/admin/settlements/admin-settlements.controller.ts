@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Param, Query, Body, UseGuards, Req, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { AdminSettlementsService } from './admin-settlements.service';
 import { JwtAdminGuard } from '../auth/guards/jwt-admin.guard';
 import { CreateSettlementDto } from './dto/create-settlement.dto';
@@ -30,7 +41,10 @@ export class AdminSettlementsController {
   async exportCsv(@Res() res: Response) {
     const csv = await this.settlementsService.exportSettlementsCsv();
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=settlements.csv');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=settlements.csv',
+    );
     return res.status(200).send(csv);
   }
 
@@ -39,7 +53,10 @@ export class AdminSettlementsController {
   async exportPdf(@Res() res: Response) {
     const buffer = await this.settlementsService.exportSettlementsPdf();
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=settlements_report.pdf');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=settlements_report.pdf',
+    );
     return res.status(200).send(buffer);
   }
 

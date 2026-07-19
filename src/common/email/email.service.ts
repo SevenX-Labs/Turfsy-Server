@@ -29,8 +29,12 @@ export class EmailService implements OnModuleInit {
       secure: false, // port 587 uses STARTTLS
       requireTLS: true,
       auth: {
-        user: this.configService.get<string>('MAIL_USER') || this.configService.get<string>('GMAIL_USER'),
-        pass: this.configService.get<string>('MAIL_PASS') || this.configService.get<string>('GMAIL_APP_PASSWORD'),
+        user:
+          this.configService.get<string>('MAIL_USER') ||
+          this.configService.get<string>('GMAIL_USER'),
+        pass:
+          this.configService.get<string>('MAIL_PASS') ||
+          this.configService.get<string>('GMAIL_APP_PASSWORD'),
       },
       connectionTimeout: 10000, // 10s connect timeout
       socketTimeout: 15000, // 15s socket timeout
@@ -40,7 +44,11 @@ export class EmailService implements OnModuleInit {
     (smtpOptions as { dnsLookup?: any }).dnsLookup = (
       hostname: string,
       options: dns.LookupOneOptions,
-      callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
+      callback: (
+        err: NodeJS.ErrnoException | null,
+        address: string,
+        family: number,
+      ) => void,
     ) => {
       dns.lookup(hostname, { ...options, family: 4 }, callback);
     };

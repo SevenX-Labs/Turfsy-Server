@@ -53,13 +53,18 @@ export class AdminSettingsService {
 
     // Filter properties to only update allowed ones
     const updateData: any = {};
-    if (dto.maintenanceMode !== undefined) updateData.maintenanceMode = dto.maintenanceMode;
-    if (dto.bookingWindowDays !== undefined) updateData.bookingWindowDays = dto.bookingWindowDays;
+    if (dto.maintenanceMode !== undefined)
+      updateData.maintenanceMode = dto.maintenanceMode;
+    if (dto.bookingWindowDays !== undefined)
+      updateData.bookingWindowDays = dto.bookingWindowDays;
     if (dto.termsUrl !== undefined) updateData.termsUrl = dto.termsUrl;
     if (dto.privacyUrl !== undefined) updateData.privacyUrl = dto.privacyUrl;
-    if (dto.contactEmail !== undefined) updateData.contactEmail = dto.contactEmail;
-    if (dto.contactPhone !== undefined) updateData.contactPhone = dto.contactPhone;
-    if (dto.notificationTemplates !== undefined) updateData.notificationTemplates = dto.notificationTemplates;
+    if (dto.contactEmail !== undefined)
+      updateData.contactEmail = dto.contactEmail;
+    if (dto.contactPhone !== undefined)
+      updateData.contactPhone = dto.contactPhone;
+    if (dto.notificationTemplates !== undefined)
+      updateData.notificationTemplates = dto.notificationTemplates;
 
     const updated = await this.prisma.platformConfig.update({
       where: { id: configId },

@@ -8,7 +8,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/services/cache.service';
 import { CreateTurfDto } from '../owner-profile/dto/create-turf.dto';
 import { UpdateTurfDto } from '../owner-profile/dto/update-turf.dto';
-import { TurfStatus, SportsType, TurfPaymentPreference, BookingApprovalType } from '@prisma/client';
+import {
+  TurfStatus,
+  SportsType,
+  TurfPaymentPreference,
+  BookingApprovalType,
+} from '@prisma/client';
 
 @Injectable()
 export class TurfsService {
@@ -100,8 +105,12 @@ export class TurfsService {
         weekdayNightPrice: dto.weekdayNightPrice,
         weekendDayPrice: dto.weekendDayPrice,
         weekendNightPrice: dto.weekendNightPrice,
-        ...(dto.paymentPreferences !== undefined && { paymentPreferences: dto.paymentPreferences }),
-        ...(dto.bookingApprovalType !== undefined && { bookingApprovalType: dto.bookingApprovalType }),
+        ...(dto.paymentPreferences !== undefined && {
+          paymentPreferences: dto.paymentPreferences,
+        }),
+        ...(dto.bookingApprovalType !== undefined && {
+          bookingApprovalType: dto.bookingApprovalType,
+        }),
       },
     });
 
@@ -168,7 +177,10 @@ export class TurfsService {
             turf.groundDayUrl,
             turf.groundNightUrl,
           ].filter(Boolean),
-          rating: typeof turf.averageRating === 'number' ? Math.round(turf.averageRating * 10) / 10 : 0,
+          rating:
+            typeof turf.averageRating === 'number'
+              ? Math.round(turf.averageRating * 10) / 10
+              : 0,
           reviewCount: turf.totalReviews ?? 0,
         };
       })
@@ -254,7 +266,9 @@ export class TurfsService {
         ...(dto.weekendNightPrice !== undefined && {
           weekendNightPrice: dto.weekendNightPrice,
         }),
-        ...(dto.paymentPreferences !== undefined && { paymentPreferences: dto.paymentPreferences }),
+        ...(dto.paymentPreferences !== undefined && {
+          paymentPreferences: dto.paymentPreferences,
+        }),
         ...(dto.bookingApprovalType !== undefined && {
           bookingApprovalType: dto.bookingApprovalType,
         }),
@@ -425,7 +439,10 @@ export class TurfsService {
             turf.groundDayUrl,
             turf.groundNightUrl,
           ].filter(Boolean),
-          rating: typeof turf.averageRating === 'number' ? Math.round(turf.averageRating * 10) / 10 : 0,
+          rating:
+            typeof turf.averageRating === 'number'
+              ? Math.round(turf.averageRating * 10) / 10
+              : 0,
           reviewCount: turf.totalReviews ?? 0,
         }));
 
@@ -486,7 +503,10 @@ export class TurfsService {
       images: [turf.entranceUrl, turf.groundDayUrl, turf.groundNightUrl].filter(
         Boolean,
       ),
-      rating: typeof turf.averageRating === 'number' ? Math.round(turf.averageRating * 10) / 10 : 0,
+      rating:
+        typeof turf.averageRating === 'number'
+          ? Math.round(turf.averageRating * 10) / 10
+          : 0,
       reviewCount: turf.totalReviews ?? 0,
     }));
 
@@ -605,7 +625,10 @@ export class TurfsService {
           turf.groundDayUrl,
           turf.groundNightUrl,
         ].filter(Boolean),
-        rating: typeof turf.averageRating === 'number' ? Math.round(turf.averageRating * 10) / 10 : 0,
+        rating:
+          typeof turf.averageRating === 'number'
+            ? Math.round(turf.averageRating * 10) / 10
+            : 0,
         reviewCount: turf.totalReviews ?? 0,
       };
     });
@@ -664,5 +687,15 @@ export class TurfsService {
       success: true,
       message: 'Turf deleted successfully',
     };
+  }
+
+  async getDistinctCities() {
+    const results = await this.prisma.turf.findMany({
+      where: { status: 'ACTIVE' },
+      select: { city: true },
+      distinct: ['city'],
+      orderBy: { city: 'asc' },
+    });
+    return results.map((r) => r.city).filter(Boolean);
   }
 }

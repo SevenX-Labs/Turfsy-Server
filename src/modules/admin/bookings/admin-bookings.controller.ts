@@ -1,4 +1,13 @@
-import { Controller, Get, Patch, Param, Query, UseGuards, Req, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  Query,
+  UseGuards,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { AdminBookingsService } from './admin-bookings.service';
 import { JwtAdminGuard } from '../auth/guards/jwt-admin.guard';
 import { CurrentAdmin } from '../auth/decorators/admin.decorator';
@@ -23,7 +32,14 @@ export class AdminBookingsController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.bookingsService.listBookings({ search, bookingStatus, paymentStatus, refundStatus, page, limit });
+    return this.bookingsService.listBookings({
+      search,
+      bookingStatus,
+      paymentStatus,
+      refundStatus,
+      page,
+      limit,
+    });
   }
 
   @Get('stats')
@@ -41,7 +57,12 @@ export class AdminBookingsController {
     @Query('refundStatus') refundStatus: string,
     @Res() res: Response,
   ) {
-    const csv = await this.bookingsService.exportBookingsCsv({ search, bookingStatus, paymentStatus, refundStatus });
+    const csv = await this.bookingsService.exportBookingsCsv({
+      search,
+      bookingStatus,
+      paymentStatus,
+      refundStatus,
+    });
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=bookings.csv');
     return res.status(200).send(csv);
@@ -56,9 +77,17 @@ export class AdminBookingsController {
     @Query('refundStatus') refundStatus: string,
     @Res() res: Response,
   ) {
-    const buffer = await this.bookingsService.exportBookingsPdf({ search, bookingStatus, paymentStatus, refundStatus });
+    const buffer = await this.bookingsService.exportBookingsPdf({
+      search,
+      bookingStatus,
+      paymentStatus,
+      refundStatus,
+    });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=bookings_report.pdf');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=bookings_report.pdf',
+    );
     return res.status(200).send(buffer);
   }
 

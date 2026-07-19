@@ -235,8 +235,8 @@ export class UserGamificationService {
     const stats = prefetchedStats || (await this.getUserStats(userId));
     if (!stats) return 'Book your first game to start your streak! 🔥';
 
-    if ((stats as any)?.decayApplied) {
-      return `Lost ${(stats as any).streakDeducted} streak day(s) due to inactivity. Play today to start rebuilding! 🔥`;
+    if (stats?.decayApplied) {
+      return `Lost ${stats.streakDeducted} streak day(s) due to inactivity. Play today to start rebuilding! 🔥`;
     }
 
     const lastPlayed = stats.lastPlayedDate;
@@ -329,7 +329,9 @@ export class UserGamificationService {
           where: { authId: userId },
           data: {
             streak: { set: Math.max(0, gamification.streak - streakDeduction) },
-            lastPlayedDate: new Date(lastPlayed.getTime() + periods * 5 * 24 * 60 * 60 * 1000),
+            lastPlayedDate: new Date(
+              lastPlayed.getTime() + periods * 5 * 24 * 60 * 60 * 1000,
+            ),
           },
         });
 

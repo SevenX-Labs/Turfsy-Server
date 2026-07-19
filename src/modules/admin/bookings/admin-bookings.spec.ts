@@ -23,7 +23,7 @@ describe('AdminBookings', () => {
           startTime: '10:00',
           endTime: '11:00',
           turf: { name: 'Turf A' },
-          user: { phone: '+911234567890' }
+          user: { phone: '+911234567890' },
         },
       ]),
       findUnique: jest.fn().mockResolvedValue({ id: 'b1', amount: 800 }),
@@ -32,7 +32,9 @@ describe('AdminBookings', () => {
         { bookingStatus: 'COMPLETED', _count: { id: 85 } },
         { bookingStatus: 'CANCELLED', _count: { id: 5 } },
       ]),
-      update: jest.fn().mockResolvedValue({ id: 'b1', bookingStatus: 'NO_SHOW' }),
+      update: jest
+        .fn()
+        .mockResolvedValue({ id: 'b1', bookingStatus: 'NO_SHOW' }),
     },
     adminActionLog: {
       create: jest.fn().mockResolvedValue({}),
@@ -55,9 +57,9 @@ describe('AdminBookings', () => {
         },
       ],
     })
-    .overrideGuard(JwtAdminGuard)
-    .useValue({ canActivate: () => true })
-    .compile();
+      .overrideGuard(JwtAdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AdminBookingsController>(AdminBookingsController);
     service = module.get<AdminBookingsService>(AdminBookingsService);
@@ -82,7 +84,9 @@ describe('AdminBookings', () => {
   });
 
   it('should mark no-show', async () => {
-    const res = await controller.markNoShow('b1', { adminId: 'admin1' }, { ip: '127.0.0.1' } as any);
+    const res = await controller.markNoShow('b1', { adminId: 'admin1' }, {
+      ip: '127.0.0.1',
+    } as any);
     expect(res.success).toBe(true);
   });
 

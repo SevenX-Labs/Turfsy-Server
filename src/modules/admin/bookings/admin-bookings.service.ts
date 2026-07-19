@@ -113,7 +113,12 @@ export class AdminBookingsService {
     return { success: true, data: updated };
   }
 
-  async exportBookingsCsv(query: { search?: string; bookingStatus?: BookingStatus; paymentStatus?: PaymentStatus; refundStatus?: string }): Promise<string> {
+  async exportBookingsCsv(query: {
+    search?: string;
+    bookingStatus?: BookingStatus;
+    paymentStatus?: PaymentStatus;
+    refundStatus?: string;
+  }): Promise<string> {
     const where: any = {};
     if (query.bookingStatus) where.bookingStatus = query.bookingStatus;
     if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
@@ -145,8 +150,14 @@ export class AdminBookingsService {
       { label: 'Booking ID', value: 'id' },
       { label: 'Turf Name', value: 'turf.name' },
       { label: 'User Phone', value: 'user.phone' },
-      { label: 'Booking Date', value: (row: any) => row.bookingDate.toISOString().split('T')[0] },
-      { label: 'Slot', value: (row: any) => `${row.startTime} - ${row.endTime}` },
+      {
+        label: 'Booking Date',
+        value: (row: any) => row.bookingDate.toISOString().split('T')[0],
+      },
+      {
+        label: 'Slot',
+        value: (row: any) => `${row.startTime} - ${row.endTime}`,
+      },
       { label: 'Amount Paid', value: 'amount' },
       { label: 'Booking Status', value: 'bookingStatus' },
       { label: 'Payment Status', value: 'paymentStatus' },
@@ -158,7 +169,12 @@ export class AdminBookingsService {
     return json2csvParser.parse(bookings);
   }
 
-  async exportBookingsPdf(query: { search?: string; bookingStatus?: BookingStatus; paymentStatus?: PaymentStatus; refundStatus?: string }): Promise<Buffer> {
+  async exportBookingsPdf(query: {
+    search?: string;
+    bookingStatus?: BookingStatus;
+    paymentStatus?: PaymentStatus;
+    refundStatus?: string;
+  }): Promise<Buffer> {
     const where: any = {};
     if (query.bookingStatus) where.bookingStatus = query.bookingStatus;
     if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
@@ -188,7 +204,9 @@ export class AdminBookingsService {
     });
 
     return new Promise((resolve, reject) => {
-      const doc = new ((pdfkit as any).default || (pdfkit as any))({ margin: 50 });
+      const doc = new ((pdfkit as any).default || (pdfkit as any))({
+        margin: 50,
+      });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -198,7 +216,9 @@ export class AdminBookingsService {
       // Header
       doc.fontSize(20).text('Turfsy Bookings Report', { align: 'center' });
       doc.moveDown();
-      doc.fontSize(10).text(`Generated on: ${new Date().toLocaleString()}`, { align: 'right' });
+      doc.fontSize(10).text(`Generated on: ${new Date().toLocaleString()}`, {
+        align: 'right',
+      });
       doc.moveDown();
 
       // Table Header
@@ -211,7 +231,10 @@ export class AdminBookingsService {
       doc.text('Amount', 480, tableTop);
       doc.text('Status', 530, tableTop);
 
-      doc.moveTo(50, tableTop + 15).lineTo(580, tableTop + 15).stroke();
+      doc
+        .moveTo(50, tableTop + 15)
+        .lineTo(580, tableTop + 15)
+        .stroke();
 
       // Table Rows
       let y = tableTop + 25;
@@ -225,7 +248,11 @@ export class AdminBookingsService {
         doc.text(booking.id.slice(0, 8).toUpperCase(), 50, y);
         doc.text(booking.turf.name.slice(0, 18), 150, y);
         doc.text(booking.user.phone, 280, y);
-        doc.text(`${booking.bookingDate.toISOString().split('T')[0]} ${booking.startTime}`, 380, y);
+        doc.text(
+          `${booking.bookingDate.toISOString().split('T')[0]} ${booking.startTime}`,
+          380,
+          y,
+        );
         doc.text(`Rs. ${booking.amount}`, 480, y);
         doc.text(booking.bookingStatus, 530, y);
 
@@ -266,6 +293,4 @@ export class AdminBookingsService {
       data: statsMap,
     };
   }
-
-
 }

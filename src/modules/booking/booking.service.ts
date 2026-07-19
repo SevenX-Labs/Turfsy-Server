@@ -68,24 +68,34 @@ export class BookingService {
     @InjectQueue('booking-expiry') private readonly bookingExpiryQueue: Queue,
   ) {
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
-    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
-    const webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET') || '';
+    const keySecret =
+      this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+    const webhookSecret =
+      this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET') || '';
 
     // ── Validate Razorpay credentials at startup ──
     if (!keyId || !keySecret) {
-      throw new Error('FATAL: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set in environment variables.');
+      throw new Error(
+        'FATAL: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set in environment variables.',
+      );
     }
     if (!webhookSecret) {
-      throw new Error('FATAL: RAZORPAY_WEBHOOK_SECRET must be set in environment variables.');
+      throw new Error(
+        'FATAL: RAZORPAY_WEBHOOK_SECRET must be set in environment variables.',
+      );
     }
 
     this.isLiveMode = keyId.startsWith('rzp_live_');
     if (this.isLiveMode) {
       this.logger.log('Razorpay initialized in LIVE mode.');
     } else if (keyId.startsWith('rzp_test_')) {
-      this.logger.warn('Razorpay initialized in TEST mode. Do NOT use in production.');
+      this.logger.warn(
+        'Razorpay initialized in TEST mode. Do NOT use in production.',
+      );
     } else {
-      throw new Error('FATAL: RAZORPAY_KEY_ID must start with rzp_live_ or rzp_test_.');
+      throw new Error(
+        'FATAL: RAZORPAY_KEY_ID must start with rzp_live_ or rzp_test_.',
+      );
     }
 
     this.razorpay = new Razorpay({
@@ -93,8 +103,14 @@ export class BookingService {
       key_secret: keySecret,
     });
 
-    if (!this.configService.get<string>('QR_SECRET_KEY') || this.configService.get<string>('QR_SECRET_KEY') === 'your_super_secret_qr_key_here') {
-      throw new Error('FATAL: QR_SECRET_KEY must be set to a real secret value in environment variables.');
+    if (
+      !this.configService.get<string>('QR_SECRET_KEY') ||
+      this.configService.get<string>('QR_SECRET_KEY') ===
+        'your_super_secret_qr_key_here'
+    ) {
+      throw new Error(
+        'FATAL: QR_SECRET_KEY must be set to a real secret value in environment variables.',
+      );
     }
   }
 
@@ -230,11 +246,15 @@ export class BookingService {
           where: { id: authId },
           select: { fullCashDisabledUntil: true },
         });
-        if (user?.fullCashDisabledUntil && user.fullCashDisabledUntil > new Date()) {
+        if (
+          user?.fullCashDisabledUntil &&
+          user.fullCashDisabledUntil > new Date()
+        ) {
           throw new ForbiddenException({
             success: false,
             code: 'FULL_CASH_DISABLED',
-            message: 'Your Full Cash payment option is temporarily disabled due to repeated late cancellations. Please use an online payment method.',
+            message:
+              'Your Full Cash payment option is temporarily disabled due to repeated late cancellations. Please use an online payment method.',
           });
         }
       }
@@ -263,7 +283,9 @@ export class BookingService {
         },
       });
       if (maintenanceBlock) {
-        throw new BadRequestException('Turf is unavailable due to maintenance.');
+        throw new BadRequestException(
+          'Turf is unavailable due to maintenance.',
+        );
       }
 
       // ── Prevent past-date bookings ──
@@ -279,7 +301,9 @@ export class BookingService {
       const bookingDateCheck = new Date(bookingDate);
       bookingDateCheck.setHours(0, 0, 0, 0);
       if (bookingDateCheck > maxBookingDate) {
-        throw new BadRequestException('Cannot book slots beyond the 90-day window');
+        throw new BadRequestException(
+          'Cannot book slots beyond the 90-day window',
+        );
       }
 
       // ── Enforce minimum 1-hour advance booking for same-day ──
@@ -361,7 +385,9 @@ export class BookingService {
       // Validation 1: minAmount > maxAmount or negative platformFee
       for (const s of activeSlabs) {
         if (s.minAmount > s.maxAmount) {
-          throw new BadRequestException('minAmount cannot be greater than maxAmount');
+          throw new BadRequestException(
+            'minAmount cannot be greater than maxAmount',
+          );
         }
         if (s.platformFee < 0) {
           throw new BadRequestException('Platform Fee cannot be negative');
@@ -391,7 +417,9 @@ export class BookingService {
 
       // Validation 5: Multiple slabs match
       if (matchingSlabs.length > 1) {
-        throw new BadRequestException('Multiple slabs match this booking amount');
+        throw new BadRequestException(
+          'Multiple slabs match this booking amount',
+        );
       }
 
       const platformFee = matchingSlabs[0].platformFee;
@@ -399,12 +427,26 @@ export class BookingService {
 
       // Validate payment preference matching
       let isAllowed = false;
-      if (dto.paymentType === PaymentType.FULL_ONLINE && turf.paymentPreferences.includes('FULL_ONLINE')) isAllowed = true;
-      if (dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH && turf.paymentPreferences.includes('ADVANCE_PAYMENT')) isAllowed = true;
-      if (dto.paymentType === PaymentType.FULL_CASH && turf.paymentPreferences.includes('FULL_CASH')) isAllowed = true;
+      if (
+        dto.paymentType === PaymentType.FULL_ONLINE &&
+        turf.paymentPreferences.includes('FULL_ONLINE')
+      )
+        isAllowed = true;
+      if (
+        dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH &&
+        turf.paymentPreferences.includes('ADVANCE_PAYMENT')
+      )
+        isAllowed = true;
+      if (
+        dto.paymentType === PaymentType.FULL_CASH &&
+        turf.paymentPreferences.includes('FULL_CASH')
+      )
+        isAllowed = true;
 
       if (!isAllowed) {
-        throw new BadRequestException('The selected payment type is not allowed for this turf');
+        throw new BadRequestException(
+          'The selected payment type is not allowed for this turf',
+        );
       }
 
       const depositPercentage = 0.3; // fixed 30% advance deposit rate
@@ -427,7 +469,6 @@ export class BookingService {
         remainingAtTurf = amount;
         depositAmount = 0;
       }
-
 
       const slotLock = await this.acquireSlotLock(authId, {
         turfId: dto.turfId,
@@ -687,7 +728,9 @@ export class BookingService {
     maxBookingDate.setDate(maxBookingDate.getDate() + 90);
 
     if (bookingDate < today || bookingDate > maxBookingDate) {
-      throw new BadRequestException('Requested date is outside the 90-day booking window');
+      throw new BadRequestException(
+        'Requested date is outside the 90-day booking window',
+      );
     }
 
     const checkDate = new Date(bookingDate);
@@ -733,7 +776,9 @@ export class BookingService {
       where: {
         turfId,
         bookingDate,
-        bookingStatus: { notIn: ['CANCELLED', 'NO_SHOW' as any, 'REJECTED' as any] },
+        bookingStatus: {
+          notIn: ['CANCELLED', 'NO_SHOW' as any, 'REJECTED' as any],
+        },
       },
       select: { startTime: true, endTime: true },
       orderBy: { startTime: 'asc' },
@@ -884,7 +929,6 @@ export class BookingService {
     }
 
     try {
-
       // ── Layer 4: Amount from DB (NEVER from request) ──
       const amountInPaise = Math.round(booking.depositAmount * 100);
       if (amountInPaise <= 0) {
@@ -1496,7 +1540,10 @@ export class BookingService {
               razorpayOrderId: failedOrderId,
               ip,
               result: 'FAILED',
-              rejectionReason: failedPayment.error_description || failedPayment.error_code || 'Payment failed via webhook',
+              rejectionReason:
+                failedPayment.error_description ||
+                failedPayment.error_code ||
+                'Payment failed via webhook',
             });
             this.metrics.paymentFailedTotal.inc();
           }
@@ -1512,7 +1559,8 @@ export class BookingService {
         const bookingId = refundEntity.notes?.bookingId;
         const paymentId = refundEntity.payment_id;
 
-        const isValidUuid = typeof bookingId === 'string' && bookingId.length === 36;
+        const isValidUuid =
+          typeof bookingId === 'string' && bookingId.length === 36;
         const booking = await this.prisma.booking.findFirst({
           where: {
             OR: [
@@ -1548,7 +1596,8 @@ export class BookingService {
         const bookingId = refundEntity.notes?.bookingId;
         const paymentId = refundEntity.payment_id;
 
-        const isValidUuid = typeof bookingId === 'string' && bookingId.length === 36;
+        const isValidUuid =
+          typeof bookingId === 'string' && bookingId.length === 36;
         const booking = await this.prisma.booking.findFirst({
           where: {
             OR: [
@@ -1596,7 +1645,8 @@ export class BookingService {
         const bookingId = refundEntity.notes?.bookingId;
         const paymentId = refundEntity.payment_id;
 
-        const isValidUuid = typeof bookingId === 'string' && bookingId.length === 36;
+        const isValidUuid =
+          typeof bookingId === 'string' && bookingId.length === 36;
         const booking = await this.prisma.booking.findFirst({
           where: {
             OR: [
@@ -1608,7 +1658,10 @@ export class BookingService {
 
         if (booking) {
           // Revert status to SUCCESS or PENDING based on booking type
-          const targetStatus = booking.paymentType === 'HALF_ONLINE_HALF_CASH' ? 'PENDING' : 'SUCCESS';
+          const targetStatus =
+            booking.paymentType === 'HALF_ONLINE_HALF_CASH'
+              ? 'PENDING'
+              : 'SUCCESS';
           await this.prisma.booking.update({
             where: { id: booking.id },
             data: {
@@ -1956,7 +2009,9 @@ export class BookingService {
   // ═══════════════════════════════════════════════════════
   // ─── QR Code Check-In Helpers ───
   async generateCheckInQrCode(booking: any, windowEnd: Date): Promise<string> {
-    const secret = this.configService.get<string>('QR_SECRET_KEY') || 'default-qr-secret-key';
+    const secret =
+      this.configService.get<string>('QR_SECRET_KEY') ||
+      'default-qr-secret-key';
     const payload = {
       bookingId: booking.id,
       customerId: booking.userId,
@@ -1984,7 +2039,13 @@ export class BookingService {
     }
 
     const { payload, signature } = parsed;
-    if (!payload || !signature || !payload.bookingId || !payload.customerId || !payload.expiresAt) {
+    if (
+      !payload ||
+      !signature ||
+      !payload.bookingId ||
+      !payload.customerId ||
+      !payload.expiresAt
+    ) {
       throw new BadRequestException('Invalid QR code structure');
     }
 
@@ -2006,7 +2067,9 @@ export class BookingService {
 
     try {
       // Validate signature
-      const secret = this.configService.get<string>('QR_SECRET_KEY') || 'default-qr-secret-key';
+      const secret =
+        this.configService.get<string>('QR_SECRET_KEY') ||
+        'default-qr-secret-key';
       const payloadString = JSON.stringify(payload);
       const expectedSignature = crypto
         .createHmac('sha256', secret)
@@ -2047,7 +2110,9 @@ export class BookingService {
 
       // Verify booking belongs to scanned Turf owner
       if (booking.turf.owner.authId !== ownerAuthId) {
-        throw new ForbiddenException('Access denied. Scanned turf owner mismatch.');
+        throw new ForbiddenException(
+          'Access denied. Scanned turf owner mismatch.',
+        );
       }
 
       // Verify booking status is CONFIRMED
@@ -2108,7 +2173,10 @@ export class BookingService {
         bookingId,
       );
 
-      const checkInTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const checkInTime = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 
       // ── Trigger notifications ──
       // Customer: Checked in successfully.
@@ -2121,7 +2189,9 @@ export class BookingService {
           bookingId,
         },
       ).catch((err) =>
-        this.logger.error(`[NOTIFICATION] Failed to send customer check-in notification: ${err.message}`),
+        this.logger.error(
+          `[NOTIFICATION] Failed to send customer check-in notification: ${err.message}`,
+        ),
       );
 
       // Owner: Customer checked in.
@@ -2134,7 +2204,9 @@ export class BookingService {
           bookingId,
         },
       ).catch((err) =>
-        this.logger.error(`[NOTIFICATION] Failed to send owner check-in notification: ${err.message}`),
+        this.logger.error(
+          `[NOTIFICATION] Failed to send owner check-in notification: ${err.message}`,
+        ),
       );
 
       // Security log
@@ -2157,14 +2229,17 @@ export class BookingService {
     }
   }
 
-
-
   // ═══════════════════════════════════════════════════════
   // 5. MANUAL CHECK-IN (Owner Override)
   //    Layer 1: Owner + turf verification
   //    Layer 5: State Machine (CONFIRMED → COMPLETED)
   // ═══════════════════════════════════════════════════════
-  async manualCheckIn(ownerAuthId: string, bookingId: string, reason: string, ip?: string) {
+  async manualCheckIn(
+    ownerAuthId: string,
+    bookingId: string,
+    reason: string,
+    ip?: string,
+  ) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { turf: { include: { owner: true } } },
@@ -2178,7 +2253,9 @@ export class BookingService {
 
     // ── Layer 5: State Machine ──
     if (booking.bookingStatus !== 'CONFIRMED') {
-      throw new BadRequestException('Only confirmed bookings can be checked-in');
+      throw new BadRequestException(
+        'Only confirmed bookings can be checked-in',
+      );
     }
 
     // ── Time Window Check ──
@@ -2261,7 +2338,7 @@ export class BookingService {
         type: 'MANUAL_CHECKIN_CUSTOMER',
         bookingId: updated.id,
       },
-    ).catch(e => this.logger.error(`Notification error: ${e.message}`));
+    ).catch((e) => this.logger.error(`Notification error: ${e.message}`));
 
     // ── Notify Owner ──
     this.triggerPushNotification(
@@ -2272,7 +2349,7 @@ export class BookingService {
         type: 'MANUAL_CHECKIN_OWNER',
         bookingId: updated.id,
       },
-    ).catch(e => this.logger.error(`Notification error: ${e.message}`));
+    ).catch((e) => this.logger.error(`Notification error: ${e.message}`));
 
     return {
       success: true,
@@ -2336,9 +2413,13 @@ export class BookingService {
     // Status filtering
     if (status === 'upcoming') {
       where.bookingDate = { gte: new Date(todayStr) };
-      where.bookingStatus = { in: ['CONFIRMED', 'PENDING', 'PENDING_APPROVAL'] };
+      where.bookingStatus = {
+        in: ['CONFIRMED', 'PENDING', 'PENDING_APPROVAL'],
+      };
     } else if (status === 'past') {
-      where.bookingStatus = { in: ['COMPLETED', 'CANCELLED', 'NO_SHOW', 'REJECTED'] };
+      where.bookingStatus = {
+        in: ['COMPLETED', 'CANCELLED', 'NO_SHOW', 'REJECTED'],
+      };
     }
 
     // Date/Filter logic
@@ -2688,9 +2769,12 @@ export class BookingService {
 
       // 5. Cross-Actor Race checks (Section 4: Cross-Actor Race)
       if (booking.bookingStatus === 'REJECTED') {
-        const refundMsg = booking.refundStatus === 'PROCESSED'
-          ? 'Your refund has been processed.'
-          : (booking.refundStatus === 'FAILED' ? 'Please contact support regarding your refund.' : 'Your refund has been initiated.');
+        const refundMsg =
+          booking.refundStatus === 'PROCESSED'
+            ? 'Your refund has been processed.'
+            : booking.refundStatus === 'FAILED'
+              ? 'Please contact support regarding your refund.'
+              : 'Your refund has been initiated.';
         return {
           type: 'CROSS_ACTOR_LOCKED' as const,
           success: true,
@@ -2719,12 +2803,14 @@ export class BookingService {
         (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
 
       if (hoursUntilSlot <= 0) {
-        throw new BadRequestException('Cannot cancel booking after slot start time');
+        throw new BadRequestException(
+          'Cannot cancel booking after slot start time',
+        );
       }
 
       // 7. Calculate Refund Amount
       let refundAmount = 0;
-      let newPaymentStatus: PaymentStatus =
+      const newPaymentStatus: PaymentStatus =
         booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
       let newRefundStatus: RefundStatus = 'NONE';
 
@@ -2858,9 +2944,11 @@ export class BookingService {
     }
 
     // Phase 2: Call Razorpay *outside* the transaction lock
-    const { booking, updated, refundAmount, newRefundStatus, hasPaidOnline } = transactionResult;
+    const { booking, updated, refundAmount, newRefundStatus, hasPaidOnline } =
+      transactionResult;
     let finalRefundStatus: RefundStatus = newRefundStatus;
-    let finalPaymentStatus: PaymentStatus = booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
+    let finalPaymentStatus: PaymentStatus =
+      booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
     let razorpayRefundId: string | null = null;
     let finalBooking = updated;
 
@@ -2880,7 +2968,8 @@ export class BookingService {
 
         razorpayRefundId = refund.id;
         finalPaymentStatus = 'REFUNDED' as PaymentStatus;
-        finalRefundStatus = refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
+        finalRefundStatus =
+          refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
 
         // Update with details outside lock
         finalBooking = await this.prisma.booking.update({
@@ -2983,9 +3072,13 @@ export class BookingService {
       success: true,
       message: finalMessage,
       lateCancellation: transactionResult.lateCancellation || undefined,
-      remainingBeforeRestriction: transactionResult.lateCancellation ? transactionResult.remainingBeforeRestriction : undefined,
+      remainingBeforeRestriction: transactionResult.lateCancellation
+        ? transactionResult.remainingBeforeRestriction
+        : undefined,
       fullCashDisabled: transactionResult.fullCashDisabled || undefined,
-      disabledUntil: transactionResult.disabledUntil ? transactionResult.disabledUntil.toISOString() : undefined,
+      disabledUntil: transactionResult.disabledUntil
+        ? transactionResult.disabledUntil.toISOString()
+        : undefined,
       data: {
         ...finalBooking,
         displayId: this.formatBookingId(bookingId),
@@ -3000,11 +3093,15 @@ export class BookingService {
       select: { fullCashDisabledUntil: true },
     });
 
-    if (user?.fullCashDisabledUntil && user.fullCashDisabledUntil > new Date()) {
+    if (
+      user?.fullCashDisabledUntil &&
+      user.fullCashDisabledUntil > new Date()
+    ) {
       return {
         fullCashEnabled: false,
         disabledUntil: user.fullCashDisabledUntil.toISOString(),
-        reason: 'Due to 3 late cancellations within 90 days, your Full Cash payment option has been disabled for 30 days.',
+        reason:
+          'Due to 3 late cancellations within 90 days, your Full Cash payment option has been disabled for 30 days.',
       };
     }
 
@@ -3094,7 +3191,9 @@ export class BookingService {
             bookingId: booking.id,
           },
         ).catch((err) =>
-          this.logger.error(`[NOTIFICATION] Failed to notify customer about no-show: ${err.message}`),
+          this.logger.error(
+            `[NOTIFICATION] Failed to notify customer about no-show: ${err.message}`,
+          ),
         );
 
         // ── Notify Owner ──
@@ -3108,7 +3207,9 @@ export class BookingService {
               bookingId: booking.id,
             },
           ).catch((err) =>
-            this.logger.error(`[NOTIFICATION] Failed to notify owner about no-show: ${err.message}`),
+            this.logger.error(
+              `[NOTIFICATION] Failed to notify owner about no-show: ${err.message}`,
+            ),
           );
         }
       }
@@ -3372,7 +3473,10 @@ export class BookingService {
           this.logger.error(`Failed to generate QR code: ${err.message}`);
         }
       }
-    } else if (booking.bookingStatus === 'CANCELLED' || booking.bookingStatus === 'REJECTED') {
+    } else if (
+      booking.bookingStatus === 'CANCELLED' ||
+      booking.bookingStatus === 'REJECTED'
+    ) {
       qrStatus = 'CANCELLED';
       qrMessage = 'Booking cancelled/rejected.';
     } else if (booking.bookingStatus === 'NO_SHOW') {
@@ -3676,7 +3780,9 @@ export class BookingService {
       _count: { rating: true },
     });
 
-    const newAvg = aggregations._avg.rating ? Math.round(aggregations._avg.rating * 10) / 10 : 0;
+    const newAvg = aggregations._avg.rating
+      ? Math.round(aggregations._avg.rating * 10) / 10
+      : 0;
     const newCount = aggregations._count.rating ?? 0;
 
     await this.prisma.turf.update({
@@ -3989,8 +4095,6 @@ export class BookingService {
     return new Date(`${dateStr}T${timeStr}:00+05:30`);
   }
 
-
-
   /**
    * Layer 10: Strip HTML tags from user input to prevent XSS
    */
@@ -4234,7 +4338,9 @@ export class BookingService {
           userId: ownerAuthId,
           bookingId,
         });
-        throw new ForbiddenException('You do not own the turf for this booking');
+        throw new ForbiddenException(
+          'You do not own the turf for this booking',
+        );
       }
 
       // 4. Duplicate checks (Section 3: Same-Actor Duplicate Request)
@@ -4262,18 +4368,21 @@ export class BookingService {
           bookingStatus: booking.bookingStatus,
           refundStatus: booking.refundStatus,
           resolvedBy: booking.resolvedBy,
-          message: 'This booking was already cancelled by the customer before your rejection was processed.',
+          message:
+            'This booking was already cancelled by the customer before your rejection was processed.',
         };
       }
 
       // 6. State Machine checks
       if (booking.bookingStatus !== 'PENDING_APPROVAL') {
-        throw new BadRequestException('Booking is not in PENDING_APPROVAL state');
+        throw new BadRequestException(
+          'Booking is not in PENDING_APPROVAL state',
+        );
       }
 
       // 7. Calculate Refund Amount
       let refundAmount = 0;
-      let newPaymentStatus: PaymentStatus =
+      const newPaymentStatus: PaymentStatus =
         booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
       let newRefundStatus: RefundStatus = 'NONE';
 
@@ -4344,9 +4453,11 @@ export class BookingService {
     }
 
     // Phase 2: Call Razorpay *outside* the transaction lock
-    const { booking, updated, refundAmount, newRefundStatus, hasPaidOnline } = transactionResult;
+    const { booking, updated, refundAmount, newRefundStatus, hasPaidOnline } =
+      transactionResult;
     let finalRefundStatus: RefundStatus = newRefundStatus;
-    let finalPaymentStatus: PaymentStatus = booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
+    let finalPaymentStatus: PaymentStatus =
+      booking.paymentStatus === 'PENDING' ? 'FAILED' : booking.paymentStatus;
     let razorpayRefundId: string | null = null;
     let finalBooking = updated;
 
@@ -4366,7 +4477,8 @@ export class BookingService {
 
         razorpayRefundId = refund.id;
         finalPaymentStatus = 'REFUNDED' as PaymentStatus;
-        finalRefundStatus = refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
+        finalRefundStatus =
+          refund.status === 'processed' ? 'PROCESSED' : 'INITIATED';
 
         // Update with details outside lock
         finalBooking = await this.prisma.booking.update({
@@ -4429,7 +4541,6 @@ export class BookingService {
       data: finalBooking,
     };
   }
-
 
   private async triggerPushNotification(
     userId: string,

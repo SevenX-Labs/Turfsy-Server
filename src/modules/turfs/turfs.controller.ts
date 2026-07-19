@@ -16,7 +16,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import {
   FileFieldsInterceptor,
@@ -355,6 +355,13 @@ export class TurfsController {
       turfId,
       body.status,
     );
+  }
+
+  @Get('cities')
+  @SkipThrottle()
+  async getCities() {
+    const cities = await this.turfsService.getDistinctCities();
+    return { success: true, data: cities };
   }
 
   // 5. Get Turf Details (Consumer View)

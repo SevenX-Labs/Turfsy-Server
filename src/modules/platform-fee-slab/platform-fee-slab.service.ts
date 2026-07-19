@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSlabDto } from './dto/create-slab.dto';
 import { UpdateSlabDto } from './dto/update-slab.dto';
@@ -15,7 +19,9 @@ export class PlatformFeeSlabService {
     excludeId?: string,
   ) {
     if (minAmount > maxAmount) {
-      throw new BadRequestException('minAmount cannot be greater than maxAmount');
+      throw new BadRequestException(
+        'minAmount cannot be greater than maxAmount',
+      );
     }
     if (platformFee < 0) {
       throw new BadRequestException('Platform Fee cannot be negative');
@@ -30,14 +36,21 @@ export class PlatformFeeSlabService {
         },
       });
       if (overlapping) {
-        throw new BadRequestException('Slab ranges overlap with an existing active slab');
+        throw new BadRequestException(
+          'Slab ranges overlap with an existing active slab',
+        );
       }
     }
   }
 
   async create(dto: CreateSlabDto) {
     const isActive = dto.isActive ?? true;
-    await this.validateSlabRange(dto.minAmount, dto.maxAmount, dto.platformFee, isActive);
+    await this.validateSlabRange(
+      dto.minAmount,
+      dto.maxAmount,
+      dto.platformFee,
+      isActive,
+    );
 
     return this.prisma.platformFeeSlab.create({
       data: {
@@ -75,12 +88,22 @@ export class PlatformFeeSlabService {
   async update(id: string, dto: UpdateSlabDto) {
     const existing = await this.findOne(id);
 
-    const minAmount = dto.minAmount !== undefined ? dto.minAmount : existing.minAmount;
-    const maxAmount = dto.maxAmount !== undefined ? dto.maxAmount : existing.maxAmount;
-    const platformFee = dto.platformFee !== undefined ? dto.platformFee : existing.platformFee;
-    const isActive = dto.isActive !== undefined ? dto.isActive : existing.isActive;
+    const minAmount =
+      dto.minAmount !== undefined ? dto.minAmount : existing.minAmount;
+    const maxAmount =
+      dto.maxAmount !== undefined ? dto.maxAmount : existing.maxAmount;
+    const platformFee =
+      dto.platformFee !== undefined ? dto.platformFee : existing.platformFee;
+    const isActive =
+      dto.isActive !== undefined ? dto.isActive : existing.isActive;
 
-    await this.validateSlabRange(minAmount, maxAmount, platformFee, isActive, id);
+    await this.validateSlabRange(
+      minAmount,
+      maxAmount,
+      platformFee,
+      isActive,
+      id,
+    );
 
     return this.prisma.platformFeeSlab.update({
       where: { id },

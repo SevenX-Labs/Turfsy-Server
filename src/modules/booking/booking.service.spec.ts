@@ -10,7 +10,11 @@ import { NotificationsService } from '../../common/notifications/notifications.s
 import { MetricsService } from '../../common/metrics/metrics.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { getQueueToken } from '@nestjs/bullmq';
-import { BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import { PaymentType, TurfPaymentPreference } from '@prisma/client';
 import * as crypto from 'crypto';
 
@@ -163,7 +167,9 @@ describe('BookingService - Platform Fee Slabs', () => {
         mockQueue as any,
         mockQueue as any,
       );
-    }).toThrow('FATAL: QR_SECRET_KEY must be set to a real secret value in environment variables.');
+    }).toThrow(
+      'FATAL: QR_SECRET_KEY must be set to a real secret value in environment variables.',
+    );
 
     // Restore
     mockConfigService.get = originalGet;
@@ -256,7 +262,10 @@ describe('BookingService - Platform Fee Slabs', () => {
     });
 
     it('should calculate correct amounts for ADVANCE_PAYMENT preference (30% deposit)', async () => {
-      const advanceTurf = { ...dummyTurf, paymentPreference: TurfPaymentPreference.ADVANCE_PAYMENT };
+      const advanceTurf = {
+        ...dummyTurf,
+        paymentPreference: TurfPaymentPreference.ADVANCE_PAYMENT,
+      };
       mockPrisma.turf.findUnique.mockResolvedValue(advanceTurf);
       jest.spyOn(service as any, 'calculatePrice').mockReturnValue(1200);
 
@@ -277,7 +286,10 @@ describe('BookingService - Platform Fee Slabs', () => {
     });
 
     it('should calculate correct amounts for FULL_CASH preference', async () => {
-      const cashTurf = { ...dummyTurf, paymentPreference: TurfPaymentPreference.FULL_CASH };
+      const cashTurf = {
+        ...dummyTurf,
+        paymentPreference: TurfPaymentPreference.FULL_CASH,
+      };
       mockPrisma.turf.findUnique.mockResolvedValue(cashTurf);
       jest.spyOn(service as any, 'calculatePrice').mockReturnValue(1200);
 
@@ -447,13 +459,16 @@ describe('BookingService - Platform Fee Slabs', () => {
         deleteMany: jest.fn(),
       };
       // We also mock bookingSplit
-      (mockPrisma as any).bookingSplit = {
+      mockPrisma.bookingSplit = {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       };
     });
 
     it('should successfully approve a PENDING_APPROVAL booking', async () => {
-      const response = await service.approveBooking('owner-auth-id', 'booking-uuid');
+      const response = await service.approveBooking(
+        'owner-auth-id',
+        'booking-uuid',
+      );
       expect(response.success).toBe(true);
       expect(response.data.bookingStatus).toBe('CONFIRMED');
     });
@@ -473,7 +488,10 @@ describe('BookingService - Platform Fee Slabs', () => {
         orders: { create: jest.fn(), fetch: jest.fn() },
       };
 
-      const response = await service.rejectBooking('owner-auth-id', 'booking-uuid');
+      const response = await service.rejectBooking(
+        'owner-auth-id',
+        'booking-uuid',
+      );
       expect(response.success).toBe(true);
       expect(response.data!.bookingStatus).toBe('REJECTED');
       expect(response.data!.paymentStatus).toBe('REFUNDED');
@@ -617,7 +635,10 @@ describe('BookingService - Platform Fee Slabs', () => {
 
     it('QR Generation - should successfully generate a base64 QR code image', async () => {
       const windowEnd = new Date(Date.now() + 600000);
-      const qrCode = await service.generateCheckInQrCode(dummyBooking, windowEnd);
+      const qrCode = await service.generateCheckInQrCode(
+        dummyBooking,
+        windowEnd,
+      );
       expect(qrCode).toContain('data:image/png;base64,');
     });
 
@@ -634,7 +655,11 @@ describe('BookingService - Platform Fee Slabs', () => {
         bookingDate: new Date('2026-07-03T00:00:00.000Z'),
       });
 
-      const result = await service.verifyCheckInQr('owner-auth-id', qrData, '127.0.0.1');
+      const result = await service.verifyCheckInQr(
+        'owner-auth-id',
+        qrData,
+        '127.0.0.1',
+      );
       expect(result.success).toBe(true);
       expect(result.message).toBe('Check-in successful');
       expect(mockPrisma.booking.updateMany).toHaveBeenCalledWith(
@@ -643,8 +668,8 @@ describe('BookingService - Platform Fee Slabs', () => {
           data: expect.objectContaining({
             bookingStatus: 'COMPLETED',
             checkedInByOwnerId: 'owner-auth-id',
-            scanIpAddress: '127.0.0.1'
-          })
+            scanIpAddress: '127.0.0.1',
+          }),
         }),
       );
     });
@@ -948,7 +973,11 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const { rawBody, signature } = getSignature(payload);
 
-      const response = await service.handleRazorpayWebhook(payload, signature, rawBody);
+      const response = await service.handleRazorpayWebhook(
+        payload,
+        signature,
+        rawBody,
+      );
       expect(response.success).toBe(true);
       expect(response.message).toBe('Refund processing recorded');
       expect(mockPrisma.booking.update).toHaveBeenCalledWith(
@@ -982,7 +1011,11 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const { rawBody, signature } = getSignature(payload);
 
-      const response = await service.handleRazorpayWebhook(payload, signature, rawBody);
+      const response = await service.handleRazorpayWebhook(
+        payload,
+        signature,
+        rawBody,
+      );
       expect(response.success).toBe(true);
       expect(response.message).toBe('Refund failure recorded');
       expect(mockPrisma.booking.update).toHaveBeenCalledWith(
@@ -1014,7 +1047,11 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const { rawBody, signature } = getSignature(payload);
 
-      const response = await service.handleRazorpayWebhook(payload, signature, rawBody);
+      const response = await service.handleRazorpayWebhook(
+        payload,
+        signature,
+        rawBody,
+      );
       expect(response.success).toBe(true);
       expect(response.message).toBe('Refund creation logged');
       expect(mockPrisma.booking.update).toHaveBeenCalledWith(
@@ -1036,7 +1073,9 @@ describe('BookingService - Platform Fee Slabs', () => {
       // Mock the Razorpay refund API call on the service instance
       (service as any).razorpay = {
         payments: {
-          refund: jest.fn().mockResolvedValue({ id: 'rfnd_test_123', status: 'processed' }),
+          refund: jest
+            .fn()
+            .mockResolvedValue({ id: 'rfnd_test_123', status: 'processed' }),
         },
         orders: { create: jest.fn(), fetch: jest.fn() },
       };
@@ -1068,19 +1107,25 @@ describe('BookingService - Platform Fee Slabs', () => {
         },
       };
 
-      mockPrisma.booking.findUnique = jest.fn().mockImplementation(() => Promise.resolve(mockBooking));
+      mockPrisma.booking.findUnique = jest
+        .fn()
+        .mockImplementation(() => Promise.resolve(mockBooking));
       mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => {
         mockBooking = { ...mockBooking, ...data };
         return mockBooking;
       });
-      (mockPrisma as any).bookingSplit = {
+      mockPrisma.bookingSplit = {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       };
     });
 
     it('should reject customer cancellation if requester is not the booking user (unauthorized)', async () => {
       await expect(
-        service.cancelBooking('another-user-id', 'booking-uuid', 'Change of plans'),
+        service.cancelBooking(
+          'another-user-id',
+          'booking-uuid',
+          'Change of plans',
+        ),
       ).rejects.toThrow(ForbiddenException);
 
       expect(mockPrisma.booking.update).not.toHaveBeenCalled();
@@ -1098,18 +1143,28 @@ describe('BookingService - Platform Fee Slabs', () => {
 
     it('should handle same-actor duplicate cancellation requests idempotently', async () => {
       // First cancellation call
-      const res1 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel');
+      const res1 = await service.cancelBooking(
+        'user-id',
+        'booking-uuid',
+        'Cancel',
+      );
       expect(res1.success).toBe(true);
       expect(res1.data!.bookingStatus).toBe('CANCELLED');
 
       // Second cancellation call (duplicate request)
-      const res2 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel again');
+      const res2 = await service.cancelBooking(
+        'user-id',
+        'booking-uuid',
+        'Cancel again',
+      );
       expect(res2.success).toBe(true);
       expect(res2.message).toBe('Booking already cancelled.');
       expect(res2.data!.bookingStatus).toBe('CANCELLED');
 
       // Only one refund call made
-      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
+      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(
+        1,
+      );
     });
 
     it('should handle same-actor duplicate rejection requests idempotently', async () => {
@@ -1125,7 +1180,9 @@ describe('BookingService - Platform Fee Slabs', () => {
       expect(res2.data!.bookingStatus).toBe('REJECTED');
 
       // Only one refund call made
-      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
+      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(
+        1,
+      );
     });
 
     it('should gracefully resolve customer cancellation vs owner rejection race', async () => {
@@ -1136,20 +1193,30 @@ describe('BookingService - Platform Fee Slabs', () => {
       expect((res1.data as any).resolvedBy).toBe('OWNER');
 
       // Customer then attempts to cancel
-      const res2 = await service.cancelBooking('user-id', 'booking-uuid', 'Change of plans');
+      const res2 = await service.cancelBooking(
+        'user-id',
+        'booking-uuid',
+        'Change of plans',
+      );
       expect(res2.success).toBe(true);
       expect(res2.bookingStatus).toBe('REJECTED');
       expect(res2.resolvedBy).toBe('OWNER');
       expect(res2.message).toContain('already rejected by the venue');
 
       // Only one refund call made total
-      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
+      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(
+        1,
+      );
     });
 
     it('should gracefully resolve owner rejection vs customer cancellation race', async () => {
       // Customer cancels the booking first (requires PENDING_APPROVAL state for time-independent refund)
       mockBooking.bookingStatus = 'PENDING_APPROVAL';
-      const res1 = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel');
+      const res1 = await service.cancelBooking(
+        'user-id',
+        'booking-uuid',
+        'Cancel',
+      );
       expect(res1.success).toBe(true);
       expect(res1.data!.bookingStatus).toBe('CANCELLED');
       expect((res1.data as any).resolvedBy).toBe('CUSTOMER');
@@ -1162,7 +1229,9 @@ describe('BookingService - Platform Fee Slabs', () => {
       expect(res2.message).toContain('already cancelled by the customer');
 
       // Only one refund call made total
-      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(1);
+      expect((service as any).razorpay.payments.refund).toHaveBeenCalledTimes(
+        1,
+      );
     });
   });
 
@@ -1177,13 +1246,21 @@ describe('BookingService - Platform Fee Slabs', () => {
       mockPrisma.auth.update = jest.fn().mockResolvedValue({
         fullCashDisabledUntil: null,
       });
-      mockPrisma.lateCancellationHistory.create = jest.fn().mockResolvedValue({});
+      mockPrisma.lateCancellationHistory.create = jest
+        .fn()
+        .mockResolvedValue({});
       mockPrisma.lateCancellationHistory.count = jest.fn().mockResolvedValue(0);
 
       // Make sure slot lock doesn't conflict
-      mockPrisma.slotLock.create = jest.fn().mockResolvedValue({ id: 'lock-1' });
-      mockPrisma.slotLock.deleteMany = jest.fn().mockResolvedValue({ count: 1 });
-      mockPrisma.slotLock.update = jest.fn().mockResolvedValue({ id: 'lock-1' });
+      mockPrisma.slotLock.create = jest
+        .fn()
+        .mockResolvedValue({ id: 'lock-1' });
+      mockPrisma.slotLock.deleteMany = jest
+        .fn()
+        .mockResolvedValue({ count: 1 });
+      mockPrisma.slotLock.update = jest
+        .fn()
+        .mockResolvedValue({ id: 'lock-1' });
       mockPrisma.booking.create = jest.fn().mockResolvedValue({
         id: 'booking-uuid',
         bookingStatus: 'CONFIRMED',
@@ -1211,7 +1288,9 @@ describe('BookingService - Platform Fee Slabs', () => {
         },
       };
 
-      mockPrisma.booking.findUnique = jest.fn().mockImplementation(() => Promise.resolve(mockBooking));
+      mockPrisma.booking.findUnique = jest
+        .fn()
+        .mockImplementation(() => Promise.resolve(mockBooking));
       mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => {
         mockBooking = { ...mockBooking, ...data };
         return mockBooking;
@@ -1229,12 +1308,14 @@ describe('BookingService - Platform Fee Slabs', () => {
       await expect(
         service.createBooking('user-id', {
           turfId: 'turf-1',
-          bookingDate: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString().split('T')[0],
+          bookingDate: new Date(Date.now() + 2 * 24 * 3600 * 1000)
+            .toISOString()
+            .split('T')[0],
           startTime: '10:00',
           endTime: '11:00',
           durationMins: 60,
           paymentType: 'FULL_CASH',
-        })
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -1242,7 +1323,11 @@ describe('BookingService - Platform Fee Slabs', () => {
       const farFuture = new Date(Date.now() + 48 * 3600 * 1000);
       mockBooking.bookingDate = farFuture;
 
-      const res = await service.cancelBooking('user-id', 'booking-uuid', 'Cancel');
+      const res = await service.cancelBooking(
+        'user-id',
+        'booking-uuid',
+        'Cancel',
+      );
       expect(res.success).toBe(true);
       expect(res.lateCancellation).toBeUndefined();
       expect(mockPrisma.lateCancellationHistory.create).not.toHaveBeenCalled();
@@ -1256,7 +1341,11 @@ describe('BookingService - Platform Fee Slabs', () => {
       // Mock count to return 1 (less than 3 restriction threshold)
       mockPrisma.lateCancellationHistory.count = jest.fn().mockResolvedValue(1);
 
-      const res = await service.cancelBooking('user-id', 'booking-uuid', 'Late Cancel');
+      const res = await service.cancelBooking(
+        'user-id',
+        'booking-uuid',
+        'Late Cancel',
+      );
       expect(res.success).toBe(true);
       expect(res.lateCancellation).toBe(true);
       expect(res.remainingBeforeRestriction).toBe(2);
@@ -1272,7 +1361,11 @@ describe('BookingService - Platform Fee Slabs', () => {
       // Mock count to return 3 (threshold reached)
       mockPrisma.lateCancellationHistory.count = jest.fn().mockResolvedValue(3);
 
-      const res = await service.cancelBooking('user-id', 'booking-uuid', 'Limit reached');
+      const res = await service.cancelBooking(
+        'user-id',
+        'booking-uuid',
+        'Limit reached',
+      );
       expect(res.success).toBe(true);
       expect(res.lateCancellation).toBe(true);
       expect(res.fullCashDisabled).toBe(true);

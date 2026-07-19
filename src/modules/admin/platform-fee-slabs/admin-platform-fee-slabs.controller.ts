@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { PlatformFeeSlabService } from '../../platform-fee-slab/platform-fee-slab.service';
 import { CreateSlabDto } from '../../platform-fee-slab/dto/create-slab.dto';
 import { UpdateSlabDto } from '../../platform-fee-slab/dto/update-slab.dto';

@@ -42,9 +42,9 @@ describe('AdminAuditLogs', () => {
         },
       ],
     })
-    .overrideGuard(JwtAdminGuard)
-    .useValue({ canActivate: () => true })
-    .compile();
+      .overrideGuard(JwtAdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AdminAuditLogsController>(AdminAuditLogsController);
     service = module.get<AdminAuditLogsService>(AdminAuditLogsService);

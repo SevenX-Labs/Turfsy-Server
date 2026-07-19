@@ -8,7 +8,11 @@ import * as pdfkit from 'pdfkit';
 export class AdminSettlementsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listSettlements(query: { status?: SettlementStatus; page?: number; limit?: number }) {
+  async listSettlements(query: {
+    status?: SettlementStatus;
+    page?: number;
+    limit?: number;
+  }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -55,8 +59,16 @@ export class AdminSettlementsService {
     return { success: true, data: settlements };
   }
 
-  async createSettlement(dto: { ownerProfileId: string; amount: number; notes?: string; bookingCount?: number; period?: string }) {
-    const owner = await this.prisma.ownerProfile.findUnique({ where: { id: dto.ownerProfileId } });
+  async createSettlement(dto: {
+    ownerProfileId: string;
+    amount: number;
+    notes?: string;
+    bookingCount?: number;
+    period?: string;
+  }) {
+    const owner = await this.prisma.ownerProfile.findUnique({
+      where: { id: dto.ownerProfileId },
+    });
     if (!owner) throw new NotFoundException('Owner profile not found');
 
     const settlement = await this.prisma.settlement.create({
@@ -106,10 +118,12 @@ export class AdminSettlementsService {
         createdAt: settlement.createdAt,
         updatedAt: settlement.updatedAt,
         owner: settlement.owner,
-        paidByAdmin: actionLog ? {
-          name: actionLog.admin.name,
-          email: actionLog.admin.email,
-        } : null,
+        paidByAdmin: actionLog
+          ? {
+              name: actionLog.admin.name,
+              email: actionLog.admin.email,
+            }
+          : null,
         paidTime: settlement.paidAt,
       },
     };
@@ -121,7 +135,9 @@ export class AdminSettlementsService {
     adminId: string,
     ipAddress: string,
   ) {
-    const settlement = await this.prisma.settlement.findUnique({ where: { id } });
+    const settlement = await this.prisma.settlement.findUnique({
+      where: { id },
+    });
     if (!settlement) throw new NotFoundException('Settlement record not found');
 
     const updated = await this.prisma.settlement.update({
@@ -198,7 +214,9 @@ export class AdminSettlementsService {
     });
 
     return new Promise((resolve, reject) => {
-      const doc = new ((pdfkit as any).default || (pdfkit as any))({ margin: 50 });
+      const doc = new ((pdfkit as any).default || (pdfkit as any))({
+        margin: 50,
+      });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -207,16 +225,22 @@ export class AdminSettlementsService {
 
       doc.fontSize(20).text('Turfsy Settlements Report', { align: 'center' });
       doc.moveDown();
-      doc.fontSize(10).text(`Generated on: ${new Date().toLocaleString()}`, { align: 'right' });
+      doc.fontSize(10).text(`Generated on: ${new Date().toLocaleString()}`, {
+        align: 'right',
+      });
       doc.moveDown();
 
-      doc.fontSize(10).text('ID | Owner | Amount | Status | Tx Ref | Period', { underline: true });
+      doc.fontSize(10).text('ID | Owner | Amount | Status | Tx Ref | Period', {
+        underline: true,
+      });
       doc.moveDown();
 
       for (const s of settlements) {
-        doc.fontSize(9).text(
-          `${s.id.substring(0, 8)}... | ${s.owner?.name || 'N/A'} | Rs. ${s.amount} | ${s.status} | ${s.txRef || 'N/A'} | ${s.period || 'N/A'}`
-        );
+        doc
+          .fontSize(9)
+          .text(
+            `${s.id.substring(0, 8)}... | ${s.owner?.name || 'N/A'} | Rs. ${s.amount} | ${s.status} | ${s.txRef || 'N/A'} | ${s.period || 'N/A'}`,
+          );
         doc.moveDown(0.5);
       }
 

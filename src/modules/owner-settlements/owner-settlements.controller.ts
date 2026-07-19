@@ -9,12 +9,16 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 @ApiBearerAuth('JWT-auth')
 @Controller('api/v3/owner-settlements')
 export class OwnerSettlementsController {
-  constructor(private readonly ownerSettlementsService: OwnerSettlementsService) {}
+  constructor(
+    private readonly ownerSettlementsService: OwnerSettlementsService,
+  ) {}
 
   @Get('summary')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
-  @ApiOperation({ summary: 'Get owner settlements summary (revenue, settled, pending, bank)' })
+  @ApiOperation({
+    summary: 'Get owner settlements summary (revenue, settled, pending, bank)',
+  })
   async getSummary(@Req() req: any) {
     return this.ownerSettlementsService.getSettlementsSummary(req.user.authId);
   }

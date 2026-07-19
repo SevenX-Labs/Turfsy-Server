@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../../prisma/prisma.service';
@@ -16,11 +21,15 @@ export class JwtAdminGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
     const token = authHeader.split(' ')[1];
     try {
-      const secret = this.configService.get<string>('JWT_ACCESS_SECRET') || 'your_access_secret_2709';
+      const secret =
+        this.configService.get<string>('JWT_ACCESS_SECRET') ||
+        'your_access_secret_2709';
       const payload = this.jwtService.verify(token, { secret });
       if (!payload.adminId) {
         throw new UnauthorizedException('Invalid token payload');
@@ -33,7 +42,12 @@ export class JwtAdminGuard implements CanActivate {
         include: { admin: true },
       });
 
-      if (!session || session.revokedAt || new Date() > session.expiresAt || !session.admin.isActive) {
+      if (
+        !session ||
+        session.revokedAt ||
+        new Date() > session.expiresAt ||
+        !session.admin.isActive
+      ) {
         throw new UnauthorizedException('Session expired or revoked');
       }
 
@@ -46,7 +60,9 @@ export class JwtAdminGuard implements CanActivate {
       };
       return true;
     } catch (err) {
-      throw new UnauthorizedException(err.message || 'Unauthorized admin access');
+      throw new UnauthorizedException(
+        err.message || 'Unauthorized admin access',
+      );
     }
   }
 }

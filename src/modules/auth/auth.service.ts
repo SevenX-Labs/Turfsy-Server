@@ -60,7 +60,7 @@ export class AuthService {
       phone,
       otp: otp, // <-- Exposing OTP in logs for testing on Render
     });
-    
+
     try {
       /* 
       // Fast2SMS API call commented out to save balance / prevent 400 errors
@@ -125,7 +125,8 @@ export class AuthService {
       throw new HttpException(
         {
           success: false,
-          message: 'Too many failed verification attempts. Please try again in 15 minutes.',
+          message:
+            'Too many failed verification attempts. Please try again in 15 minutes.',
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -142,7 +143,8 @@ export class AuthService {
       throw new HttpException(
         {
           success: false,
-          message: 'Too many OTP requests from this IP. Please try again later.',
+          message:
+            'Too many OTP requests from this IP. Please try again later.',
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -159,7 +161,8 @@ export class AuthService {
       throw new HttpException(
         {
           success: false,
-          message: 'Too many OTP requests for this phone. Please try again later.',
+          message:
+            'Too many OTP requests for this phone. Please try again later.',
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -253,7 +256,8 @@ export class AuthService {
       throw new HttpException(
         {
           success: false,
-          message: 'Too many failed verification attempts. Please try again in 15 minutes.',
+          message:
+            'Too many failed verification attempts. Please try again in 15 minutes.',
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -288,7 +292,8 @@ export class AuthService {
     const isValid = await bcrypt.compare(otp, otpPayload.code);
     if (!isValid) {
       const attemptKey = `otp_verify_attempts:${phone}`;
-      const failedAttempts = (await this.cacheService.get<number>(attemptKey)) || 0;
+      const failedAttempts =
+        (await this.cacheService.get<number>(attemptKey)) || 0;
       const newFailedAttempts = failedAttempts + 1;
 
       if (newFailedAttempts >= 5) {
@@ -298,12 +303,17 @@ export class AuthService {
         throw new HttpException(
           {
             success: false,
-            message: 'Too many failed verification attempts. Verification locked for 15 minutes.',
+            message:
+              'Too many failed verification attempts. Verification locked for 15 minutes.',
           },
           HttpStatus.TOO_MANY_REQUESTS,
         );
       } else {
-        await this.cacheService.set(attemptKey, newFailedAttempts, 15 * 60 * 1000);
+        await this.cacheService.set(
+          attemptKey,
+          newFailedAttempts,
+          15 * 60 * 1000,
+        );
       }
 
       if (otpPayload.attempts >= 5) {
@@ -587,7 +597,17 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    const { userProfile, ownerProfile, payment, mpinHash, mpinCreatedAt, mpinUpdatedAt, mpinLockedUntil, failedMpinAttempts, ...authData } = auth;
+    const {
+      userProfile,
+      ownerProfile,
+      payment,
+      mpinHash,
+      mpinCreatedAt,
+      mpinUpdatedAt,
+      mpinLockedUntil,
+      failedMpinAttempts,
+      ...authData
+    } = auth;
     let profile: Record<string, any> | null =
       auth.role === Role.OWNER ? ownerProfile : userProfile;
 
@@ -695,7 +715,8 @@ export class AuthService {
       throw new HttpException(
         {
           success: false,
-          message: 'Too many failed verification attempts. Please try again in 15 minutes.',
+          message:
+            'Too many failed verification attempts. Please try again in 15 minutes.',
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -720,7 +741,8 @@ export class AuthService {
     const isValid = await bcrypt.compare(otp, otpPayload.code);
     if (!isValid) {
       const attemptKey = `otp_verify_attempts:${newPhone}`;
-      const failedAttempts = (await this.cacheService.get<number>(attemptKey)) || 0;
+      const failedAttempts =
+        (await this.cacheService.get<number>(attemptKey)) || 0;
       const newFailedAttempts = failedAttempts + 1;
 
       if (newFailedAttempts >= 5) {
@@ -730,12 +752,17 @@ export class AuthService {
         throw new HttpException(
           {
             success: false,
-            message: 'Too many failed verification attempts. Verification locked for 15 minutes.',
+            message:
+              'Too many failed verification attempts. Verification locked for 15 minutes.',
           },
           HttpStatus.TOO_MANY_REQUESTS,
         );
       } else {
-        await this.cacheService.set(attemptKey, newFailedAttempts, 15 * 60 * 1000);
+        await this.cacheService.set(
+          attemptKey,
+          newFailedAttempts,
+          15 * 60 * 1000,
+        );
       }
 
       if (otpPayload.attempts >= 5) {

@@ -50,9 +50,14 @@ describe('UserGamificationService', () => {
       };
       mockPrisma.booking.findUnique.mockResolvedValue(mockBooking);
       mockPrisma.userGamification.findUnique.mockResolvedValue(null);
-      mockPrisma.userGamification.create.mockImplementation((args) => args.data);
+      mockPrisma.userGamification.create.mockImplementation(
+        (args) => args.data,
+      );
 
-      const result = await service.handleBookingCompletion('user-1', 'booking-1');
+      const result = await service.handleBookingCompletion(
+        'user-1',
+        'booking-1',
+      );
 
       expect(result).toBeDefined();
       expect(result.points).toBe(10);

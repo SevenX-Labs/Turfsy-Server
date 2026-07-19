@@ -205,8 +205,7 @@ export class OwnerHomeService {
 
     const revenueOverall = bookings
       .filter(
-        (b) =>
-          b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS',
+        (b) => b.bookingStatus === 'COMPLETED' || b.paymentStatus === 'SUCCESS',
       )
       .reduce((sum, b) => sum + b.amount, 0);
 
@@ -218,18 +217,31 @@ export class OwnerHomeService {
     const bookingsUpcoming = bookings.filter(
       (b) => b.bookingDate >= new Date() && b.bookingStatus === 'CONFIRMED',
     ).length;
-    const bookingsCompleted = bookings.filter((b) => b.bookingStatus === 'COMPLETED').length;
-    const bookingsCancelled = bookings.filter((b) => b.bookingStatus === 'CANCELLED').length;
-    const bookingsNoShow = bookings.filter((b) => b.bookingStatus === 'NO_SHOW').length;
-    const bookingsPending = bookings.filter((b) => b.bookingStatus === 'PENDING_APPROVAL').length;
+    const bookingsCompleted = bookings.filter(
+      (b) => b.bookingStatus === 'COMPLETED',
+    ).length;
+    const bookingsCancelled = bookings.filter(
+      (b) => b.bookingStatus === 'CANCELLED',
+    ).length;
+    const bookingsNoShow = bookings.filter(
+      (b) => b.bookingStatus === 'NO_SHOW',
+    ).length;
+    const bookingsPending = bookings.filter(
+      (b) => b.bookingStatus === 'PENDING_APPROVAL',
+    ).length;
 
     // 3. Quick Stats
-    const completedBookingsList = bookings.filter((b) => b.bookingStatus === 'COMPLETED');
-    const avgBookingValue = completedBookingsList.length 
-      ? Math.round(completedBookingsList.reduce((sum, b) => sum + b.amount, 0) / completedBookingsList.length)
+    const completedBookingsList = bookings.filter(
+      (b) => b.bookingStatus === 'COMPLETED',
+    );
+    const avgBookingValue = completedBookingsList.length
+      ? Math.round(
+          completedBookingsList.reduce((sum, b) => sum + b.amount, 0) /
+            completedBookingsList.length,
+        )
       : 0;
-    const cancellationRate = bookingsTotal 
-      ? `${((bookingsCancelled / bookingsTotal) * 100).toFixed(1)}%` 
+    const cancellationRate = bookingsTotal
+      ? `${((bookingsCancelled / bookingsTotal) * 100).toFixed(1)}%`
       : '0%';
 
     // 4. Trends - Revenue Chart (7 Days)
@@ -281,7 +293,10 @@ export class OwnerHomeService {
     bookings.forEach((b) => {
       if (b.turfId) {
         if (!turfCounts[b.turfId]) {
-          turfCounts[b.turfId] = { name: b.turf?.name || 'Unknown Turf', count: 0 };
+          turfCounts[b.turfId] = {
+            name: b.turf?.name || 'Unknown Turf',
+            count: 0,
+          };
         }
         turfCounts[b.turfId].count += 1;
       }

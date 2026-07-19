@@ -47,7 +47,10 @@ describe('UserGamificationController', () => {
         points: 100,
         totalMatches: 2,
         totalHours: 2.5,
-        leaderboard: { top10: [], currentUser: { rank: 1, name: 'You', points: 100 } },
+        leaderboard: {
+          top10: [],
+          currentUser: { rank: 1, name: 'You', points: 100 },
+        },
         nudge: 'Keep it up!',
         inactivityPenaltyApplied: false,
         penaltyReason: null,
@@ -58,7 +61,9 @@ describe('UserGamificationController', () => {
       const response = await controller.getOverall(req);
 
       expect(response).toEqual(mockResult);
-      expect(mockUserGamificationService.getOverallStats).toHaveBeenCalledWith('user-1');
+      expect(mockUserGamificationService.getOverallStats).toHaveBeenCalledWith(
+        'user-1',
+      );
     });
   });
 
@@ -75,7 +80,9 @@ describe('UserGamificationController', () => {
 
   describe('getNudge', () => {
     it('should return nudge message for the user', async () => {
-      mockUserGamificationService.getNudgeMessage.mockResolvedValue('Keep pushing!');
+      mockUserGamificationService.getNudgeMessage.mockResolvedValue(
+        'Keep pushing!',
+      );
 
       const req = { user: { authId: 'user-1' } };
       const response = await controller.getNudge(req);

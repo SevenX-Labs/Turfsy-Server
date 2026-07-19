@@ -64,7 +64,8 @@ import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_ACCESS_SECRET') || 'your_access_secret_2709',
+        secret:
+          config.get<string>('JWT_ACCESS_SECRET') || 'your_access_secret_2709',
         signOptions: {
           expiresIn: config.get<string>('JWT_ACCESS_EXPIRES_IN', '24h') as any,
         },
@@ -100,10 +101,7 @@ import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
     AdminAuditLogsService,
     JwtAdminGuard,
   ],
-  exports: [
-    AdminAuthService,
-    JwtAdminGuard,
-  ],
+  exports: [AdminAuthService, JwtAdminGuard],
 })
 export class AdminModule implements OnModuleInit {
   constructor(
@@ -116,14 +114,16 @@ export class AdminModule implements OnModuleInit {
     const adminPassword = this.configService.get<string>('ADMIN_PASSWORD');
 
     if (!adminEmail || !adminPassword) {
-      console.warn('ADMIN_EMAIL or ADMIN_PASSWORD not set in environment variables. Skipping Super Admin seeding.');
+      console.warn(
+        'ADMIN_EMAIL or ADMIN_PASSWORD not set in environment variables. Skipping Super Admin seeding.',
+      );
       return;
     }
 
     const trimmedEmail = adminEmail.toLowerCase().trim();
 
     const passwordHash = await bcrypt.hash(adminPassword, 10);
-    
+
     await this.prisma.admin.upsert({
       where: { email: trimmedEmail },
       update: {
@@ -139,6 +139,8 @@ export class AdminModule implements OnModuleInit {
         isActive: true,
       },
     });
-    console.log(`[SEED] Ensured SUPER_ADMIN exists and matches environment variables: ${trimmedEmail}`);
+    console.log(
+      `[SEED] Ensured SUPER_ADMIN exists and matches environment variables: ${trimmedEmail}`,
+    );
   }
 }

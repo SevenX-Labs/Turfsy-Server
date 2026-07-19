@@ -105,9 +105,7 @@ import { BullMqConnectionModule } from './bullmq-connection.module';
 export class BullMqModule implements OnApplicationShutdown {
   private readonly logger = new Logger(BullMqModule.name);
 
-  constructor(
-    @Inject(BULLMQ_CONNECTION) private readonly connection: Redis,
-  ) {}
+  constructor(@Inject(BULLMQ_CONNECTION) private readonly connection: Redis) {}
 
   /**
    * Called by NestJS on SIGTERM, SIGINT, hot-reload, or app.close().

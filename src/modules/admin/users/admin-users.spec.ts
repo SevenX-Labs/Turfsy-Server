@@ -14,7 +14,12 @@ describe('AdminUsers', () => {
     auth: {
       count: jest.fn().mockResolvedValue(5),
       findMany: jest.fn().mockResolvedValue([
-        { id: 'user1', phone: '+911234567890', isBanned: false, userProfile: { name: 'Test' } },
+        {
+          id: 'user1',
+          phone: '+911234567890',
+          isBanned: false,
+          userProfile: { name: 'Test' },
+        },
       ]),
       findUnique: jest.fn().mockResolvedValue({
         id: 'user1',
@@ -53,9 +58,9 @@ describe('AdminUsers', () => {
         },
       ],
     })
-    .overrideGuard(JwtAdminGuard)
-    .useValue({ canActivate: () => true })
-    .compile();
+      .overrideGuard(JwtAdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AdminUsersController>(AdminUsersController);
     service = module.get<AdminUsersService>(AdminUsersService);
@@ -76,17 +81,26 @@ describe('AdminUsers', () => {
   });
 
   it('should suspend user', async () => {
-    const res = await controller.suspendUser('user1', { reason: 'spam' }, { adminId: 'admin1' }, { ip: '127.0.0.1' } as any);
+    const res = await controller.suspendUser(
+      'user1',
+      { reason: 'spam' },
+      { adminId: 'admin1' },
+      { ip: '127.0.0.1' } as any,
+    );
     expect(res.success).toBe(true);
   });
 
   it('should activate user', async () => {
-    const res = await controller.activateUser('user1', { adminId: 'admin1' }, { ip: '127.0.0.1' } as any);
+    const res = await controller.activateUser('user1', { adminId: 'admin1' }, {
+      ip: '127.0.0.1',
+    } as any);
     expect(res.success).toBe(true);
   });
 
   it('should soft delete user', async () => {
-    const res = await controller.deleteUser('user1', { adminId: 'admin1' }, { ip: '127.0.0.1' } as any);
+    const res = await controller.deleteUser('user1', { adminId: 'admin1' }, {
+      ip: '127.0.0.1',
+    } as any);
     expect(res.success).toBe(true);
   });
 

@@ -18,7 +18,10 @@ import { UpdateTurfSettingsDto } from './dto/turf-settings.dto';
 import { UpdatePaymentSettingsDto } from './dto/payment-settings.dto';
 import { UpdateNotificationSettingsDto } from './dto/notification-settings.dto';
 import { UpdateCancellationPolicyDto } from './dto/cancellation-policy.dto';
-import { CreateMaintenanceDto, UpdateMaintenanceDto } from './dto/maintenance.dto';
+import {
+  CreateMaintenanceDto,
+  UpdateMaintenanceDto,
+} from './dto/maintenance.dto';
 import { AuthService } from '../auth/auth.service';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
@@ -155,14 +158,20 @@ export class OwnerSettingsController {
   @Get('maintenance/:turfId')
   @ApiOperation({ summary: 'View all maintenance blocks for a Turf' })
   getMaintenanceBlocks(@Req() req: any, @Param('turfId') turfId: string) {
-    return this.ownerSettingsService.getMaintenanceBlocks(req.user.authId, turfId);
+    return this.ownerSettingsService.getMaintenanceBlocks(
+      req.user.authId,
+      turfId,
+    );
   }
 
   @Post('maintenance')
   @ApiOperation({ summary: 'Create maintenance block(s) for a Turf' })
   @HttpCode(HttpStatus.CREATED)
   createMaintenanceBlock(@Req() req: any, @Body() dto: CreateMaintenanceDto) {
-    return this.ownerSettingsService.createMaintenanceBlock(req.user.authId, dto);
+    return this.ownerSettingsService.createMaintenanceBlock(
+      req.user.authId,
+      dto,
+    );
   }
 
   @Patch('maintenance/:maintenanceId')

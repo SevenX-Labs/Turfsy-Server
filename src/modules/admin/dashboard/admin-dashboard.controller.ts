@@ -23,7 +23,9 @@ export class AdminDashboardController {
   }
 
   @Get('charts')
-  @ApiOperation({ summary: 'Get chart data series (bookings, revenue, user/owner growth)' })
+  @ApiOperation({
+    summary: 'Get chart data series (bookings, revenue, user/owner growth)',
+  })
   async getChartData() {
     return this.dashboardService.getChartData();
   }

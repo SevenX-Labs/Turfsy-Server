@@ -376,7 +376,8 @@ export class UserHomeService {
     if (turf.groundDayUrl) images.push(turf.groundDayUrl);
     if (turf.groundNightUrl) images.push(turf.groundNightUrl);
 
-    const rating = typeof turf.averageRating === 'number'
+    const rating =
+      typeof turf.averageRating === 'number'
         ? Math.round(turf.averageRating * 10) / 10
         : 0;
 

@@ -80,7 +80,9 @@ describe('TurfsService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data.paymentPreferences).toEqual([TurfPaymentPreference.ADVANCE_PAYMENT]);
+      expect(result.data.paymentPreferences).toEqual([
+        TurfPaymentPreference.ADVANCE_PAYMENT,
+      ]);
       expect(mockPrisma.turf.create).toHaveBeenCalled();
     });
   });
@@ -104,7 +106,9 @@ describe('TurfsService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data.paymentPreferences).toEqual([TurfPaymentPreference.FULL_CASH]);
+      expect(result.data.paymentPreferences).toEqual([
+        TurfPaymentPreference.FULL_CASH,
+      ]);
       expect(mockPrisma.turf.update).toHaveBeenCalled();
     });
   });

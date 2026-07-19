@@ -6,7 +6,13 @@ import { TurfStatus } from '@prisma/client';
 export class AdminTurfsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listTurfs(query: { search?: string; status?: TurfStatus; city?: string; page?: number; limit?: number }) {
+  async listTurfs(query: {
+    search?: string;
+    status?: TurfStatus;
+    city?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -72,7 +78,13 @@ export class AdminTurfsService {
     return { success: true, data: turf };
   }
 
-  async updateTurfStatus(id: string, status: TurfStatus, adminId: string, ipAddress: string, reason?: string) {
+  async updateTurfStatus(
+    id: string,
+    status: TurfStatus,
+    adminId: string,
+    ipAddress: string,
+    reason?: string,
+  ) {
     const turf = await this.prisma.turf.findUnique({ where: { id } });
     if (!turf) throw new NotFoundException('Turf not found');
 
@@ -80,7 +92,8 @@ export class AdminTurfsService {
       where: { id },
       data: {
         status,
-        suspensionReason: status === 'SUSPENDED' ? (reason || 'Suspended by admin') : null,
+        suspensionReason:
+          status === 'SUSPENDED' ? reason || 'Suspended by admin' : null,
         suspendedAt: status === 'SUSPENDED' ? new Date() : null,
         suspendedBy: status === 'SUSPENDED' ? adminId : null,
       },

@@ -1,4 +1,3 @@
-
 import {
   Controller,
   Get,
@@ -183,16 +182,9 @@ export class BookingController {
   @Roles('OWNER')
   @Throttle({ strict: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
-  async verifyQr(
-    @Req() req: any,
-    @Body() dto: VerifyQrDto,
-  ) {
+  async verifyQr(@Req() req: any, @Body() dto: VerifyQrDto) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.verifyCheckInQr(
-      req.user.authId,
-      dto.qrData,
-      ip,
-    );
+    return this.bookingService.verifyCheckInQr(req.user.authId, dto.qrData, ip);
   }
 
   // ──────────────────────────────────────────────
@@ -210,7 +202,12 @@ export class BookingController {
     @Body() dto: ManualCheckInDto,
   ) {
     const ip = req.ip || req.connection?.remoteAddress;
-    return this.bookingService.manualCheckIn(req.user.authId, bookingId, dto.reason, ip);
+    return this.bookingService.manualCheckIn(
+      req.user.authId,
+      bookingId,
+      dto.reason,
+      ip,
+    );
   }
 
   // ──────────────────────────────────────────────
@@ -242,7 +239,6 @@ export class BookingController {
   ) {
     return this.bookingService.rejectBooking(req.user.authId, bookingId);
   }
-
 
   // ──────────────────────────────────────────────
   // 6.1 OWNER: GET ALL BOOKINGS
@@ -559,7 +555,6 @@ export class BookingController {
   async testEmail(@Req() req: any) {
     return this.bookingService.sendTestEmail(req.user.authId);
   }
-
 
   @Get('customer/full-cash-status')
   @UseGuards(JwtAuthGuard)

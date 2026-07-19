@@ -1,4 +1,12 @@
-import { Controller, Post, Get, Body, Query, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { AdminNotificationsService } from './admin-notifications.service';
 import { JwtAdminGuard } from '../auth/guards/jwt-admin.guard';
 import { BroadcastNotificationDto } from './dto/broadcast-notification.dto';
@@ -11,10 +19,14 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @UseGuards(JwtAdminGuard)
 @ApiBearerAuth()
 export class AdminNotificationsController {
-  constructor(private readonly notificationsService: AdminNotificationsService) {}
+  constructor(
+    private readonly notificationsService: AdminNotificationsService,
+  ) {}
 
   @Post('broadcast')
-  @ApiOperation({ summary: 'Broadcast push notifications to all users, owners, or by city' })
+  @ApiOperation({
+    summary: 'Broadcast push notifications to all users, owners, or by city',
+  })
   async broadcast(
     @Body() dto: BroadcastNotificationDto,
     @CurrentAdmin() admin: any,
@@ -30,6 +42,9 @@ export class AdminNotificationsController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.notificationsService.getNotificationHistory(Number(page) || 1, Number(limit) || 10);
+    return this.notificationsService.getNotificationHistory(
+      Number(page) || 1,
+      Number(limit) || 10,
+    );
   }
 }

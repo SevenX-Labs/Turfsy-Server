@@ -36,17 +36,21 @@ describe('AdminDashboard', () => {
         { provide: PrismaService, useValue: mockPrisma },
         {
           provide: JwtService,
-          useValue: { verify: jest.fn().mockReturnValue({ adminId: 'admin123' }) },
+          useValue: {
+            verify: jest.fn().mockReturnValue({ adminId: 'admin123' }),
+          },
         },
         {
           provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue('your_access_secret_2709') },
+          useValue: {
+            get: jest.fn().mockReturnValue('your_access_secret_2709'),
+          },
         },
       ],
     })
-    .overrideGuard(JwtAdminGuard)
-    .useValue({ canActivate: () => true })
-    .compile();
+      .overrideGuard(JwtAdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AdminDashboardController>(AdminDashboardController);
     service = module.get<AdminDashboardService>(AdminDashboardService);

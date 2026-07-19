@@ -1,4 +1,13 @@
-import { Controller, Get, Patch, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { AdminTurfsService } from './admin-turfs.service';
 import { JwtAdminGuard } from '../auth/guards/jwt-admin.guard';
 import { SuspendTurfDto } from './dto/suspend-turf.dto';
@@ -51,7 +60,12 @@ export class AdminTurfsController {
     @Req() req: Request,
   ) {
     const ip = req.ip || '127.0.0.1';
-    return this.turfsService.updateTurfStatus(id, 'INACTIVE', admin.adminId, ip);
+    return this.turfsService.updateTurfStatus(
+      id,
+      'INACTIVE',
+      admin.adminId,
+      ip,
+    );
   }
 
   @Patch(':id/suspend')
@@ -63,7 +77,13 @@ export class AdminTurfsController {
     @Req() req: Request,
   ) {
     const ip = req.ip || '127.0.0.1';
-    return this.turfsService.updateTurfStatus(id, 'SUSPENDED', admin.adminId, ip, dto.reason);
+    return this.turfsService.updateTurfStatus(
+      id,
+      'SUSPENDED',
+      admin.adminId,
+      ip,
+      dto.reason,
+    );
   }
 
   @Patch(':id/feature')

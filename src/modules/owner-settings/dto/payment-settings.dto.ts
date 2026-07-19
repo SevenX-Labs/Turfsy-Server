@@ -41,8 +41,11 @@ export function isRepeatedPattern(str: string): boolean {
 }
 
 // Custom validator for Match Field
-export function MatchField(property: string, validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+export function MatchField(
+  property: string,
+  validationOptions?: ValidationOptions,
+) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'matchField',
       target: object.constructor,
@@ -66,7 +69,7 @@ export function MatchField(property: string, validationOptions?: ValidationOptio
 
 // Custom validator for Account Number rules
 export function IsValidAccountNumber(validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'isValidAccountNumber',
       target: object.constructor,
@@ -84,12 +87,18 @@ export function IsValidAccountNumber(validationOptions?: ValidationOptions) {
         },
         defaultMessage(args: ValidationArguments) {
           const value = args.value;
-          if (typeof value !== 'string') return 'Account number must be a string';
-          if (!/^\d+$/.test(value)) return 'Account number must contain digits only';
-          if (value.startsWith('0')) return 'Account number must not start with 0';
-          if (new Set(value).size === 1) return 'Account number cannot consist of identical digits';
-          if (isSequential(value)) return 'Account number cannot be a sequential sequence';
-          if (isRepeatedPattern(value)) return 'Account number cannot contain repeated patterns';
+          if (typeof value !== 'string')
+            return 'Account number must be a string';
+          if (!/^\d+$/.test(value))
+            return 'Account number must contain digits only';
+          if (value.startsWith('0'))
+            return 'Account number must not start with 0';
+          if (new Set(value).size === 1)
+            return 'Account number cannot consist of identical digits';
+          if (isSequential(value))
+            return 'Account number cannot be a sequential sequence';
+          if (isRepeatedPattern(value))
+            return 'Account number cannot contain repeated patterns';
           return 'Account number is invalid';
         },
       },
@@ -106,7 +115,9 @@ export class UpdatePaymentSettingsDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsNotEmpty({ message: 'Account holder name is required' })
   @IsString({ message: 'Account holder name must be a string' })
-  @Length(3, 100, { message: 'Account holder name must be between 3 and 100 characters' })
+  @Length(3, 100, {
+    message: 'Account holder name must be between 3 and 100 characters',
+  })
   @Matches(/^[a-zA-Z\s.]+$/, {
     message: 'Account holder name can only contain alphabets, spaces, and dots',
   })
@@ -164,11 +175,14 @@ export class UpdatePaymentSettingsDto {
     example: 'HDFC0001234',
     required: true,
   })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() : value,
+  )
   @IsNotEmpty({ message: 'IFSC code is required' })
   @IsString({ message: 'IFSC code must be a string' })
   @Matches(/^[A-Z]{4}0[A-Z0-9]{6}$/, {
-    message: 'IFSC code must match the valid RBI IFSC format (e.g. HDFC0001234)',
+    message:
+      'IFSC code must match the valid RBI IFSC format (e.g. HDFC0001234)',
   })
   ifscCode: string;
 

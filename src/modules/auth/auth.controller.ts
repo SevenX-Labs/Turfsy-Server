@@ -217,7 +217,11 @@ export class AuthController {
     if (!body.newPhone) {
       throw new Error('newPhone is required');
     }
-    return this.authService.requestPhoneChange(req.user.authId, body.newPhone, ip);
+    return this.authService.requestPhoneChange(
+      req.user.authId,
+      body.newPhone,
+      ip,
+    );
   }
 
   @Post('verify-phone-change')

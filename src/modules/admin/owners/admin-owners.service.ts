@@ -7,7 +7,12 @@ import * as pdfkit from 'pdfkit';
 export class AdminOwnersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listOwners(query: { search?: string; status?: 'active' | 'suspended'; page?: number; limit?: number }) {
+  async listOwners(query: {
+    search?: string;
+    status?: 'active' | 'suspended';
+    page?: number;
+    limit?: number;
+  }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -23,8 +28,16 @@ export class AdminOwnersService {
     if (query.search) {
       where.OR = [
         { phone: { contains: query.search, mode: 'insensitive' } },
-        { ownerProfile: { name: { contains: query.search, mode: 'insensitive' } } },
-        { ownerProfile: { email: { contains: query.search, mode: 'insensitive' } } },
+        {
+          ownerProfile: {
+            name: { contains: query.search, mode: 'insensitive' },
+          },
+        },
+        {
+          ownerProfile: {
+            email: { contains: query.search, mode: 'insensitive' },
+          },
+        },
       ];
     }
 
@@ -74,16 +87,18 @@ export class AdminOwnersService {
           phone: authObj.phone,
           isBanned: authObj.isBanned,
           createdAt: authObj.createdAt,
-          profile: ownerProfile ? {
-            id: ownerProfile.id,
-            name: ownerProfile.name,
-            email: ownerProfile.email,
-            contactNumber: ownerProfile.contactNumber,
-            totalTurfs,
-            totalEarnings,
-          } : null,
+          profile: ownerProfile
+            ? {
+                id: ownerProfile.id,
+                name: ownerProfile.name,
+                email: ownerProfile.email,
+                contactNumber: ownerProfile.contactNumber,
+                totalTurfs,
+                totalEarnings,
+              }
+            : null,
         };
-      })
+      }),
     );
 
     return {
@@ -105,7 +120,8 @@ export class AdminOwnersService {
       where: { id },
       include: { ownerProfile: true },
     });
-    if (!owner || owner.role !== 'OWNER') throw new NotFoundException('Owner not found');
+    if (!owner || owner.role !== 'OWNER')
+      throw new NotFoundException('Owner not found');
 
     const ownerProfile = owner.ownerProfile;
     if (!ownerProfile) throw new NotFoundException('Owner profile not found');
@@ -135,7 +151,10 @@ export class AdminOwnersService {
     });
 
     const totalEarnings = bookings
-      .filter(b => b.bookingStatus === 'COMPLETED' || b.bookingStatus === 'CONFIRMED')
+      .filter(
+        (b) =>
+          b.bookingStatus === 'COMPLETED' || b.bookingStatus === 'CONFIRMED',
+      )
       .reduce((sum, b) => sum + (b.amount - b.platformFee), 0);
 
     // 5. Rating
@@ -180,8 +199,15 @@ export class AdminOwnersService {
     };
   }
 
-  async suspendOwner(id: string, reason: string, adminId: string, ipAddress: string) {
-    const owner = await this.prisma.auth.findFirst({ where: { id, role: 'OWNER' } });
+  async suspendOwner(
+    id: string,
+    reason: string,
+    adminId: string,
+    ipAddress: string,
+  ) {
+    const owner = await this.prisma.auth.findFirst({
+      where: { id, role: 'OWNER' },
+    });
     if (!owner) throw new NotFoundException('Owner not found');
 
     const updated = await this.prisma.auth.update({
@@ -209,7 +235,9 @@ export class AdminOwnersService {
   }
 
   async activateOwner(id: string, adminId: string, ipAddress: string) {
-    const owner = await this.prisma.auth.findFirst({ where: { id, role: 'OWNER' } });
+    const owner = await this.prisma.auth.findFirst({
+      where: { id, role: 'OWNER' },
+    });
     if (!owner) throw new NotFoundException('Owner not found');
 
     const updated = await this.prisma.auth.update({
@@ -241,7 +269,8 @@ export class AdminOwnersService {
       where: { id, role: 'OWNER' },
       include: { ownerProfile: true },
     });
-    if (!owner || !owner.ownerProfile) throw new NotFoundException('Owner or owner profile not found');
+    if (!owner || !owner.ownerProfile)
+      throw new NotFoundException('Owner or owner profile not found');
 
     const payment = await this.prisma.payment.findFirst({
       where: { ownerProfileId: owner.ownerProfile.id },
@@ -258,7 +287,8 @@ export class AdminOwnersService {
       where: { id, role: 'OWNER' },
       include: { ownerProfile: true },
     });
-    if (!owner || !owner.ownerProfile) throw new NotFoundException('Owner or owner profile not found');
+    if (!owner || !owner.ownerProfile)
+      throw new NotFoundException('Owner or owner profile not found');
 
     const settlements = await this.prisma.settlement.findMany({
       where: { ownerProfileId: owner.ownerProfile.id },
@@ -329,11 +359,23 @@ export class AdminOwnersService {
       doc.rect(40, 40, 515, 60).fill(primaryColor);
       doc.fillColor('#FFFFFF');
       doc.fontSize(16).font('Helvetica-Bold').text('TURFSY ADMIN', 55, 52);
-      doc.fontSize(10).font('Helvetica').text('Owners Directory & Account Audit', 55, 74);
-      
+      doc
+        .fontSize(10)
+        .font('Helvetica')
+        .text('Owners Directory & Account Audit', 55, 74);
+
       // Date meta info
-      doc.fontSize(8).font('Helvetica').text(`Generated: ${new Date().toLocaleString()}`, 380, 55, { align: 'right', width: 160 });
-      doc.text(`Total Records: ${owners.length}`, 380, 72, { align: 'right', width: 160 });
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .text(`Generated: ${new Date().toLocaleString()}`, 380, 55, {
+          align: 'right',
+          width: 160,
+        });
+      doc.text(`Total Records: ${owners.length}`, 380, 72, {
+        align: 'right',
+        width: 160,
+      });
 
       // Table Setup
       let y = 120;
@@ -365,7 +407,7 @@ export class AdminOwnersService {
         if (y > 750) {
           doc.addPage();
           y = 50; // Reset Y on new page
-          
+
           // Re-draw header on new page
           doc.rect(startX, y, 515, 20).fill('#ECECFE');
           doc.fillColor('#1F2937');
@@ -389,39 +431,66 @@ export class AdminOwnersService {
         }
 
         // Draw horizontal line at bottom of row
-        doc.strokeColor(borderGray).lineWidth(0.5).moveTo(startX, y + 22).lineTo(startX + 515, y + 22).stroke();
+        doc
+          .strokeColor(borderGray)
+          .lineWidth(0.5)
+          .moveTo(startX, y + 22)
+          .lineTo(startX + 515, y + 22)
+          .stroke();
 
         // Print cell text
         doc.fillColor(textColor);
-        
+
         let cx = startX;
         // #
-        doc.text(count.toString(), cx + 5, y + 7, { width: colWidths[0] - 10, align: 'center' });
+        doc.text(count.toString(), cx + 5, y + 7, {
+          width: colWidths[0] - 10,
+          align: 'center',
+        });
         cx += colWidths[0];
 
         // Name
-        doc.font('Helvetica-Bold').text(o.ownerProfile?.name || 'N/A', cx + 5, y + 7, { width: colWidths[1] - 10, ellipsis: true });
+        doc
+          .font('Helvetica-Bold')
+          .text(o.ownerProfile?.name || 'N/A', cx + 5, y + 7, {
+            width: colWidths[1] - 10,
+            ellipsis: true,
+          });
         doc.font('Helvetica');
         cx += colWidths[1];
 
         // Phone
-        doc.text(o.phone || 'N/A', cx + 5, y + 7, { width: colWidths[2] - 10, ellipsis: true });
+        doc.text(o.phone || 'N/A', cx + 5, y + 7, {
+          width: colWidths[2] - 10,
+          ellipsis: true,
+        });
         cx += colWidths[2];
 
         // Email
-        doc.text(o.ownerProfile?.email || 'N/A', cx + 5, y + 7, { width: colWidths[3] - 10, ellipsis: true });
+        doc.text(o.ownerProfile?.email || 'N/A', cx + 5, y + 7, {
+          width: colWidths[3] - 10,
+          ellipsis: true,
+        });
         cx += colWidths[3];
 
         // Contact Number
-        doc.text(o.ownerProfile?.contactNumber || 'N/A', cx + 5, y + 7, { width: colWidths[4] - 10, ellipsis: true });
+        doc.text(o.ownerProfile?.contactNumber || 'N/A', cx + 5, y + 7, {
+          width: colWidths[4] - 10,
+          ellipsis: true,
+        });
         cx += colWidths[4];
 
         // Status
         const statusText = o.isBanned ? 'SUSPENDED' : 'ACTIVE';
-        doc.fillColor(o.isBanned ? bannedColor : activeColor).font('Helvetica-Bold');
-        doc.text(statusText, cx + 5, y + 7, { width: colWidths[5] - 10, align: 'left' });
+        doc
+          .fillColor(o.isBanned ? bannedColor : activeColor)
+          .font('Helvetica-Bold');
+        doc.text(statusText, cx + 5, y + 7, {
+          width: colWidths[5] - 10,
+          align: 'left',
+        });
         doc.font('Helvetica');
-        
+
         y += 22;
         count++;
       }
@@ -430,12 +499,13 @@ export class AdminOwnersService {
       const range = doc.bufferedPageRange();
       for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
-        doc.fillColor('#9CA3AF').fontSize(8).text(
-          `Page ${i + 1} of ${range.count}`,
-          40,
-          800,
-          { align: 'center', width: 515 }
-        );
+        doc
+          .fillColor('#9CA3AF')
+          .fontSize(8)
+          .text(`Page ${i + 1} of ${range.count}`, 40, 800, {
+            align: 'center',
+            width: 515,
+          });
       }
 
       doc.end();

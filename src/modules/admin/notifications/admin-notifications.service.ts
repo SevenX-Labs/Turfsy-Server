@@ -10,7 +10,11 @@ export class AdminNotificationsService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async broadcast(dto: BroadcastNotificationDto, adminId: string, ipAddress: string) {
+  async broadcast(
+    dto: BroadcastNotificationDto,
+    adminId: string,
+    ipAddress: string,
+  ) {
     let targets: string[] = [];
 
     if (dto.target === 'ALL_USERS') {
@@ -27,7 +31,9 @@ export class AdminNotificationsService {
       targets = owners.map((o) => o.id);
     } else if (dto.target === 'BY_CITY') {
       if (!dto.city) {
-        throw new BadRequestException('City is required when target is BY_CITY');
+        throw new BadRequestException(
+          'City is required when target is BY_CITY',
+        );
       }
       const [usersInCity, ownersInCity] = await Promise.all([
         this.prisma.auth.findMany({
@@ -51,7 +57,10 @@ export class AdminNotificationsService {
           select: { id: true },
         }),
       ]);
-      targets = [...usersInCity.map((u) => u.id), ...ownersInCity.map((o) => o.id)];
+      targets = [
+        ...usersInCity.map((u) => u.id),
+        ...ownersInCity.map((o) => o.id),
+      ];
     } else if (dto.target === 'PROMOTIONAL') {
       const active = await this.prisma.auth.findMany({
         where: { isActive: true, deletedAt: null },
@@ -72,7 +81,7 @@ export class AdminNotificationsService {
         targetIds: targets,
         sentBy: adminId,
         sentCount: targets.length,
-        metadata: (dto.data as any) || {},
+        metadata: dto.data || {},
       },
     });
 
@@ -146,13 +155,26 @@ export class AdminNotificationsService {
     };
   }
 
-  private async sendToTargetsBackground(targets: string[], title: string, body: string, data?: any) {
+  private async sendToTargetsBackground(
+    targets: string[],
+    title: string,
+    body: string,
+    data?: any,
+  ) {
     for (const targetId of targets) {
       try {
-        await this.notificationsService.sendNotification(targetId, title, body, data);
+        await this.notificationsService.sendNotification(
+          targetId,
+          title,
+          body,
+          data,
+        );
       } catch (err) {
         // Log error internally and continue
-        console.error(`Failed to broadcast notification to user ${targetId}:`, err.message);
+        console.error(
+          `Failed to broadcast notification to user ${targetId}:`,
+          err.message,
+        );
       }
     }
   }

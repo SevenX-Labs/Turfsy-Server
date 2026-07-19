@@ -103,7 +103,9 @@ export class OwnerProfileService {
     });
 
     if (profile && profile.payment) {
-      profile.payment.accountNumber = maskAccountNumber(profile.payment.accountNumber) as any;
+      profile.payment.accountNumber = maskAccountNumber(
+        profile.payment.accountNumber,
+      ) as any;
     }
 
     return {
@@ -198,7 +200,9 @@ export class OwnerProfileService {
     });
 
     if (finalProfile && finalProfile.payment) {
-      finalProfile.payment.accountNumber = maskAccountNumber(finalProfile.payment.accountNumber) as any;
+      finalProfile.payment.accountNumber = maskAccountNumber(
+        finalProfile.payment.accountNumber,
+      ) as any;
     }
 
     return {
@@ -207,6 +211,4 @@ export class OwnerProfileService {
       data: finalProfile,
     };
   }
-
-
 }

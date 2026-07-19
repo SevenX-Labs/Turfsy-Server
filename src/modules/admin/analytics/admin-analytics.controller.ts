@@ -12,7 +12,9 @@ export class AdminAnalyticsController {
   constructor(private readonly analyticsService: AdminAnalyticsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get detailed booking, revenue, and platform analytics' })
+  @ApiOperation({
+    summary: 'Get detailed booking, revenue, and platform analytics',
+  })
   async getAnalytics() {
     return this.analyticsService.getPlatformAnalytics();
   }
@@ -31,7 +33,10 @@ export class AdminAnalyticsController {
   async exportPdf(@Res() res: Response) {
     const buffer = await this.analyticsService.exportAnalyticsPdf();
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=analytics_report.pdf');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=analytics_report.pdf',
+    );
     return res.status(200).send(buffer);
   }
 }

@@ -18,7 +18,12 @@ describe('AdminOwners', () => {
           id: 'owner1',
           phone: '+919999999999',
           isBanned: false,
-          ownerProfile: { id: 'prof1', name: 'Owner Test', email: 'owner@test.com', _count: { turfs: 1 } },
+          ownerProfile: {
+            id: 'prof1',
+            name: 'Owner Test',
+            email: 'owner@test.com',
+            _count: { turfs: 1 },
+          },
         },
       ]),
       findUnique: jest.fn().mockResolvedValue({
@@ -26,7 +31,11 @@ describe('AdminOwners', () => {
         phone: '+919999999999',
         role: 'OWNER',
         isBanned: false,
-        ownerProfile: { id: 'prof1', name: 'Owner Test', email: 'owner@test.com' },
+        ownerProfile: {
+          id: 'prof1',
+          name: 'Owner Test',
+          email: 'owner@test.com',
+        },
       }),
       findFirst: jest.fn().mockResolvedValue({
         id: 'owner1',
@@ -39,9 +48,9 @@ describe('AdminOwners', () => {
       findFirst: jest.fn().mockResolvedValue({ id: 'pay1', upiId: 'test@upi' }),
     },
     settlement: {
-      findMany: jest.fn().mockResolvedValue([
-        { id: 'set1', amount: 1000, status: 'COMPLETED' },
-      ]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ id: 'set1', amount: 1000, status: 'COMPLETED' }]),
     },
     turf: {
       count: jest.fn().mockResolvedValue(3),
@@ -80,9 +89,9 @@ describe('AdminOwners', () => {
         },
       ],
     })
-    .overrideGuard(JwtAdminGuard)
-    .useValue({ canActivate: () => true })
-    .compile();
+      .overrideGuard(JwtAdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AdminOwnersController>(AdminOwnersController);
     service = module.get<AdminOwnersService>(AdminOwnersService);
@@ -103,12 +112,21 @@ describe('AdminOwners', () => {
   });
 
   it('should suspend owner', async () => {
-    const res = await controller.suspendOwner('owner1', { reason: 'abuse' }, { adminId: 'admin1' }, { ip: '127.0.0.1' } as any);
+    const res = await controller.suspendOwner(
+      'owner1',
+      { reason: 'abuse' },
+      { adminId: 'admin1' },
+      { ip: '127.0.0.1' } as any,
+    );
     expect(res.success).toBe(true);
   });
 
   it('should activate owner', async () => {
-    const res = await controller.activateOwner('owner1', { adminId: 'admin1' }, { ip: '127.0.0.1' } as any);
+    const res = await controller.activateOwner(
+      'owner1',
+      { adminId: 'admin1' },
+      { ip: '127.0.0.1' } as any,
+    );
     expect(res.success).toBe(true);
   });
 

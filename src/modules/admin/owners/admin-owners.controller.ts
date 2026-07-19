@@ -1,4 +1,14 @@
-import { Controller, Get, Patch, Param, Query, Body, UseGuards, Req, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { AdminOwnersService } from './admin-owners.service';
 import { JwtAdminGuard } from '../auth/guards/jwt-admin.guard';
 import { SuspendOwnerDto } from './dto/suspend-owner.dto';
@@ -38,7 +48,10 @@ export class AdminOwnersController {
   async exportPdf(@Res() res: Response) {
     const buffer = await this.ownersService.exportOwnersPdf();
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=owners_report.pdf');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=owners_report.pdf',
+    );
     return res.status(200).send(buffer);
   }
 

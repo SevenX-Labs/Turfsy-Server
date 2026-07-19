@@ -53,9 +53,9 @@ describe('AdminSettings', () => {
         },
       ],
     })
-    .overrideGuard(JwtAdminGuard)
-    .useValue({ canActivate: () => true })
-    .compile();
+      .overrideGuard(JwtAdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AdminSettingsController>(AdminSettingsController);
     service = module.get<AdminSettingsService>(AdminSettingsService);

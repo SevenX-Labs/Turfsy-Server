@@ -13,9 +13,11 @@ describe('AdminSettlements', () => {
   const mockPrisma = {
     settlement: {
       count: jest.fn().mockResolvedValue(1),
-      findMany: jest.fn().mockResolvedValue([
-        { id: 's1', amount: 5000, status: 'PENDING', ownerProfileId: 'o1' },
-      ]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 's1', amount: 5000, status: 'PENDING', ownerProfileId: 'o1' },
+        ]),
       findUnique: jest.fn().mockResolvedValue({
         id: 's1',
         amount: 5000,
@@ -53,11 +55,13 @@ describe('AdminSettlements', () => {
         },
       ],
     })
-    .overrideGuard(JwtAdminGuard)
-    .useValue({ canActivate: () => true })
-    .compile();
+      .overrideGuard(JwtAdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
-    controller = module.get<AdminSettlementsController>(AdminSettlementsController);
+    controller = module.get<AdminSettlementsController>(
+      AdminSettlementsController,
+    );
     service = module.get<AdminSettlementsService>(AdminSettlementsService);
   });
 
@@ -80,12 +84,20 @@ describe('AdminSettlements', () => {
   });
 
   it('should create settlement', async () => {
-    const res = await controller.createSettlement({ ownerProfileId: 'o1', amount: 5000 });
+    const res = await controller.createSettlement({
+      ownerProfileId: 'o1',
+      amount: 5000,
+    });
     expect(res.success).toBe(true);
   });
 
   it('should mark paid', async () => {
-    const res = await controller.markPaid('s1', { txRef: 'UTR123' }, { adminId: 'admin1' }, { ip: '127.0.0.1' } as any);
+    const res = await controller.markPaid(
+      's1',
+      { txRef: 'UTR123' },
+      { adminId: 'admin1' },
+      { ip: '127.0.0.1' } as any,
+    );
     expect(res.success).toBe(true);
   });
 

@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Delete, Patch, Param, Query, Body, UseGuards, Req, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Patch,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { AdminUsersService } from './admin-users.service';
 import { JwtAdminGuard } from '../auth/guards/jwt-admin.guard';
 import { SuspendUserDto } from './dto/suspend.dto';
@@ -38,12 +50,17 @@ export class AdminUsersController {
   async exportPdf(@Res() res: Response) {
     const buffer = await this.usersService.exportUsersPdf();
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=users_report.pdf');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=users_report.pdf',
+    );
     return res.status(200).send(buffer);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get detailed profile and statistics for a specific user' })
+  @ApiOperation({
+    summary: 'Get detailed profile and statistics for a specific user',
+  })
   async getUserDetails(@Param('id') id: string) {
     return this.usersService.getUserDetails(id);
   }

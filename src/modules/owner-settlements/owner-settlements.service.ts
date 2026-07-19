@@ -8,7 +8,7 @@ export class OwnerSettlementsService {
   async getSettlementsSummary(ownerAuthId: string) {
     const owner = await this.prisma.ownerProfile.findUnique({
       where: { authId: ownerAuthId },
-      include: { 
+      include: {
         turfs: { select: { id: true } },
         payment: true,
       },
@@ -33,10 +33,16 @@ export class OwnerSettlementsService {
     });
 
     // Total revenue = Sum of booking.amount for completed bookings
-    const totalRevenue = completedBookings.reduce((sum, b) => sum + b.amount, 0);
+    const totalRevenue = completedBookings.reduce(
+      (sum, b) => sum + b.amount,
+      0,
+    );
 
     // Total owed = Sum of (depositAmount - platformFee) for completed bookings
-    const totalOwed = completedBookings.reduce((sum, b) => sum + (b.depositAmount - b.platformFee), 0);
+    const totalOwed = completedBookings.reduce(
+      (sum, b) => sum + (b.depositAmount - b.platformFee),
+      0,
+    );
 
     // Fetch all settlements for this owner
     const settlements = await this.prisma.settlement.findMany({
@@ -56,14 +62,18 @@ export class OwnerSettlementsService {
         totalOwed,
         totalSettled,
         pendingSettlements,
-        bankDetails: owner.payment ? {
-          bankHolderName: owner.payment.bankHolderName ?? null,
-          bankName: owner.payment.bankName ?? null,
-          accountNumber: owner.payment.accountNumber ? `*${owner.payment.accountNumber.slice(-4)}` : null,
-          ifscCode: owner.payment.ifscCode ?? null,
-          upiId: owner.payment.upiId ?? null,
-          payoutMethod: owner.payment.payoutMethod ?? null,
-        } : null,
+        bankDetails: owner.payment
+          ? {
+              bankHolderName: owner.payment.bankHolderName ?? null,
+              bankName: owner.payment.bankName ?? null,
+              accountNumber: owner.payment.accountNumber
+                ? `*${owner.payment.accountNumber.slice(-4)}`
+                : null,
+              ifscCode: owner.payment.ifscCode ?? null,
+              upiId: owner.payment.upiId ?? null,
+              payoutMethod: owner.payment.payoutMethod ?? null,
+            }
+          : null,
       },
     };
   }

@@ -264,5 +264,4 @@ describe('OwnerProfileService', () => {
       ).rejects.toThrow(ConflictException);
     });
   });
-
 });

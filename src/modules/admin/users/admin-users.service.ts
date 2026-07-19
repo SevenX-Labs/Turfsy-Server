@@ -7,7 +7,12 @@ import * as pdfkit from 'pdfkit';
 export class AdminUsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listUsers(query: { search?: string; status?: 'active' | 'suspended' | 'deleted'; page?: number; limit?: number }) {
+  async listUsers(query: {
+    search?: string;
+    status?: 'active' | 'suspended' | 'deleted';
+    page?: number;
+    limit?: number;
+  }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -29,8 +34,16 @@ export class AdminUsersService {
     if (query.search) {
       where.OR = [
         { phone: { contains: query.search, mode: 'insensitive' } },
-        { userProfile: { name: { contains: query.search, mode: 'insensitive' } } },
-        { userProfile: { email: { contains: query.search, mode: 'insensitive' } } },
+        {
+          userProfile: {
+            name: { contains: query.search, mode: 'insensitive' },
+          },
+        },
+        {
+          userProfile: {
+            email: { contains: query.search, mode: 'insensitive' },
+          },
+        },
       ];
     }
 
@@ -64,7 +77,8 @@ export class AdminUsersService {
       where: { id },
       include: { userProfile: true },
     });
-    if (!user || user.role !== 'USER') throw new NotFoundException('User not found');
+    if (!user || user.role !== 'USER')
+      throw new NotFoundException('User not found');
 
     const bookings = await this.prisma.booking.findMany({
       where: { userId: id },
@@ -73,7 +87,10 @@ export class AdminUsersService {
 
     const totalBookings = bookings.length;
     const totalSpent = bookings
-      .filter(b => b.bookingStatus === 'COMPLETED' || b.bookingStatus === 'CONFIRMED')
+      .filter(
+        (b) =>
+          b.bookingStatus === 'COMPLETED' || b.bookingStatus === 'CONFIRMED',
+      )
       .reduce((sum, b) => sum + b.amount, 0);
 
     const bookingHistorySummary = bookings.reduce((acc: any, b) => {
@@ -110,8 +127,15 @@ export class AdminUsersService {
     };
   }
 
-  async suspendUser(id: string, reason: string, adminId: string, ipAddress: string) {
-    const user = await this.prisma.auth.findFirst({ where: { id, role: 'USER' } });
+  async suspendUser(
+    id: string,
+    reason: string,
+    adminId: string,
+    ipAddress: string,
+  ) {
+    const user = await this.prisma.auth.findFirst({
+      where: { id, role: 'USER' },
+    });
     if (!user) throw new NotFoundException('User not found');
 
     const updated = await this.prisma.auth.update({
@@ -139,7 +163,9 @@ export class AdminUsersService {
   }
 
   async activateUser(id: string, adminId: string, ipAddress: string) {
-    const user = await this.prisma.auth.findFirst({ where: { id, role: 'USER' } });
+    const user = await this.prisma.auth.findFirst({
+      where: { id, role: 'USER' },
+    });
     if (!user) throw new NotFoundException('User not found');
 
     const updated = await this.prisma.auth.update({
@@ -167,7 +193,9 @@ export class AdminUsersService {
   }
 
   async softDeleteUser(id: string, adminId: string, ipAddress: string) {
-    const user = await this.prisma.auth.findFirst({ where: { id, role: 'USER', deletedAt: null } });
+    const user = await this.prisma.auth.findFirst({
+      where: { id, role: 'USER', deletedAt: null },
+    });
     if (!user) throw new NotFoundException('User not found');
 
     const updated = await this.prisma.auth.update({
@@ -260,11 +288,23 @@ export class AdminUsersService {
       doc.rect(40, 40, 515, 60).fill(primaryColor);
       doc.fillColor('#FFFFFF');
       doc.fontSize(16).font('Helvetica-Bold').text('TURFSY ADMIN', 55, 52);
-      doc.fontSize(10).font('Helvetica').text('Users Directory Directory & Account Audit', 55, 74);
-      
+      doc
+        .fontSize(10)
+        .font('Helvetica')
+        .text('Users Directory Directory & Account Audit', 55, 74);
+
       // Date meta info
-      doc.fontSize(8).font('Helvetica').text(`Generated: ${new Date().toLocaleString()}`, 380, 55, { align: 'right', width: 160 });
-      doc.text(`Total Records: ${users.length}`, 380, 72, { align: 'right', width: 160 });
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .text(`Generated: ${new Date().toLocaleString()}`, 380, 55, {
+          align: 'right',
+          width: 160,
+        });
+      doc.text(`Total Records: ${users.length}`, 380, 72, {
+        align: 'right',
+        width: 160,
+      });
 
       // Table Setup
       let y = 120;
@@ -296,7 +336,7 @@ export class AdminUsersService {
         if (y > 750) {
           doc.addPage();
           y = 50; // Reset Y on new page
-          
+
           // Re-draw header on new page
           doc.rect(startX, y, 515, 20).fill('#ECECFE');
           doc.fillColor('#1F2937');
@@ -320,39 +360,66 @@ export class AdminUsersService {
         }
 
         // Draw horizontal line at bottom of row
-        doc.strokeColor(borderGray).lineWidth(0.5).moveTo(startX, y + 22).lineTo(startX + 515, y + 22).stroke();
+        doc
+          .strokeColor(borderGray)
+          .lineWidth(0.5)
+          .moveTo(startX, y + 22)
+          .lineTo(startX + 515, y + 22)
+          .stroke();
 
         // Print cell text
         doc.fillColor(textColor);
-        
+
         let cx = startX;
         // #
-        doc.text(count.toString(), cx + 5, y + 7, { width: colWidths[0] - 10, align: 'center' });
+        doc.text(count.toString(), cx + 5, y + 7, {
+          width: colWidths[0] - 10,
+          align: 'center',
+        });
         cx += colWidths[0];
 
         // Name
-        doc.font('Helvetica-Bold').text(u.userProfile?.name || 'N/A', cx + 5, y + 7, { width: colWidths[1] - 10, ellipsis: true });
+        doc
+          .font('Helvetica-Bold')
+          .text(u.userProfile?.name || 'N/A', cx + 5, y + 7, {
+            width: colWidths[1] - 10,
+            ellipsis: true,
+          });
         doc.font('Helvetica');
         cx += colWidths[1];
 
         // Phone
-        doc.text(u.phone || 'N/A', cx + 5, y + 7, { width: colWidths[2] - 10, ellipsis: true });
+        doc.text(u.phone || 'N/A', cx + 5, y + 7, {
+          width: colWidths[2] - 10,
+          ellipsis: true,
+        });
         cx += colWidths[2];
 
         // Email
-        doc.text(u.userProfile?.email || 'N/A', cx + 5, y + 7, { width: colWidths[3] - 10, ellipsis: true });
+        doc.text(u.userProfile?.email || 'N/A', cx + 5, y + 7, {
+          width: colWidths[3] - 10,
+          ellipsis: true,
+        });
         cx += colWidths[3];
 
         // City
-        doc.text(u.userProfile?.city || 'N/A', cx + 5, y + 7, { width: colWidths[4] - 10, ellipsis: true });
+        doc.text(u.userProfile?.city || 'N/A', cx + 5, y + 7, {
+          width: colWidths[4] - 10,
+          ellipsis: true,
+        });
         cx += colWidths[4];
 
         // Status
         const statusText = u.isBanned ? 'BANNED' : 'ACTIVE';
-        doc.fillColor(u.isBanned ? bannedColor : activeColor).font('Helvetica-Bold');
-        doc.text(statusText, cx + 5, y + 7, { width: colWidths[5] - 10, align: 'left' });
+        doc
+          .fillColor(u.isBanned ? bannedColor : activeColor)
+          .font('Helvetica-Bold');
+        doc.text(statusText, cx + 5, y + 7, {
+          width: colWidths[5] - 10,
+          align: 'left',
+        });
         doc.font('Helvetica');
-        
+
         y += 22;
         count++;
       }
@@ -361,12 +428,13 @@ export class AdminUsersService {
       const range = doc.bufferedPageRange();
       for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
-        doc.fillColor('#9CA3AF').fontSize(8).text(
-          `Page ${i + 1} of ${range.count}`,
-          40,
-          800,
-          { align: 'center', width: 515 }
-        );
+        doc
+          .fillColor('#9CA3AF')
+          .fontSize(8)
+          .text(`Page ${i + 1} of ${range.count}`, 40, 800, {
+            align: 'center',
+            width: 515,
+          });
       }
 
       doc.end();

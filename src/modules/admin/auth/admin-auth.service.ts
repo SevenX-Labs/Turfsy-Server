@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -19,7 +23,9 @@ export class AdminAuthService {
     const envPassword = this.configService.get<string>('ADMIN_PASSWORD');
 
     if (!envEmail || !envPassword) {
-      throw new UnauthorizedException('Admin credentials are not configured on the server');
+      throw new UnauthorizedException(
+        'Admin credentials are not configured on the server',
+      );
     }
 
     // 1. Verify credentials purely against ENV variables
@@ -59,11 +65,17 @@ export class AdminAuthService {
     }
 
     // 3. Generate JWT token
-    const secret = this.configService.get<string>('JWT_ACCESS_SECRET') || 'your_access_secret_2709';
-    const expiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '24h';
-    
+    const secret =
+      this.configService.get<string>('JWT_ACCESS_SECRET') ||
+      'your_access_secret_2709';
+    const expiresIn =
+      this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '24h';
+
     const payload = { adminId: admin.id, email: admin.email, role: admin.role };
-    const token = this.jwtService.sign(payload, { secret, expiresIn: expiresIn as any });
+    const token = this.jwtService.sign(payload, {
+      secret,
+      expiresIn: expiresIn as any,
+    });
 
     // 4. Create session in database
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');

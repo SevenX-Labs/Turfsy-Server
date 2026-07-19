@@ -8,7 +8,7 @@ export class AdminAnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPlatformAnalytics() {
-    // 1. Core aggregates 
+    // 1. Core aggregates
     const completedAgg = await this.prisma.booking.aggregate({
       where: { bookingStatus: { in: ['CONFIRMED', 'COMPLETED'] } },
       _sum: { amount: true, platformFee: true, depositAmount: true },
@@ -197,11 +197,9 @@ export class AdminAnalyticsService {
 
       doc.fontSize(20).text('Turfsy Analytics Report', { align: 'center' });
       doc.moveDown();
-      doc
-        .fontSize(10)
-        .text(`Generated on: ${new Date().toLocaleString()}`, {
-          align: 'right',
-        });
+      doc.fontSize(10).text(`Generated on: ${new Date().toLocaleString()}`, {
+        align: 'right',
+      });
       doc.moveDown();
 
       doc.fontSize(14).text('Summary Metrics:', { underline: true });

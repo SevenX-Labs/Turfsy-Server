@@ -85,7 +85,6 @@ export class ManualCheckInDto {
   reason: string;
 }
 
-
 export class RateTurfDto {
   @IsInt({ message: 'Rating must be an integer' })
   @Min(1, { message: 'Rating minimum is 1' })

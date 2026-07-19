@@ -13,9 +13,15 @@ export class AdminDashboardService {
     endOfToday.setHours(23, 59, 59, 999);
 
     // Basic Metrics
-    const totalUsers = await this.prisma.auth.count({ where: { role: 'USER' } });
-    const totalOwners = await this.prisma.auth.count({ where: { role: 'OWNER' } });
-    const totalTurfs = await this.prisma.turf.count({ where: { deletedAt: null } });
+    const totalUsers = await this.prisma.auth.count({
+      where: { role: 'USER' },
+    });
+    const totalOwners = await this.prisma.auth.count({
+      where: { role: 'OWNER' },
+    });
+    const totalTurfs = await this.prisma.turf.count({
+      where: { deletedAt: null },
+    });
 
     // Active Bookings (CONFIRMED or PENDING_APPROVAL)
     const activeBookings = await this.prisma.booking.count({
@@ -72,8 +78,6 @@ export class AdminDashboardService {
     });
     const completedSettlements = completedSettlementsSum._sum.amount || 0;
 
-
-
     // Pending Manual Booking Approvals
     const pendingManualApprovals = await this.prisma.booking.count({
       where: { bookingStatus: 'PENDING_APPROVAL' },
@@ -100,8 +104,24 @@ export class AdminDashboardService {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-      const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      const start = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        0,
+        0,
+        0,
+        0,
+      );
+      const end = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        23,
+        59,
+        59,
+        999,
+      );
 
       const dayRevenue = await this.prisma.booking.aggregate({
         where: {
@@ -159,8 +179,24 @@ export class AdminDashboardService {
   async getRevenueStats() {
     const now = new Date();
 
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    const endOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
     const startOfWeek = new Date();
     startOfWeek.setDate(now.getDate() - 7);
@@ -204,9 +240,21 @@ export class AdminDashboardService {
         todayRevenue: todayAgg._sum.amount || 0,
         weeklyRevenue: weeklyAgg._sum.amount || 0,
         monthlyRevenue: monthlyAgg._sum.amount || 0,
-        platformFeeEarned: Math.max(0, (todayAgg._sum.platformFee || 0) - ((todayAgg._sum.depositAmount || 0) * 0.02)),
-        totalPlatformFeeWeekly: Math.max(0, (weeklyAgg._sum.platformFee || 0) - ((weeklyAgg._sum.depositAmount || 0) * 0.02)),
-        totalPlatformFeeMonthly: Math.max(0, (monthlyAgg._sum.platformFee || 0) - ((monthlyAgg._sum.depositAmount || 0) * 0.02)),
+        platformFeeEarned: Math.max(
+          0,
+          (todayAgg._sum.platformFee || 0) -
+            (todayAgg._sum.depositAmount || 0) * 0.02,
+        ),
+        totalPlatformFeeWeekly: Math.max(
+          0,
+          (weeklyAgg._sum.platformFee || 0) -
+            (weeklyAgg._sum.depositAmount || 0) * 0.02,
+        ),
+        totalPlatformFeeMonthly: Math.max(
+          0,
+          (monthlyAgg._sum.platformFee || 0) -
+            (monthlyAgg._sum.depositAmount || 0) * 0.02,
+        ),
         pendingSettlementAmount: pendingAgg._sum.amount || 0,
       },
     };
@@ -218,8 +266,24 @@ export class AdminDashboardService {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-      const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      const start = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        0,
+        0,
+        0,
+        0,
+      );
+      const end = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        23,
+        59,
+        59,
+        999,
+      );
       const count = await this.prisma.booking.count({
         where: { bookingDate: { gte: start, lte: end } },
       });
@@ -234,8 +298,24 @@ export class AdminDashboardService {
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-      const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      const start = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        0,
+        0,
+        0,
+        0,
+      );
+      const end = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        23,
+        59,
+        59,
+        999,
+      );
       const agg = await this.prisma.booking.aggregate({
         where: {
           bookingStatus: { in: ['CONFIRMED', 'COMPLETED'] },
@@ -255,8 +335,24 @@ export class AdminDashboardService {
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-      const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      const start = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        0,
+        0,
+        0,
+        0,
+      );
+      const end = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        23,
+        59,
+        59,
+        999,
+      );
 
       const userCount = await this.prisma.auth.count({
         where: { role: 'USER', createdAt: { lte: end } },

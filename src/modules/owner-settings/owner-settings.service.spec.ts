@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OwnerSettingsService } from './owner-settings.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role, AccountType } from '@prisma/client';
 
 describe('OwnerSettingsService', () => {
@@ -80,7 +84,10 @@ describe('OwnerSettingsService', () => {
     });
 
     it('should successfully save valid bank details', async () => {
-      const result = await service.updatePaymentSettings('owner-auth-id', validDto);
+      const result = await service.updatePaymentSettings(
+        'owner-auth-id',
+        validDto,
+      );
       expect(result.success).toBe(true);
       expect(result.message).toBe('Payment settings updated successfully');
       expect(result.data.bankHolderName).toBe('John Doe');
@@ -242,8 +249,16 @@ describe('OwnerSettingsService', () => {
   });
 
   describe('Turf Maintenance Blocks Management', () => {
-    const dummyTurf = { id: 'turf-1', name: 'Super Turf', ownerProfileId: 'owner-id' };
-    const mockAuthOwner = { id: 'owner-auth-id', role: Role.OWNER, isActive: true };
+    const dummyTurf = {
+      id: 'turf-1',
+      name: 'Super Turf',
+      ownerProfileId: 'owner-id',
+    };
+    const mockAuthOwner = {
+      id: 'owner-auth-id',
+      role: Role.OWNER,
+      isActive: true,
+    };
 
     beforeEach(() => {
       mockPrisma.auth.findUnique.mockResolvedValue(mockAuthOwner);
@@ -308,13 +323,20 @@ describe('OwnerSettingsService', () => {
         turfId: 'turf-1',
         turf: { owner: { authId: 'owner-auth-id' } },
       });
-      mockPrisma.turfMaintenance.update.mockResolvedValue({ id: 'm-1', reason: 'Updated Reason' });
-
-      const response = await service.updateMaintenanceBlock('owner-auth-id', 'm-1', {
-        startDate: '2026-08-15',
-        endDate: '2026-08-20',
+      mockPrisma.turfMaintenance.update.mockResolvedValue({
+        id: 'm-1',
         reason: 'Updated Reason',
       });
+
+      const response = await service.updateMaintenanceBlock(
+        'owner-auth-id',
+        'm-1',
+        {
+          startDate: '2026-08-15',
+          endDate: '2026-08-20',
+          reason: 'Updated Reason',
+        },
+      );
 
       expect(response.success).toBe(true);
       expect(response.data.reason).toBe('Updated Reason');
@@ -328,7 +350,10 @@ describe('OwnerSettingsService', () => {
       });
       mockPrisma.turfMaintenance.delete.mockResolvedValue({});
 
-      const response = await service.deleteMaintenanceBlock('owner-auth-id', 'm-1');
+      const response = await service.deleteMaintenanceBlock(
+        'owner-auth-id',
+        'm-1',
+      );
       expect(response.success).toBe(true);
     });
   });
