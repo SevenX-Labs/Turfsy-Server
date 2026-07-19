@@ -2940,6 +2940,14 @@ export class BookingService {
       this.metrics.refundTotal.inc({ status: 'success' });
     }
 
+    await this.userGamificationService
+      .handleBookingCancellation(booking.userId)
+      .catch((err) =>
+        this.logger.error(
+          `[GAMIFICATION] Failed to handle cancellation penalty: ${err.message}`,
+        ),
+      );
+
     this.sendCancellationEmail(
       bookingId,
       sanitizedReason || 'User Request',

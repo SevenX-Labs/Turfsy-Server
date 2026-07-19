@@ -28,9 +28,7 @@ export class UserGamificationService {
     const durationHours = booking.durationMins / 60;
     const pointsToAdd = 10; // 10 pts per booking completion
 
-    let gamification = await this.prisma.userGamification.findUnique({
-      where: { authId: userId },
-    });
+    let gamification = await this.getUserStats(userId);
 
     if (!gamification) {
       gamification = await this.prisma.userGamification.create({
@@ -166,9 +164,13 @@ export class UserGamificationService {
   }
 
   async getUserStats(userId: string) {
-    return await this.prisma.userGamification.findUnique({
+    let stats = await this.prisma.userGamification.findUnique({
       where: { authId: userId },
     });
+    if (stats) {
+      stats = await this.applyInactivityDecay(userId, stats);
+    }
+    return stats;
   }
 
   async getLeaderboardFiltered(
@@ -279,6 +281,73 @@ export class UserGamificationService {
         type: 'GAMIFICATION_PENALTY',
         pointsDeducted: pointsToDeduct,
         streak: 0,
+      },
+    );
+
+    return result;
+  }
+
+  private async applyInactivityDecay(userId: string, gamification: any) {
+    if (!gamification || !gamification.lastPlayedDate) return gamification;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const lastPlayed = gamification.lastPlayedDate;
+    const lastDate = new Date(
+      lastPlayed.getFullYear(),
+      lastPlayed.getMonth(),
+      lastPlayed.getDate(),
+    );
+
+    const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 5) {
+      const periods = Math.floor(diffDays / 5);
+      if (periods > 0) {
+        const pointsDeduction = periods * 5;
+        const streakDeduction = periods;
+
+        const updated = await this.prisma.userGamification.update({
+          where: { authId: userId },
+          data: {
+            points: { decrement: pointsDeduction },
+            streak: { set: Math.max(0, gamification.streak - streakDeduction) },
+            lastPlayedDate: new Date(lastPlayed.getTime() + periods * 5 * 24 * 60 * 60 * 1000),
+          },
+        });
+        return updated;
+      }
+    }
+    return gamification;
+  }
+
+  async handleBookingCancellation(userId: string) {
+    const pointsToDeduct = 2; // 2 pts penalty
+
+    const result = await this.prisma.userGamification.upsert({
+      where: { authId: userId },
+      create: {
+        authId: userId,
+        streak: 0,
+        points: -pointsToDeduct,
+        totalMatches: 0,
+        totalHours: 0,
+        lastPlayedDate: new Date(),
+      },
+      update: {
+        points: { decrement: pointsToDeduct },
+      },
+    });
+
+    // ── Push Notification (Cancellation Penalty) ──
+    this.triggerPushNotification(
+      userId,
+      'Booking Cancelled 😔',
+      `Points deducted (-${pointsToDeduct} pts) due to booking cancellation.`,
+      {
+        type: 'GAMIFICATION_PENALTY',
+        pointsDeducted: pointsToDeduct,
       },
     );
 

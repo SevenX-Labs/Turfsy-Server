@@ -81,6 +81,7 @@ describe('BookingService - Platform Fee Slabs', () => {
     incrementBookings: jest.fn(),
     handleNoShow: jest.fn().mockResolvedValue({}),
     handleBookingCompletion: jest.fn().mockResolvedValue({}),
+    handleBookingCancellation: jest.fn().mockResolvedValue({}),
   };
 
   const mockEmailService = {
