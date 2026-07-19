@@ -26,7 +26,7 @@ export class UserGamificationService {
     }
 
     const durationHours = booking.durationMins / 60;
-    const pointsToAdd = 30; // 30 pts per booking completion
+    const pointsToAdd = 10; // 10 pts per booking completion
 
     let gamification = await this.prisma.userGamification.findUnique({
       where: { authId: userId },

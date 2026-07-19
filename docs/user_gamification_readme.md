@@ -104,33 +104,15 @@ All endpoints are protected and require a valid `Bearer Token` belonging to a `U
 *   Only **one** increment per day (multiple slots in one day count as a single active day).
 *   **5-Day Grace Rule:** 
     *   Played within 1-5 days since last session? → Streak increases.
-    *   Not played for more than 5 days? → Streak **decreases** by 1 (floor is 0).
+    *   Not played for more than 5 days? → Streak resets to 1 (effective streak shown as 0 if expired).
 
 ### Points Rules:
 *   Points awarded *only* for **COMPLETED** status bookings.
-*   **10 Points** awarded for every **1 hour** played. (Duration is calculated dynamically server-side).
+*   A flat **10 Points** is awarded per booking completion.
 
 ### Nudge Logic Priority:
-1.  **Not Played Today**: "Play today to keep your streak 🔥"
-2.  **Rank 11+**: "Play more to reach Top 10!"
-3.  **Rank 4-10**: "You are close to the Top 3! Keep going! 🏆"
-4.  **Top 3**: "Great job! You are among the top players! 🌟"
-
----
-
-## 🛠️ Debug Tool
-
-### Trigger Completion Manually
-*   **URL:** `POST /api/v3/user-gamification/debug/trigger-completion/:bookingId`
-*   **Description:** Manually triggers the streak, points, and stat calculation for a specific booking.
-*   **Body:** None
-*   **Success Response:**
-    ```json
-    {
-      "streak": 5,
-      "points": 450,
-      "totalMatches": 12,
-      "totalHours": 24,
-      ...
-    }
-    ```
+1.  **New User (No stats)**: "Book your first game to start your streak! 🔥"
+2.  **Not Played Today**: "Play today to keep your streak 🔥"
+3.  **Rank 11+**: "Play more to reach Top 10!"
+4.  **Rank 4-10**: "You are close to the Top 3! Keep going! 🏆"
+5.  **Top 3**: "Great job! You are among the top players! 🌟"
