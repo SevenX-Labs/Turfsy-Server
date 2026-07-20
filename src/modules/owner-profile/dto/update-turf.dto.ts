@@ -112,6 +112,41 @@ export class UpdateTurfDto {
   @IsBoolean()
   cafeteria?: boolean;
 
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  footballs?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  cricketNets?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  bibs?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  goalPosts?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  wifi?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  cctv?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  firstAid?: boolean;
+
   @ApiProperty({ example: 1000, required: false })
   @IsOptional()
   @IsNumber()

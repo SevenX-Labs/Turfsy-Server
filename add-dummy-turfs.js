@@ -23,7 +23,12 @@ const turfs = [
     weekendNightPrice: 1500,
     floodLights: true,
     parking: true,
-    changingRoom: true
+    changingRoom: true,
+    footballs: true,
+    bibs: true,
+    goalPosts: true,
+    wifi: true,
+    firstAid: true
   },
   {
     name: "Rabale Strikers Arena",
@@ -43,7 +48,10 @@ const turfs = [
     weekendNightPrice: 1200,
     floodLights: true,
     parking: false,
-    drinkingWater: true
+    drinkingWater: true,
+    cricketNets: true,
+    wifi: true,
+    firstAid: true
   },
   {
     name: "Vashi 5-a-side Ground",
@@ -64,7 +72,13 @@ const turfs = [
     floodLights: true,
     parking: true,
     seatingArea: true,
-    cafeteria: true
+    cafeteria: true,
+    footballs: true,
+    bibs: true,
+    goalPosts: true,
+    wifi: true,
+    cctv: true,
+    firstAid: true
   },
   {
     name: "Nerul Sports Hub",
@@ -84,7 +98,10 @@ const turfs = [
     weekendNightPrice: 1900,
     floodLights: true,
     washroom: true,
-    changingRoom: true
+    changingRoom: true,
+    footballs: true,
+    goalPosts: true,
+    firstAid: true
   },
   {
     name: "Dadar Turf Club",
@@ -106,7 +123,11 @@ const turfs = [
     parking: true,
     washroom: true,
     changingRoom: true,
-    cafeteria: true
+    cafeteria: true,
+    cricketNets: true,
+    wifi: true,
+    cctv: true,
+    firstAid: true
   }
 ];
 

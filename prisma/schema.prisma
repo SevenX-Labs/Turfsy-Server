@@ -383,6 +383,13 @@ model Turf {
   drinkingWater                  Boolean               @default(false)
   seatingArea                    Boolean               @default(false)
   cafeteria                      Boolean               @default(false)
+  footballs                      Boolean               @default(false)
+  cricketNets                    Boolean               @default(false)
+  bibs                           Boolean               @default(false)
+  goalPosts                      Boolean               @default(false)
+  wifi                           Boolean               @default(false)
+  cctv                           Boolean               @default(false)
+  firstAid                       Boolean               @default(false)
   weekdayDayPrice                Float
   weekdayNightPrice              Float
   weekendDayPrice                Float

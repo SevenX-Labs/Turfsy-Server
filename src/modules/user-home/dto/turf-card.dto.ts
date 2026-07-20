@@ -22,6 +22,13 @@ export class TurfCardDto {
   drinkingWater: boolean;
   seatingArea: boolean;
   cafeteria: boolean;
+  footballs: boolean;
+  cricketNets: boolean;
+  bibs: boolean;
+  goalPosts: boolean;
+  wifi: boolean;
+  cctv: boolean;
+  firstAid: boolean;
   images: string[];
   owner: {
     name: string;

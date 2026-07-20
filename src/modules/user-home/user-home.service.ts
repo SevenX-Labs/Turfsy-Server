@@ -95,6 +95,13 @@ type RawTurf = {
   drinkingWater: boolean;
   seatingArea: boolean;
   cafeteria: boolean;
+  footballs: boolean;
+  cricketNets: boolean;
+  bibs: boolean;
+  goalPosts: boolean;
+  wifi: boolean;
+  cctv: boolean;
+  firstAid: boolean;
   groundDayUrl: string | null;
   groundNightUrl: string | null;
   entranceUrl: string | null;
@@ -345,6 +352,13 @@ export class UserHomeService {
             drinkingWater: true,
             seatingArea: true,
             cafeteria: true,
+            footballs: true,
+            cricketNets: true,
+            bibs: true,
+            goalPosts: true,
+            wifi: true,
+            cctv: true,
+            firstAid: true,
             groundDayUrl: true,
             groundNightUrl: true,
             entranceUrl: true,
@@ -407,6 +421,13 @@ export class UserHomeService {
       drinkingWater: turf.drinkingWater,
       seatingArea: turf.seatingArea,
       cafeteria: turf.cafeteria,
+      footballs: turf.footballs,
+      cricketNets: turf.cricketNets,
+      bibs: turf.bibs,
+      goalPosts: turf.goalPosts,
+      wifi: turf.wifi,
+      cctv: turf.cctv,
+      firstAid: turf.firstAid,
       images,
       owner: {
         name: turf.owner?.name ?? '',
