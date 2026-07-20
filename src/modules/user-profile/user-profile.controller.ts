@@ -10,6 +10,7 @@ import {
   HttpStatus,
   Query,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { UserProfileService } from './user-profile.service';
 import { CreateUserProfileDto } from './dto/create-profile.dto';
 import { UpdateUserProfileDto } from './dto/update-profile.dto';
@@ -30,6 +31,7 @@ export class UserProfileController {
   }
 
   @Get('check-availability')
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async checkAvailability(@Query('username') username: string) {
     return this.userProfileService.checkUsernameAvailability(username);
