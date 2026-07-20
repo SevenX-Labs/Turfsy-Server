@@ -369,6 +369,7 @@ export class TurfsController {
   // 5. Get Turf Details (Consumer View)
   @UseGuards(OptionalJwtAuthGuard)
   @Get(':turfId')
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async getTurfDetails(@Req() req: any, @Param('turfId') turfId: string) {
     return this.turfsService.getTurfDetails(turfId, req.user?.authId);

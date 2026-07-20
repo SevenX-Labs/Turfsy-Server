@@ -12,6 +12,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../modules/auth/guards/jwt-auth.guard';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -76,6 +77,7 @@ export class NotificationsController {
     return { success: true, message: 'Test notification sent' };
   }
   @Get('inbox')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getInbox(
