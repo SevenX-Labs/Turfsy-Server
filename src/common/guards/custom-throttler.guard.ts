@@ -8,11 +8,14 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
     const url = request?.originalUrl || request?.url || '';
     const className = context.getClass()?.name || '';
 
-    // Skip rate limiting if the request is for any admin API or uses an Admin controller
+    // Skip rate limiting if the request is for any admin API, uses an Admin controller,
+    // or is the notifications inbox / turf query endpoints which are high-frequency
     if (
       url.startsWith('/api/v1/admin') ||
       url.includes('/admin/') ||
-      className.startsWith('Admin')
+      className.startsWith('Admin') ||
+      url.includes('/api/v3/notifications/inbox') ||
+      url.includes('/api/v3/turfs')
     ) {
       return true;
     }
