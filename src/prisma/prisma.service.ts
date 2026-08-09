@@ -96,8 +96,15 @@ export class PrismaService
       }
     });
 
-    await this.$connect();
-    this.logger.log('Database connected successfully');
+    try {
+      await this.$connect();
+      this.logger.log('Database connected successfully');
+    } catch (err: any) {
+      this.logger.error(
+        `Database connection failed: ${err.message}. Ensure Supabase database project is active and connection settings in .env are correct.`,
+      );
+      throw err;
+    }
   }
 
   /**
