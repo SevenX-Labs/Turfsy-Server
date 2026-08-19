@@ -77,189 +77,222 @@ export class EmailService implements OnModuleInit {
   private getBaseTemplate(content: string, title: string) {
     return `
       <!DOCTYPE html>
-      <html>
+      <html lang="en">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>${title} | Turfzy</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
         <style>
+          * { box-sizing: border-box; }
           body { 
             font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f8fafc; 
+            background-color: #0B0E14; 
             margin: 0; 
             padding: 0; 
-            color: #1e293b;
+            color: #E2E8F0;
             -webkit-font-smoothing: antialiased;
           }
-          .wrapper {
-            background-color: #f8fafc;
-            padding: 40px 20px;
+          .email-wrapper {
+            background-color: #0B0E14;
+            padding: 36px 16px;
+            width: 100%;
           }
-          .container { 
-            max-width: 600px; 
+          .email-card { 
+            max-width: 580px; 
             margin: 0 auto; 
-            background: #ffffff; 
-            border-radius: 20px; 
+            background: #131823; 
+            border-radius: 22px; 
             overflow: hidden; 
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05); 
+            border: 1px solid #222B3C;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6); 
           }
-          .header { 
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
-            padding: 40px 30px; 
+          .brand-header { 
+            background: linear-gradient(180deg, #1A2234 0%, #131823 100%); 
+            padding: 30px 28px 22px; 
             text-align: center; 
-            color: white; 
+            border-bottom: 1px solid #222B3C;
           }
-          .header h1 { 
+          .brand-name { 
             margin: 0; 
-            font-size: 32px; 
+            font-size: 28px; 
+            font-weight: 900;
+            letter-spacing: 2.5px;
+            color: #FFFFFF;
+          }
+          .brand-highlight {
+            color: #7CFC00;
+          }
+          .brand-tagline {
+            margin: 6px 0 0;
+            font-size: 11px;
+            color: #94A3B8;
             font-weight: 700;
-            letter-spacing: -0.025em;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
           }
-          .header p {
-            margin: 10px 0 0;
-            font-size: 16px;
-            opacity: 0.9;
-            font-weight: 400;
+          .email-body { 
+            padding: 32px 28px; 
           }
-          .logo-circle {
-            width: 64px;
-            height: 64px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            backdrop-filter: blur(4px);
-          }
-          .content { padding: 40px 30px; }
-          .hero-text { 
+          .hero-title { 
             font-size: 22px; 
-            font-weight: 600; 
-            color: #0f172a; 
-            margin-bottom: 24px;
+            font-weight: 800; 
+            color: #FFFFFF; 
+            margin: 0 0 10px;
             text-align: center;
+            letter-spacing: -0.02em;
           }
-          .info-card { 
-            background: #f8fafc; 
-            border: 1px solid #e2e8f0;
+          .hero-sub {
+            text-align: center;
+            color: #94A3B8;
+            font-size: 14.5px;
+            line-height: 1.6;
+            margin: 0 0 24px;
+          }
+          .receipt-box { 
+            background: #181F2E; 
+            border: 1px solid #26334A;
             border-radius: 16px; 
             padding: 20px; 
-            margin: 24px 0; 
+            margin: 20px 0; 
           }
-          .info-table {
+          .receipt-table {
             width: 100%;
             border-collapse: collapse;
           }
-          .info-row td {
-            padding: 10px 0;
-            border-bottom: 1px solid #f1f5f9;
+          .receipt-row td {
+            padding: 11px 0;
+            border-bottom: 1px solid #222B3C;
             vertical-align: middle;
           }
-          .info-row:last-child td { border-bottom: none; }
-          .info-label { 
-            color: #64748b; 
+          .receipt-row:last-child td { 
+            border-bottom: none; 
+          }
+          .receipt-label { 
+            color: #94A3B8; 
             font-size: 13px; 
             font-weight: 500; 
             width: 40%;
             text-align: left;
           }
-          .info-value { 
-            color: #0f172a; 
+          .receipt-value { 
+            color: #FFFFFF; 
             font-size: 14px; 
-            font-weight: 600; 
+            font-weight: 700; 
             width: 60%;
             text-align: right;
           }
-          
-          .pin-container {
+          .pass-box {
             text-align: center;
-            background: #ffffff;
-            border: 2px dashed #cbd5e1;
+            background: rgba(124, 252, 0, 0.04);
+            border: 1.5px dashed rgba(124, 252, 0, 0.35);
             border-radius: 16px;
-            padding: 24px;
+            padding: 22px 18px;
             margin: 24px 0;
           }
-          .pin-code {
-            font-size: 42px;
+          .pass-label {
+            color: #94A3B8;
+            font-size: 11px;
             font-weight: 800;
-            letter-spacing: 0.15em;
-            color: #10b981;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+          }
+          .pass-code {
+            font-size: 26px;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            color: #7CFC00;
             margin: 8px 0;
-            line-height: 1;
+            line-height: 1.2;
           }
-          
-          .footer { 
-            padding: 30px; 
-            text-align: center; 
-            font-size: 13px; 
-            color: #94a3b8;
-            background: #f8fafc;
+          .pass-hint {
+            font-size: 12px;
+            color: #94A3B8;
+            margin: 0;
+            line-height: 1.5;
           }
-          .footer p { margin: 4px 0; }
-          .social-links { margin-top: 20px; }
-          .social-link {
-            color: #64748b;
-            text-decoration: none;
-            margin: 0 8px;
-            font-weight: 500;
-          }
-          
-          .btn { 
+          .cta-btn { 
             display: block; 
-            padding: 16px 20px; 
-            background: #10b981; 
-            color: #ffffff !important; 
+            padding: 15px 24px; 
+            background: linear-gradient(135deg, #7CFC00 0%, #6FC000 100%); 
+            color: #000000 !important; 
             text-decoration: none; 
-            border-radius: 12px; 
-            font-weight: 600; 
+            border-radius: 14px; 
+            font-weight: 800; 
             text-align: center;
-            margin-top: 32px;
-            font-size: 16px;
-            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+            margin-top: 28px;
+            font-size: 15px;
+            letter-spacing: 0.3px;
+            box-shadow: 0 6px 20px -4px rgba(124, 252, 0, 0.35);
           }
-          .badge { 
+          .badge-pill { 
             display: inline-block; 
             padding: 4px 10px; 
             border-radius: 6px; 
             font-size: 11px; 
-            font-weight: 700; 
+            font-weight: 800; 
+            letter-spacing: 0.5px;
             text-transform: uppercase; 
           }
-          .badge-success { background: #dcfce7; color: #166534; }
-          .badge-pending { background: #fef9c3; color: #854d0e; }
-          .badge-danger { background: #fee2e2; color: #991b1b; }
-          
+          .badge-success { 
+            background: rgba(124, 252, 0, 0.15); 
+            color: #7CFC00; 
+            border: 1px solid rgba(124, 252, 0, 0.3);
+          }
+          .badge-pending { 
+            background: rgba(255, 184, 0, 0.15); 
+            color: #FFB800; 
+            border: 1px solid rgba(255, 184, 0, 0.3);
+          }
+          .badge-danger { 
+            background: rgba(255, 69, 58, 0.15); 
+            color: #FF453A; 
+            border: 1px solid rgba(255, 69, 58, 0.3);
+          }
+          .brand-footer { 
+            padding: 26px 20px; 
+            text-align: center; 
+            font-size: 12px; 
+            color: #64748B;
+            background: #0E121B;
+            border-top: 1px solid #1E293B;
+          }
+          .brand-footer p { margin: 4px 0; }
+          .footer-links { margin-top: 14px; }
+          .footer-link {
+            color: #94A3B8;
+            text-decoration: none;
+            margin: 0 10px;
+            font-weight: 600;
+            font-size: 12px;
+          }
           @media only screen and (max-width: 480px) {
-            .container { border-radius: 0; }
-            .wrapper { padding: 0; }
-            .content { padding: 30px 20px; }
-            .pin-code { font-size: 32px; }
-            .hero-text { font-size: 18px; }
-            .info-label { font-size: 12px; }
-            .info-value { font-size: 13px; }
+            .email-wrapper { padding: 12px 6px; }
+            .email-card { border-radius: 16px; }
+            .email-body { padding: 22px 16px; }
+            .hero-title { font-size: 20px; }
+            .pass-code { font-size: 22px; }
           }
         </style>
       </head>
       <body>
-        <div class="wrapper">
-          <div class="container">
-            <div class="header">
-              <div class="logo-circle">🏟️</div>
-              <h1>Turfsy</h1>
-              <p>${title}</p>
+        <div class="email-wrapper">
+          <div class="email-card">
+            <div class="brand-header">
+              <h1 class="brand-name">TURF<span class="brand-highlight">ZY</span></h1>
+              <p class="brand-tagline">${title}</p>
             </div>
-            <div class="content">
+            <div class="email-body">
               ${content}
             </div>
-            <div class="footer">
-              <p>Made with ❤️ for Sports Lovers</p>
-              <p>&copy; 2026 Turfsy. All rights reserved.</p>
-              <div class="social-links">
-                <a href="#" class="social-link">Instagram</a>
-                <a href="#" class="social-link">Twitter</a>
-                <a href="#" class="social-link">Support</a>
+            <div class="brand-footer">
+              <p style="font-weight: 700; color: #94A3B8;">TURFZY - Play More. Anywhere.</p>
+              <p>&copy; 2026 Turfzy. All rights reserved.</p>
+              <div class="footer-links">
+                <a href="https://turfzy.com" class="footer-link">Website</a>
+                <a href="mailto:turfzy2026@gmail.com" class="footer-link">Support</a>
+                <a href="https://turfzy.com/privacy" class="footer-link">Privacy</a>
               </div>
             </div>
           </div>
@@ -281,35 +314,61 @@ export class EmailService implements OnModuleInit {
       displayId,
     } = bookingData;
 
-    const bookingRef = displayId || `#${id.slice(0, 8).toUpperCase()}`;
+    const bookingRef = displayId || `#TRF-${id.slice(0, 7).toUpperCase()}`;
 
     const content = `
-      <div class="hero-text">Your Stadium is Ready! ⚽</div>
-      <p style="text-align: center; color: #64748b; font-size: 15px;">Hey champion! Your booking at <strong>${turfName}</strong> is confirmed. It's time to lace up and hit the pitch.</p>
+      <div class="hero-title">Booking Confirmed</div>
+      <p class="hero-sub">Your pitch booking at <strong>${turfName}</strong> has been secured. Details and check-in pass are provided below.</p>
       
-      <div class="info-card">
-        <table class="info-table">
-          <tr class="info-row"><td class="info-label">Booking ID</td> <td class="info-value">${bookingRef}</td></tr>
-          <tr class="info-row"><td class="info-label">Date</td> <td class="info-value">${date}</td></tr>
-          <tr class="info-row"><td class="info-label">Time Slot</td> <td class="info-value">${startTime} – ${endTime}</td></tr>
-          <tr class="info-row"><td class="info-label">Payment</td> <td class="info-value"><span class="badge ${paymentStatus === 'SUCCESS' ? 'badge-success' : 'badge-pending'}">${paymentStatus}</span></td></tr>
-          <tr class="info-row"><td class="info-label">Total Amount</td> <td class="info-value">₹${amount}</td></tr>
+      <div class="receipt-box">
+        <table class="receipt-table">
+          <tr class="receipt-row">
+            <td class="receipt-label">Booking ID</td> 
+            <td class="receipt-value" style="color: #7CFC00;">${bookingRef}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Venue</td> 
+            <td class="receipt-value">${turfName}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Match Date</td> 
+            <td class="receipt-value">${date}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Time Slot</td> 
+            <td class="receipt-value">${startTime} - ${endTime}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Payment Status</td> 
+            <td class="receipt-value">
+              <span class="badge-pill ${paymentStatus === 'SUCCESS' || paymentStatus === 'PAID' ? 'badge-success' : 'badge-pending'}">
+                ${paymentStatus === 'SUCCESS' ? 'PAID & CONFIRMED' : paymentStatus}
+              </span>
+            </td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Total Amount</td> 
+            <td class="receipt-value" style="font-size: 16px;">Rs. ${amount}</td>
+          </tr>
         </table>
       </div>
 
-      <div class="pin-container">
-        <div style="color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Check-In Pass</div>
-        <div class="pin-code" style="font-size: 28px; letter-spacing: 0.05em;">${bookingRef}</div>
-        <p style="font-size: 13px; color: #94a3b8; margin: 0;">Show your QR code from the app at the turf entrance (active 10 mins before slot)</p>
+      <div class="pass-box">
+        <div class="pass-label">Entry Pass Reference</div>
+        <div class="pass-code">${bookingRef}</div>
+        <p class="pass-hint">Present your dynamic QR code from the Turfzy app at the venue gate (active 10 minutes prior to slot start).</p>
       </div>
       
-      <a href="#" class="btn">Manage Booking</a>
+      <a href="https://turfzy.com" class="cta-btn">View in Turfzy App</a>
     `;
+
+    const plainText = `TURFZY - Booking Confirmed\n\nYour booking at ${turfName} is confirmed.\n\nBooking ID: ${bookingRef}\nVenue: ${turfName}\nDate: ${date}\nTime Slot: ${startTime} - ${endTime}\nPayment Status: ${paymentStatus}\nTotal Amount: Rs. ${amount}\n\nPresent your dynamic QR code in the Turfzy app at the venue gate.\n\nThank you for choosing Turfzy!`;
 
     return this.sendMail(
       email,
-      `Booking Confirmed - ${turfName}`,
-      this.getBaseTemplate(content, 'Booking Summary'),
+      `Booking Confirmed - ${turfName} (${bookingRef})`,
+      this.getBaseTemplate(content, 'Official Booking Receipt'),
+      plainText,
     );
   }
 
@@ -318,26 +377,43 @@ export class EmailService implements OnModuleInit {
       bookingData;
 
     const content = `
-      <div class="hero-text" style="color: #64748b;">Booking Cancelled</div>
-      <p style="text-align: center; color: #64748b; font-size: 15px;">We're sorry to hear you won't be making it. Your booking for <strong>${turfName}</strong> has been cancelled.</p>
+      <div class="hero-title" style="color: #94A3B8;">Booking Cancelled</div>
+      <p class="hero-sub">Your booking for <strong>${turfName}</strong> has been cancelled.</p>
       
-      <div class="info-card">
-        <table class="info-table">
-          <tr class="info-row"><td class="info-label">Venue</td> <td class="info-value">${turfName}</td></tr>
-          <tr class="info-row"><td class="info-label">Date/Time</td> <td class="info-value">${date} at ${startTime}</td></tr>
-          <tr class="info-row"><td class="info-label">Reason</td> <td class="info-value">${reason || 'User Request'}</td></tr>
-          <tr class="info-row"><td class="info-label">Refund Initiated</td> <td class="info-value" style="color: #10b981;">₹${refundAmount || 0}</td></tr>
+      <div class="receipt-box">
+        <table class="receipt-table">
+          <tr class="receipt-row">
+            <td class="receipt-label">Venue</td> 
+            <td class="receipt-value">${turfName}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Date & Time</td> 
+            <td class="receipt-value">${date} at ${startTime}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Reason</td> 
+            <td class="receipt-value">${reason || 'Customer Request'}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Refund Initiated</td> 
+            <td class="receipt-value" style="color: #7CFC00;">Rs. ${refundAmount || 0}</td>
+          </tr>
         </table>
       </div>
       
-      <p style="font-size: 13px; color: #94a3b8; text-align: center; margin-top: 20px;">Refunds usually reflect in your account within 5-7 business days.</p>
-      <a href="#" class="btn" style="background: #64748b;">Book Another Turf</a>
+      <p style="font-size: 13px; color: #94A3B8; text-align: center; margin-top: 20px; line-height: 1.5;">
+        Eligible refunds are processed to your original payment method within 5-7 business days.
+      </p>
+      <a href="https://turfzy.com" class="cta-btn" style="background: #334155; color: #FFFFFF !important;">Book Another Slot</a>
     `;
+
+    const plainText = `TURFZY - Booking Cancelled\n\nYour booking for ${turfName} on ${date} at ${startTime} has been cancelled.\nRefund Initiated: Rs. ${refundAmount || 0}\nReason: ${reason || 'Customer Request'}\n\nThank you,\nTurfzy Team`;
 
     return this.sendMail(
       email,
       `Cancellation Confirmed - ${turfName}`,
-      this.getBaseTemplate(content, 'Cancellation Details'),
+      this.getBaseTemplate(content, 'Cancellation Notice'),
+      plainText,
     );
   }
 
@@ -345,24 +421,36 @@ export class EmailService implements OnModuleInit {
     const { turfName, amount, expiryTime } = bookingData;
 
     const content = `
-      <div class="hero-text">Don't Lose Your Slot! ⏳</div>
-      <p style="text-align: center; color: #64748b; font-size: 15px;">Your session at <strong>${turfName}</strong> is reserved. Complete payment to secure your time before it expires.</p>
+      <div class="hero-title">Payment Pending</div>
+      <p class="hero-sub">Your slot at <strong>${turfName}</strong> is reserved. Complete payment to secure your booking before the reservation expires.</p>
       
-      <div class="info-card">
-        <table class="info-table">
-          <tr class="info-row"><td class="info-label">Venue</td> <td class="info-value">${turfName}</td></tr>
-          <tr class="info-row"><td class="info-label">Payable Amount</td> <td class="info-value">₹${amount}</td></tr>
-          <tr class="info-row"><td class="info-label">Expires At</td> <td class="info-value" style="color: #ef4444;">${expiryTime}</td></tr>
+      <div class="receipt-box">
+        <table class="receipt-table">
+          <tr class="receipt-row">
+            <td class="receipt-label">Venue</td> 
+            <td class="receipt-value">${turfName}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Payable Amount</td> 
+            <td class="receipt-value">Rs. ${amount}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Expires At</td> 
+            <td class="receipt-value" style="color: #FF453A;">${expiryTime}</td>
+          </tr>
         </table>
       </div>
       
-      <a href="#" class="btn">Complete Payment</a>
+      <a href="https://turfzy.com" class="cta-btn">Complete Payment Now</a>
     `;
+
+    const plainText = `TURFZY - Payment Pending\n\nYour session at ${turfName} is reserved for Rs. ${amount}.\nComplete your payment before ${expiryTime} to confirm your slot.\n\nTurfzy Team`;
 
     return this.sendMail(
       email,
-      `Flash Notice: Payment Pending - ${turfName}`,
-      this.getBaseTemplate(content, 'Action Required'),
+      `Payment Pending - ${turfName}`,
+      this.getBaseTemplate(content, 'Payment Reminder'),
+      plainText,
     );
   }
 
@@ -370,46 +458,63 @@ export class EmailService implements OnModuleInit {
     const { turfName, date, startTime } = bookingData;
 
     const content = `
-      <div class="hero-text" style="color: #ef4444;">We Missed You! 🏟️</div>
-      <p style="text-align: center; color: #64748b; font-size: 15px;">Our team at <strong>${turfName}</strong> noticed you didn't check in for your booking today at ${startTime}.</p>
+      <div class="hero-title" style="color: #FF453A;">Missed Booking Notice</div>
+      <p class="hero-sub">The venue <strong>${turfName}</strong> noted you were unable to check in for your booking on ${date} at ${startTime}.</p>
       
-      <div class="info-card" style="border-left: 4px solid #ef4444;">
-        <table class="info-table">
-          <tr class="info-row"><td class="info-label">Date</td> <td class="info-value">${date}</td></tr>
-          <tr class="info-row"><td class="info-label">Status</td> <td class="info-value"><span class="badge badge-danger">No Show</span></td></tr>
+      <div class="receipt-box" style="border-left: 4px solid #FF453A;">
+        <table class="receipt-table">
+          <tr class="receipt-row">
+            <td class="receipt-label">Venue</td> 
+            <td class="receipt-value">${turfName}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Date & Time</td> 
+            <td class="receipt-value">${date} at ${startTime}</td>
+          </tr>
+          <tr class="receipt-row">
+            <td class="receipt-label">Status</td> 
+            <td class="receipt-value"><span class="badge-pill badge-danger">No Show</span></td>
+          </tr>
         </table>
       </div>
       
-      <p style="font-size: 13px; text-align: center; color: #94a3b8; margin-top: 20px;">No-shows are non-refundable, but we hope to see you back on the field soon!</p>
-      <a href="#" class="btn">Book for Tomorrow</a>
+      <p style="font-size: 13px; text-align: center; color: #94A3B8; margin-top: 20px;">
+        No-shows are non-refundable. We look forward to hosting you on your next match.
+      </p>
+      <a href="https://turfzy.com" class="cta-btn">Book Another Slot</a>
     `;
+
+    const plainText = `TURFZY - Missed Booking\n\nYou did not check in for your booking at ${turfName} on ${date} at ${startTime}.\nStatus: No Show\n\nTurfzy Team`;
 
     return this.sendMail(
       email,
-      `Missed Booking - ${turfName}`,
-      this.getBaseTemplate(content, 'Attendance Update'),
+      `Missed Booking Notice - ${turfName}`,
+      this.getBaseTemplate(content, 'Attendance Notice'),
+      plainText,
     );
   }
 
-  private async sendMail(to: string, subject: string, html: string) {
+  private async sendMail(to: string, subject: string, html: string, text?: string) {
     const sender =
       (
         this.configService.get<string>('MAIL_USER') ||
         this.configService.get<string>('GMAIL_USER') ||
-        'noreply@turfsy.com'
+        'turfzy2026@gmail.com'
       ).trim();
 
     try {
       const info = await this.transporter.sendMail({
-        from: `"Turfsy" <${sender}>`,
+        from: `"Turfzy" <${sender}>`,
         to,
+        replyTo: sender,
         subject,
         html,
+        text,
       });
-      this.logger.log(`Email sent successfully to ${to}: ${info.messageId}`);
+      this.logger.log(`[EMAIL_SENT] Successfully sent email to ${to}: ${info.messageId}`);
       return info;
     } catch (error: any) {
-      this.logger.error(`Failed to send email to ${to}: ${error.message}`);
+      this.logger.error(`[EMAIL_ERROR] Failed to send email to ${to}: ${error.message}`);
       throw error;
     }
   }

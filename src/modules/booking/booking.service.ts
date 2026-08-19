@@ -4127,6 +4127,10 @@ export class BookingService {
         .catch((err) =>
           this.logger.error(`[EMAIL_SEND_ERROR] Customer email failed: ${err.message}`),
         );
+    } else {
+      this.logger.warn(
+        `[EMAIL] User ${booking.userId} for booking ${booking.id} has no email address configured in profile. Customer email skipped.`,
+      );
     }
 
     // Send copy to turf owner if owner has an email registered
