@@ -3840,93 +3840,102 @@ export class BookingService {
     const data = invoice.data;
 
     return new Promise((resolve, reject) => {
-      const doc = new (PDFDocument as any)({ margin: 50 });
-      const chunks: Buffer[] = [];
+      try {
+        const doc = new ((PDFDocument as any).default || (PDFDocument as any))({
+          margin: 50,
+        });
+        const chunks: Buffer[] = [];
 
-      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
 
-      // --- LOGO / HEADER ---
-      doc.fillColor('#2E7D32').fontSize(28).text('TURFSY', { align: 'right' });
-      doc
-        .fillColor('#444')
-        .fontSize(10)
-        .text('Premium Turf Booking Platform', { align: 'right' });
-      doc.moveDown();
+        // --- LOGO / HEADER ---
+        doc.fillColor('#2E7D32').fontSize(28).text('TURFSY', { align: 'right' });
+        doc
+          .fillColor('#444')
+          .fontSize(10)
+          .text('Premium Turf Booking Platform', { align: 'right' });
+        doc.moveDown();
 
-      // --- INVOICE INFO ---
-      doc.fillColor('#000').fontSize(20).text('INVOICE', 50, 100);
-      doc.fontSize(10).text(`Invoice No: ${data.invoiceId}`, 50, 130);
-      doc.text(`Booking ID: ${data.bookingId}`, 50, 145);
-      doc.text(`Issued Date: ${new Date().toLocaleDateString()}`, 50, 160);
+        // --- INVOICE INFO ---
+        doc.fillColor('#000').fontSize(20).text('INVOICE', 50, 100);
+        doc.fontSize(10).text(`Invoice No: ${data.invoiceId}`, 50, 130);
+        doc.text(`Booking ID: ${data.bookingId}`, 50, 145);
+        doc.text(`Issued Date: ${new Date().toLocaleDateString()}`, 50, 160);
 
-      // --- BILLING SECTION ---
-      doc.rect(50, 180, 500, 1).fill('#EEE'); // Horizontal Line
+        // --- BILLING SECTION ---
+        doc.rect(50, 180, 500, 1).fill('#EEE'); // Horizontal Line
 
-      doc.fontSize(12).fillColor('#2E7D32').text('Billed By:', 50, 200);
-      doc.fillColor('#000').fontSize(14).text(data.turf.name, 50, 215);
-      doc.fontSize(10).text(data.turf.address, 50, 235);
-      doc.text(`${data.turf.city} - ${data.turf.pincode || ''}`, 50, 250);
-      doc.text(`Contact: ${data.turf.owner.contactNumber}`, 50, 265);
+        doc.fontSize(12).fillColor('#2E7D32').text('Billed By:', 50, 200);
+        doc.fillColor('#000').fontSize(14).text(data.turf?.name || 'Turf Venue', 50, 215);
+        doc.fontSize(10).text(data.turf?.address || '', 50, 235);
+        doc.text(`${data.turf?.city || ''} ${data.turf?.pincode ? '- ' + data.turf.pincode : ''}`, 50, 250);
+        const contactInfo = data.turf?.owner?.contactNumber || data.turf?.owner?.name || 'N/A';
+        doc.text(`Contact: ${contactInfo}`, 50, 265);
 
-      doc.fontSize(12).fillColor('#2E7D32').text('Billed To:', 300, 200);
-      doc.fillColor('#000').fontSize(14).text(data.customer.name, 300, 215);
-      doc.fontSize(10).text(`Phone: ${data.customer.phone}`, 300, 235);
-      doc.text(`Email: ${data.customer.email}`, 300, 250);
+        doc.fontSize(12).fillColor('#2E7D32').text('Billed To:', 300, 200);
+        doc.fillColor('#000').fontSize(14).text(data.customer?.name || 'Customer', 300, 215);
+        doc.fontSize(10).text(`Phone: ${data.customer?.phone || 'N/A'}`, 300, 235);
+        if (data.customer?.email && data.customer.email !== 'N/A') {
+          doc.text(`Email: ${data.customer.email}`, 300, 250);
+        }
 
-      // --- TABLE HEADER ---
-      doc.rect(50, 300, 500, 25).fill('#2E7D32');
-      doc.fillColor('#FFF').fontSize(10).text('Description', 70, 308);
-      doc.text('Slot Details', 250, 308);
-      doc.text('Amount', 450, 308);
+        // --- TABLE HEADER ---
+        doc.rect(50, 300, 500, 25).fill('#2E7D32');
+        doc.fillColor('#FFF').fontSize(10).text('Description', 70, 308);
+        doc.text('Slot Details', 250, 308);
+        doc.text('Amount', 450, 308);
 
-      // --- TABLE ROWS ---
-      doc
-        .fillColor('#000')
-        .fontSize(11)
-        .text(`Turf Booking - ${data.turf.sportsType}`, 70, 340);
-      doc
-        .fontSize(9)
-        .text(`${new Date(data.bookingDate).toDateString()}`, 250, 340);
-      doc.text(data.slot, 250, 355);
-      doc.fontSize(11).text(`INR ${data.amount}`, 450, 340);
+        // --- TABLE ROWS ---
+        doc
+          .fillColor('#000')
+          .fontSize(11)
+          .text(`Turf Booking - ${data.turf?.sportsType || 'Sports'}`, 70, 340);
+        doc
+          .fontSize(9)
+          .text(`${new Date(data.bookingDate).toDateString()}`, 250, 340);
+        doc.text(data.slot || '', 250, 355);
+        doc.fontSize(11).text(`INR ${data.amount}`, 450, 340);
 
-      doc.rect(50, 380, 500, 1).fill('#EEE');
+        doc.rect(50, 380, 500, 1).fill('#EEE');
 
-      // --- SUMMARY ---
-      const summaryY = 400;
-      doc.fontSize(10).text('Payment Type:', 350, summaryY);
-      doc.text(data.paymentType, 450, summaryY);
+        // --- SUMMARY ---
+        const summaryY = 400;
+        doc.fontSize(10).text('Payment Type:', 350, summaryY);
+        doc.text(data.paymentType || 'ONLINE', 450, summaryY);
 
-      doc.text('Booking Status:', 350, summaryY + 15);
-      doc
-        .fillColor(data.bookingStatus === 'CANCELLED' ? '#D32F2F' : '#2E7D32')
-        .text(data.bookingStatus, 450, summaryY + 15);
+        doc.text('Booking Status:', 350, summaryY + 15);
+        doc
+          .fillColor(data.bookingStatus === 'CANCELLED' ? '#D32F2F' : '#2E7D32')
+          .text(data.bookingStatus || 'CONFIRMED', 450, summaryY + 15);
 
-      doc
-        .fillColor('#000')
-        .fontSize(12)
-        .text('TOTAL PAID:', 350, summaryY + 40);
-      doc
-        .fontSize(14)
-        .text(`INR ${data.depositAmount || data.amount}`, 450, summaryY + 38);
+        doc
+          .fillColor('#000')
+          .fontSize(12)
+          .text('TOTAL PAID:', 350, summaryY + 40);
+        doc
+          .fontSize(14)
+          .text(`INR ${data.depositAmount || data.amount}`, 450, summaryY + 38);
 
-      // --- FOOTER ---
-      doc
-        .fontSize(10)
-        .fillColor('#777')
-        .text('Thank you for choosing Turfsy!', 50, 700, { align: 'center' });
-      doc
-        .fontSize(8)
-        .text(
-          'This is a computer generated invoice and does not require a physical signature.',
-          50,
-          715,
-          { align: 'center' },
-        );
+        // --- FOOTER ---
+        doc
+          .fontSize(10)
+          .fillColor('#777')
+          .text('Thank you for choosing Turfsy!', 50, 700, { align: 'center' });
+        doc
+          .fontSize(8)
+          .text(
+            'This is a computer generated invoice and does not require a physical signature.',
+            50,
+            715,
+            { align: 'center' },
+          );
 
-      doc.end();
+        doc.end();
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 
