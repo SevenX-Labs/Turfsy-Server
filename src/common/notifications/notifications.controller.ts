@@ -70,7 +70,7 @@ export class NotificationsController {
     await this.notificationsService.sendNotification(
       authId,
       'Test Notification',
-      'This is a test notification from Turfsy! 🚀',
+      'This is a test notification from Turfzy.',
       { type: 'test' },
     );
 

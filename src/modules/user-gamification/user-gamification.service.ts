@@ -45,8 +45,8 @@ export class UserGamificationService {
       // ── Push Notification (New Gamification) ──
       this.triggerPushNotification(
         userId,
-        'Level Up! 🌟',
-        `You earned ${pointsToAdd} pts! Started your streak 🔥`,
+        'Level Up',
+        `You earned ${pointsToAdd} points and started your streak.`,
         {
           type: 'GAMIFICATION_UPDATE',
           points: pointsToAdd,
@@ -105,8 +105,8 @@ export class UserGamificationService {
     // ── Push Notification (Gamification Update) ──
     this.triggerPushNotification(
       userId,
-      'Game Completed! 🏆',
-      `You earned ${pointsToAdd} pts! Current streak: ${newStreak} 🔥`,
+      'Game Completed',
+      `You earned ${pointsToAdd} points. Current streak: ${newStreak}.`,
       {
         type: 'GAMIFICATION_UPDATE',
         points: pointsToAdd,
@@ -233,10 +233,10 @@ export class UserGamificationService {
 
   async getNudgeMessage(userId: string, prefetchedStats?: any) {
     const stats = prefetchedStats || (await this.getUserStats(userId));
-    if (!stats) return 'Book your first game to start your streak! 🔥';
+    if (!stats) return 'Book your first match to start your streak.';
 
     if (stats?.decayApplied) {
-      return `Lost ${stats.streakDeducted} streak day(s) due to inactivity. Play today to start rebuilding! 🔥`;
+      return `Streak reduced by ${stats.streakDeducted} day(s) due to inactivity. Play today to rebuild your streak.`;
     }
 
     const lastPlayed = stats.lastPlayedDate;
@@ -248,17 +248,17 @@ export class UserGamificationService {
       lastPlayed.getFullYear() === now.getFullYear();
 
     if (!isPlayedToday) {
-      return 'Play today to keep your streak 🔥';
+      return 'Play today to maintain your streak.';
     }
 
     const rank = await this.getUserRank(userId, 'points', stats);
     if (rank && rank > 10) {
       return 'Play more to reach Top 10!';
     } else if (rank && rank > 3) {
-      return 'You are close to the Top 3! Keep going! 🏆';
+      return 'You are close to the Top 3 leaderboard. Keep playing!';
     }
 
-    return 'Great job! You are among the top players! 🌟';
+    return 'Great job! You are currently among the top players.';
   }
 
   async handleNoShow(userId: string, bookingId: string) {
@@ -293,8 +293,8 @@ export class UserGamificationService {
     // ── Push Notification (Penalty) ──
     this.triggerPushNotification(
       userId,
-      'Booking Missed 😞',
-      `Points deducted (-${pointsToDeduct} pts) and streak broken. Don't miss your next game!`,
+      'Booking Missed',
+      `Points deducted (-${pointsToDeduct} pts) and streak reset.`,
       {
         type: 'GAMIFICATION_PENALTY',
         pointsDeducted: pointsToDeduct,
@@ -338,8 +338,8 @@ export class UserGamificationService {
         // ── Push Notification (Inactivity Decay) ──
         this.triggerPushNotification(
           userId,
-          'Streak Reduced 😔',
-          `Lost ${streakDeduction} streak day(s) due to inactivity.`,
+          'Streak Reduced',
+          `Streak reduced by ${streakDeduction} day(s) due to inactivity.`,
           {
             type: 'GAMIFICATION_DECAY',
             streakDeducted: streakDeduction,
@@ -388,7 +388,7 @@ export class UserGamificationService {
     // ── Push Notification (Cancellation Penalty) ──
     this.triggerPushNotification(
       userId,
-      'Booking Cancelled 😔',
+      'Booking Cancelled',
       `Points deducted (-${pointsToDeduct} pts) due to booking cancellation.`,
       {
         type: 'GAMIFICATION_PENALTY',
