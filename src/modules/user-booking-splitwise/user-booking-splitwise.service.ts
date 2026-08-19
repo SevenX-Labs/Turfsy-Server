@@ -278,7 +278,7 @@ export class UserBookingSplitwiseService {
           if (player.userId) {
             this.triggerPushNotification(
               player.userId,
-              'Added to Split 👥',
+              'Added to Split',
               `You were added to a split for ${turfName} by ${leadName}`,
               {
                 type: 'SPLIT_ADDED',
@@ -407,7 +407,7 @@ export class UserBookingSplitwiseService {
         if (p.userId && p.amount > 0) {
           this.triggerPushNotification(
             p.userId,
-            'Payment Required 💸',
+            'Payment Required',
             `You need to pay ₹${p.amount} to ${leadName} for ${turfName}. See details.`,
             {
               type: 'SPLIT_PAYMENT',
@@ -535,8 +535,8 @@ export class UserBookingSplitwiseService {
     if (status === SplitPlayerStatus.PAID && player.userId) {
       this.triggerPushNotification(
         player.userId,
-        'You are settled! ✅',
-        'Your split payment has been marked as paid. All set!',
+        'Payment Confirmed',
+        'Your split payment has been marked as paid.',
         {
           type: 'SPLIT_PAID',
           bookingId,

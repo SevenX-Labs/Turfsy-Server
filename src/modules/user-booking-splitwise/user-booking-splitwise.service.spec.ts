@@ -159,7 +159,7 @@ describe('UserBookingSplitwiseService', () => {
       expect(result.success).toBe(true);
       expect(mockNotifications.sendNotification).toHaveBeenCalledWith(
         'teammate-auth-id',
-        'Added to Split 👥',
+        'Added to Split',
         'You were added to a split for Thunder Turf by Alex Hunter',
         {
           type: 'SPLIT_ADDED',
@@ -251,7 +251,7 @@ describe('UserBookingSplitwiseService', () => {
       expect(result.success).toBe(true);
       expect(mockNotifications.sendNotification).toHaveBeenCalledWith(
         'teammate-auth-id',
-        'Payment Required 💸',
+        'Payment Required',
         'You need to pay ₹500 to Alex Hunter for Thunder Turf. See details.',
         {
           type: 'SPLIT_PAYMENT',

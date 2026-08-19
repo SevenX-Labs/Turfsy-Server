@@ -572,7 +572,7 @@ export class BookingService {
         // ── Push Notification ──
         this.triggerPushNotification(
           booking.userId,
-          'Booking Confirmed ✅',
+          'Booking Confirmed',
           'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
           {
             type: 'BOOKING_CONFIRMED',
@@ -583,7 +583,7 @@ export class BookingService {
         // ── Notify Owner ──
         this.triggerPushNotification(
           turf.owner.authId,
-          'New Booking Received! 💸',
+          'New Booking Received',
           `You have a new confirmed booking for ${turf.name} at ${booking.startTime}`,
           {
             type: 'NEW_BOOKING_OWNER',
@@ -600,7 +600,7 @@ export class BookingService {
         // ── Notify Owner ──
         this.triggerPushNotification(
           turf.owner.authId,
-          'Booking Pending ⏳',
+          'Booking Pending',
           `A customer is performing payment for ${turf.name} at ${booking.startTime}`,
           {
             type: 'NEW_PENDING_OWNER',
@@ -1239,7 +1239,7 @@ export class BookingService {
         booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH;
       this.triggerPushNotification(
         updated.userId,
-        isPartial ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
+        isPartial ? 'Advance Paid' : 'Booking Confirmed',
         isPartial
           ? 'Your advance payment is successful. Pay remaining at venue. Your QR will become available 10 minutes before your slot.'
           : 'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
@@ -1252,7 +1252,7 @@ export class BookingService {
       // ── Notify Owner ──
       this.triggerPushNotification(
         booking.turf.owner.authId,
-        'Payment Received! 💰',
+        'Payment Received',
         `Advance payment received for ${booking.turf.name} at ${booking.startTime}`,
         {
           type: 'PAYMENT_RECEIVED_OWNER',
@@ -1368,7 +1368,7 @@ export class BookingService {
     const isPartial = booking.paymentType === PaymentType.HALF_ONLINE_HALF_CASH;
     await this.triggerPushNotification(
       updated.userId,
-      isPartial ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
+      isPartial ? 'Advance Paid' : 'Booking Confirmed',
       isPartial
         ? 'Your advance payment is successful. Pay remaining at venue. Your QR will become available 10 minutes before your slot.'
         : 'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
@@ -1382,7 +1382,7 @@ export class BookingService {
     if (booking.turf?.owner?.authId) {
       await this.triggerPushNotification(
         booking.turf.owner.authId,
-        'Payment Confirmed! 💳',
+        'Payment Confirmed',
         `Payment successful via reconciliation for ${booking.turf.name} at ${booking.startTime}`,
         {
           type: 'PAYMENT_RECEIVED_OWNER',
@@ -1862,7 +1862,7 @@ export class BookingService {
         // Customer Notification
         this.triggerPushNotification(
           updated.userId,
-          'Booking Pending Approval ⏳',
+          'Booking Pending Approval',
           'Your payment was successful. Waiting for owner confirmation.',
           {
             type: 'BOOKING_PENDING_APPROVAL',
@@ -1886,7 +1886,7 @@ export class BookingService {
         // Customer Notification
         this.triggerPushNotification(
           updated.userId,
-          isPartialWebhook ? 'Advance Paid 💳' : 'Booking Confirmed ✅',
+          isPartialWebhook ? 'Advance Paid' : 'Booking Confirmed',
           isPartialWebhook
             ? 'Your advance payment is successful. Pay remaining at venue. Your QR will become available 10 minutes before your slot.'
             : 'Booking Confirmed. Your QR will become available 10 minutes before your slot.',
@@ -2182,7 +2182,7 @@ export class BookingService {
       // Customer: Checked in successfully.
       this.triggerPushNotification(
         booking.userId,
-        'Check-in successful 🎉',
+        'Check-in Successful',
         `Check-in successful at ${checkInTime}.`,
         {
           type: 'CHECK_IN_SUCCESS',
@@ -2197,7 +2197,7 @@ export class BookingService {
       // Owner: Customer checked in.
       this.triggerPushNotification(
         ownerAuthId,
-        'Customer checked in ✅',
+        'Customer Checked In',
         `Customer checked in successfully at ${checkInTime}.`,
         {
           type: 'CHECK_IN_OWNER',
@@ -2332,7 +2332,7 @@ export class BookingService {
     // ── Push Notification ──
     this.triggerPushNotification(
       updated.userId,
-      'Check-in successful ✔',
+      'Check-in Successful',
       'You have been manually checked in by the turf owner. Enjoy your game!',
       {
         type: 'MANUAL_CHECKIN_CUSTOMER',
@@ -2343,7 +2343,7 @@ export class BookingService {
     // ── Notify Owner ──
     this.triggerPushNotification(
       ownerAuthId,
-      'Manual Check-in Saved ✅',
+      'Manual Check-in Confirmed',
       `You've manually checked in ${this.formatBookingId(updated.id)}. Reason logged.`,
       {
         type: 'MANUAL_CHECKIN_OWNER',
@@ -3050,7 +3050,7 @@ export class BookingService {
     if (booking.turf?.owner?.authId) {
       this.triggerPushNotification(
         booking.turf.owner.authId,
-        'Booking Cancelled! 🚨',
+        'Booking Cancelled',
         `${booking.turf.name} slot at ${booking.startTime} was cancelled by the customer.`,
         {
           type: 'BOOKING_CANCELLED_OWNER',
@@ -3184,7 +3184,7 @@ export class BookingService {
         // ── Notify Customer ──
         this.triggerPushNotification(
           booking.userId,
-          'Booking marked as No Show ⚠️',
+          'Booking Marked as No Show',
           'Booking marked as No Show.',
           {
             type: 'NO_SHOW_CUSTOMER',
@@ -3200,7 +3200,7 @@ export class BookingService {
         if (booking.turf?.owner?.authId) {
           this.triggerPushNotification(
             booking.turf.owner.authId,
-            'Customer did not check in ⚠️',
+            'Customer Did Not Check In',
             'Customer did not check in.',
             {
               type: 'NO_SHOW_OWNER',
@@ -3326,7 +3326,7 @@ export class BookingService {
       try {
         await this.notificationsService.sendNotification(
           ownerAuthId,
-          'Guest Arriving Soon! 🏃‍♂️',
+          'Guest Arriving Soon',
           `The PIN verification window for ${booking.turf.name} at ${booking.startTime} is now OPEN.`,
           {
             type: 'PIN_WINDOW_OPEN',
