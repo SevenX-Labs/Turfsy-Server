@@ -263,21 +263,23 @@ export class UserBookingSplitwiseService {
       if (notifiablePlayers.length > 0) {
         const leadProfile = await this.prisma.userProfile.findUnique({
           where: { authId },
-          select: { name: true },
+          select: { name: true, username: true },
         });
         const turfInfo = await this.prisma.turf.findUnique({
           where: { id: booking.turfId },
           select: { name: true },
         });
 
-        const bookingDateStr = booking.bookingDate.toISOString().split('T')[0];
+        const leadName =
+          leadProfile?.name || leadProfile?.username || 'Team Lead';
+        const turfName = turfInfo?.name || 'the turf';
 
         for (const player of notifiablePlayers) {
           if (player.userId) {
             this.triggerPushNotification(
               player.userId,
               'Added to Split 👥',
-              `You were added to a split for ${turfInfo?.name || 'a turf'}`,
+              `You were added to a split for ${turfName} by ${leadName}`,
               {
                 type: 'SPLIT_ADDED',
                 bookingId,
@@ -388,12 +390,25 @@ export class UserBookingSplitwiseService {
 
     // ── Push Notification (Payment Required for All) ──
     if (split.players && split.players.length > 0) {
+      const leadProfile = await this.prisma.userProfile.findUnique({
+        where: { authId },
+        select: { name: true, username: true },
+      });
+      const turfInfo = await this.prisma.turf.findUnique({
+        where: { id: booking.turfId },
+        select: { name: true },
+      });
+
+      const leadName =
+        leadProfile?.name || leadProfile?.username || 'Team Lead';
+      const turfName = turfInfo?.name || 'the turf';
+
       split.players.forEach((p) => {
         if (p.userId && p.amount > 0) {
           this.triggerPushNotification(
             p.userId,
             'Payment Required 💸',
-            `You need to pay ₹${p.amount} for your booking`,
+            `You need to pay ₹${p.amount} to ${leadName} for ${turfName}. See details.`,
             {
               type: 'SPLIT_PAYMENT',
               bookingId,
