@@ -261,4 +261,92 @@ describe('UserBookingSplitwiseService', () => {
       );
     });
   });
+
+  describe('updatePlayerStatus push notifications', () => {
+    it('should send settlement completed notification to player when marked as PAID', async () => {
+      mockPrisma.bookingSplitPlayer.findUnique.mockResolvedValue({
+        id: 'p-2',
+        splitId: 'split-1',
+        username: 'marcus',
+        userId: 'teammate-auth-id',
+        amount: 500,
+        status: 'PENDING',
+        split: {
+          id: 'split-1',
+          bookingId: 'booking-1',
+        },
+      });
+
+      mockPrisma.booking.findUnique.mockResolvedValue({
+        id: 'booking-1',
+        userId: 'lead-auth-id',
+        turfId: 'turf-1',
+        amount: 1000,
+      });
+
+      mockPrisma.bookingSplit.findUnique.mockResolvedValue({
+        id: 'split-1',
+        bookingId: 'booking-1',
+        leadUserId: 'lead-auth-id',
+        totalAmount: 1000,
+        isSplitDone: true,
+        players: [
+          {
+            id: 'p-1',
+            splitId: 'split-1',
+            username: 'alex',
+            userId: 'lead-auth-id',
+            amount: 500,
+            status: 'PAID',
+          },
+          {
+            id: 'p-2',
+            splitId: 'split-1',
+            username: 'marcus',
+            userId: 'teammate-auth-id',
+            amount: 500,
+            status: 'PENDING',
+          },
+        ],
+      });
+
+      mockPrisma.bookingSplitPlayer.update.mockResolvedValue({
+        id: 'p-2',
+        status: 'PAID',
+      });
+
+      mockPrisma.userProfile.findUnique.mockImplementation(({ where }: any) => {
+        if (where.authId === 'lead-auth-id') {
+          return Promise.resolve({ name: 'Alex Hunter', username: 'alex' });
+        }
+        return Promise.resolve(null);
+      });
+
+      mockPrisma.turf.findUnique.mockResolvedValue({
+        id: 'turf-1',
+        name: 'Thunder Turf',
+      });
+
+      const result = await service.updatePlayerStatus(
+        'lead-auth-id',
+        'p-2',
+        'PAID' as any,
+        '127.0.0.1',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockNotifications.sendNotification).toHaveBeenCalledWith(
+        'teammate-auth-id',
+        'Settlement Completed',
+        'Your split payment of ₹500 for Thunder Turf has been marked as paid by Alex Hunter. Your settlement is completed!',
+        {
+          type: 'SPLIT_PAID',
+          bookingId: 'booking-1',
+          amount: 500,
+          turfName: 'Thunder Turf',
+          leadName: 'Alex Hunter',
+        },
+      );
+    });
+  });
 });

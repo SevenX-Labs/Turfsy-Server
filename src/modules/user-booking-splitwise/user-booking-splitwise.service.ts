@@ -533,13 +533,30 @@ export class UserBookingSplitwiseService {
 
     // ── Push Notification (Payment Marked Paid) ──
     if (status === SplitPlayerStatus.PAID && player.userId) {
+      const leadProfile = await this.prisma.userProfile.findUnique({
+        where: { authId },
+        select: { name: true, username: true },
+      });
+      const turfInfo = await this.prisma.turf.findUnique({
+        where: { id: booking.turfId },
+        select: { name: true },
+      });
+
+      const leadName =
+        leadProfile?.name || leadProfile?.username || 'Booking Lead';
+      const turfName = turfInfo?.name || 'the turf';
+      const amountStr = player.amount > 0 ? ` of ₹${player.amount}` : '';
+
       this.triggerPushNotification(
         player.userId,
-        'Payment Confirmed',
-        'Your split payment has been marked as paid.',
+        'Settlement Completed',
+        `Your split payment${amountStr} for ${turfName} has been marked as paid by ${leadName}. Your settlement is completed!`,
         {
           type: 'SPLIT_PAID',
           bookingId,
+          amount: player.amount,
+          turfName,
+          leadName,
         },
       );
     }
