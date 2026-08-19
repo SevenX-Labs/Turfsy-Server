@@ -45,7 +45,7 @@ const NIGHT_START_HOUR = 18; // 6 PM onwards = night pricing
 const PIN_MAX_ATTEMPTS = 5; // Lock PIN after 5 wrong attempts
 const PIN_WINDOW_MINUTES = 10; // ±10 min for PIN verification
 const SLOT_LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes reservation window
-const MIN_ADVANCE_BOOKING_MINS = 30; // Must book at least 30 minutes before start time
+const MIN_ADVANCE_BOOKING_MINS = 15; // Must book at least 15 minutes before start time
 
 @Injectable()
 export class BookingService {
@@ -324,7 +324,7 @@ export class BookingService {
           const cutoffM = minAdvanceMins % 60;
           const cutoffStr = `${cutoffH.toString().padStart(2, '0')}:${cutoffM.toString().padStart(2, '0')}`;
           throw new BadRequestException(
-            `Bookings must be made at least 30 minutes in advance. Earliest available start time for today is ${cutoffStr}.`,
+            `Bookings must be made at least ${MIN_ADVANCE_BOOKING_MINS} minutes in advance. Earliest available start time for today is ${cutoffStr}.`,
           );
         }
       }
