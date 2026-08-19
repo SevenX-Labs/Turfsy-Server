@@ -118,10 +118,7 @@ export class EmailService implements OnModuleInit {
             margin: 0; 
             font-size: 28px; 
             font-weight: 900;
-            letter-spacing: 2.5px;
-            color: #FFFFFF;
-          }
-          .brand-highlight {
+            letter-spacing: 2px;
             color: #7CFC00;
           }
           .brand-tagline {
@@ -280,7 +277,7 @@ export class EmailService implements OnModuleInit {
         <div class="email-wrapper">
           <div class="email-card">
             <div class="brand-header">
-              <h1 class="brand-name">TURF<span class="brand-highlight">ZY</span></h1>
+              <h1 class="brand-name">TURFZY</h1>
               <p class="brand-tagline">${title}</p>
             </div>
             <div class="email-body">
