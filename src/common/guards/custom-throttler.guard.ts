@@ -5,10 +5,16 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 export class CustomThrottlerGuard extends ThrottlerGuard {
   protected async shouldSkip(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
+    const method = request?.method?.toUpperCase?.();
     const url = request?.originalUrl || request?.url || '';
     const className = context.getClass()?.name || '';
 
-    // Skip rate limiting if the request is for any admin API, uses an Admin controller,
+    // 1. Skip rate limiting for all GET, OPTIONS, and HEAD requests
+    if (method === 'GET' || method === 'OPTIONS' || method === 'HEAD') {
+      return true;
+    }
+
+    // 2. Skip rate limiting if the request is for any admin API, uses an Admin controller,
     // or is the notifications inbox / turf query endpoints which are high-frequency
     if (
       url.startsWith('/api/v1/admin') ||

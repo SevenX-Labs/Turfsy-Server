@@ -548,10 +548,14 @@ describe('BookingService - Platform Fee Slabs', () => {
     });
 
     it('Booking Outside Maintenance - should allow booking request to proceed', async () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
       mockPrisma.turfMaintenance.findFirst.mockResolvedValue(null);
       mockPrisma.booking.create.mockResolvedValue({
         id: 'booking-id',
-        bookingDate: '2026-08-15',
+        bookingDate: tomorrowStr,
         startTime: '10:00',
         endTime: '11:00',
         paymentType: PaymentType.FULL_ONLINE,
@@ -563,7 +567,7 @@ describe('BookingService - Platform Fee Slabs', () => {
 
       const response = await service.createBooking('user-id', {
         turfId: 'turf-1',
-        bookingDate: '2026-08-15',
+        bookingDate: tomorrowStr,
         startTime: '10:00',
         endTime: '11:00',
         durationMins: 60,
@@ -574,12 +578,16 @@ describe('BookingService - Platform Fee Slabs', () => {
     });
 
     it('Availability API - should hide maintenance dates by marking the day as booked/expired', async () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
       mockPrisma.turfMaintenance.findFirst.mockResolvedValue({
         id: 'm-1',
         reason: 'Ground Renovation',
       });
 
-      const result = await service.getBookedSlots('turf-1', '2026-08-15');
+      const result = await service.getBookedSlots('turf-1', tomorrowStr);
       expect(result.success).toBe(true);
       expect(result.data.underMaintenance).toBe(true);
       expect(result.data.maintenanceReason).toBe('Ground Renovation');
