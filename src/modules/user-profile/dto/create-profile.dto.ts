@@ -47,6 +47,26 @@ export class CreateUserProfileDto {
 
   @IsOptional()
   @IsString()
+  houseNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  societyName?: string;
+
+  @IsOptional()
+  @IsString()
+  landmark?: string;
+
+  @IsOptional()
+  @IsString()
+  roadName?: string;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
   city?: string;
 
   @IsOptional()
@@ -60,4 +80,8 @@ export class CreateUserProfileDto {
   @IsOptional()
   @IsEnum(SportsType, { message: 'preferredSport must be FOOTBALL or CRICKET' })
   preferredSport?: SportsType;
+
+  @IsOptional()
+  @IsString()
+  expoPushToken?: string;
 }

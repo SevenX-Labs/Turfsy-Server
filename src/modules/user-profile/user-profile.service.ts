@@ -82,6 +82,8 @@ export class UserProfileService {
       }
     }
 
+    const address = dto.address || this.formatAddress(dto);
+
     const profile = await this.prisma.userProfile.upsert({
       where: { authId },
       create: {
@@ -92,6 +94,7 @@ export class UserProfileService {
         dob: new Date(dto.dob),
         gender: dto.gender,
         preferredSport: dto.preferredSport ?? null,
+        address: address || undefined,
         city: dto.city,
         state: dto.state,
         pincode: dto.pincode,
@@ -105,6 +108,7 @@ export class UserProfileService {
         dob: new Date(dto.dob),
         gender: dto.gender,
         preferredSport: dto.preferredSport ?? null,
+        address: address || undefined,
         city: dto.city,
         state: dto.state,
         pincode: dto.pincode,

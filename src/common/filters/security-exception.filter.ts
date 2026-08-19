@@ -82,44 +82,59 @@ export class SecurityExceptionFilter implements ExceptionFilter {
 
     // Server-side logging — full details
     if (status >= 500) {
-      this.logger.error(`[ERROR ${status}]`, {
-        path: request.url,
-        method: request.method,
-        message: originalMessage,
-        stack: exception?.stack,
-        ip: request.ip,
-        requestId: request.id || request.headers['x-request-id'],
-      });
+      this.logger.error(
+        `[ERROR ${status}] [${request.method} ${request.url}] ${typeof originalMessage === 'string' ? originalMessage : JSON.stringify(originalMessage)}`,
+        {
+          path: request.url,
+          method: request.method,
+          message: originalMessage,
+          stack: exception?.stack,
+          ip: request.ip,
+          requestId: request.id || request.headers['x-request-id'],
+        },
+      );
     } else if (status === 400) {
-      this.logger.warn(`[VALIDATION ERROR]`, {
-        path: request.url,
-        method: request.method,
-        // Flatten array messages so they always show up in Pino JSON output
-        message: Array.isArray(originalMessage)
-          ? originalMessage.join(' | ')
-          : originalMessage,
-        validationErrors: Array.isArray(originalMessage)
-          ? originalMessage
-          : undefined,
-        ip: request.ip,
-        requestId: request.id || request.headers['x-request-id'],
-      });
+      const formattedMessage = Array.isArray(originalMessage)
+        ? originalMessage.join(' | ')
+        : typeof originalMessage === 'object'
+          ? JSON.stringify(originalMessage)
+          : String(originalMessage);
+
+      this.logger.warn(
+        `[VALIDATION ERROR] [${request.method} ${request.url}] ${formattedMessage}`,
+        {
+          path: request.url,
+          method: request.method,
+          message: formattedMessage,
+          validationErrors: Array.isArray(originalMessage)
+            ? originalMessage
+            : undefined,
+          ip: request.ip,
+          requestId: request.id || request.headers['x-request-id'],
+        },
+      );
     } else if (status === 401 || status === 403) {
-      this.logger.warn(`[AUTH ${status}]`, {
-        path: request.url,
-        method: request.method,
-        message: originalMessage,
-        ip: request.ip,
-        userId: request.user?.authId || 'anonymous',
-        requestId: request.id || request.headers['x-request-id'],
-      });
+      this.logger.warn(
+        `[AUTH ${status}] [${request.method} ${request.url}] ${typeof originalMessage === 'string' ? originalMessage : JSON.stringify(originalMessage)}`,
+        {
+          path: request.url,
+          method: request.method,
+          message: originalMessage,
+          ip: request.ip,
+          userId: request.user?.authId || 'anonymous',
+          requestId: request.id || request.headers['x-request-id'],
+        },
+      );
     } else {
-      this.logger.debug(`[EXCEPTION ${status}]`, {
-        path: request.url,
-        method: request.method,
-        message: originalMessage,
-        requestId: request.id || request.headers['x-request-id'],
-      });
+      this.logger.debug(
+        `[EXCEPTION ${status}] [${request.method} ${request.url}] ${typeof originalMessage === 'string' ? originalMessage : JSON.stringify(originalMessage)}`,
+        {
+          path: request.url,
+          method: request.method,
+          message: originalMessage,
+          requestId: request.id || request.headers['x-request-id'],
+        },
+      );
     }
 
     // Client-side response:

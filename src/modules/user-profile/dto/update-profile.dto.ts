@@ -68,6 +68,10 @@ export class UpdateUserProfileDto {
 
   @IsOptional()
   @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
   city?: string;
 
   @IsOptional()

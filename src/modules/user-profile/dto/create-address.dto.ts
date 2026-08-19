@@ -3,7 +3,6 @@ import {
   IsOptional,
   IsNumber,
   IsBoolean,
-  IsNotEmpty,
 } from 'class-validator';
 
 export class CreateUserAddressDto {
@@ -28,24 +27,28 @@ export class CreateUserAddressDto {
   roadName?: string;
 
   @IsString()
-  @IsNotEmpty()
-  city: string;
+  @IsOptional()
+  address?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
 
   @IsString()
   @IsOptional()
   state?: string;
 
   @IsString()
-  @IsNotEmpty()
-  pincode: string;
+  @IsOptional()
+  pincode?: string;
 
   @IsNumber()
-  @IsNotEmpty()
-  lat: number;
+  @IsOptional()
+  lat?: number;
 
   @IsNumber()
-  @IsNotEmpty()
-  lng: number;
+  @IsOptional()
+  lng?: number;
 
   @IsBoolean()
   @IsOptional()
