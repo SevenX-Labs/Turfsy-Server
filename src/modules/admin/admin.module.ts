@@ -3,8 +3,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PlatformFeeSlabModule } from '../platform-fee-slab/platform-fee-slab.module';
 import { NotificationsModule } from '../../common/notifications/notifications.module';
+
 import * as bcrypt from 'bcrypt';
 
 // Auth
@@ -40,9 +40,6 @@ import { AdminSettlementsService } from './settlements/admin-settlements.service
 import { AdminAnalyticsController } from './analytics/admin-analytics.controller';
 import { AdminAnalyticsService } from './analytics/admin-analytics.service';
 
-// Platform Fee Slabs
-import { AdminPlatformFeeSlabsController } from './platform-fee-slabs/admin-platform-fee-slabs.controller';
-
 // Notifications
 import { AdminNotificationsController } from './notifications/admin-notifications.controller';
 import { AdminNotificationsService } from './notifications/admin-notifications.service';
@@ -59,7 +56,6 @@ import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
   imports: [
     PrismaModule,
     ConfigModule,
-    PlatformFeeSlabModule,
     NotificationsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -82,7 +78,6 @@ import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
     AdminBookingsController,
     AdminSettlementsController,
     AdminAnalyticsController,
-    AdminPlatformFeeSlabsController,
     AdminNotificationsController,
     AdminSettingsController,
     AdminAuditLogsController,

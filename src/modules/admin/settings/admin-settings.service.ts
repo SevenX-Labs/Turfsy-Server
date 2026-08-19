@@ -10,7 +10,6 @@ export class AdminSettingsService {
     if (!config) {
       config = await this.prisma.platformConfig.create({
         data: {
-          platformFeePercent: 10,
           gstPercent: 18,
           minBookingAmount: 100,
           maxRefundDays: 7,

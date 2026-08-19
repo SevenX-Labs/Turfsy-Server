@@ -228,7 +228,7 @@ model PriceHistory {
 
 model PlatformConfig {
   id                        String   @id @default(uuid())
-  platformFeePercent        Float    @default(10)
+
   gstPercent                Float    @default(18)
   minBookingAmount          Float    @default(100)
   maxRefundDays             Int      @default(7)
@@ -706,19 +706,7 @@ model Notification {
   @@map("notifications")
 }
 
-model PlatformFeeSlab {
-  id          String   @id @default(uuid())
-  minAmount   Float    @map("min_amount")
-  maxAmount   Float    @map("max_amount")
-  platformFee Float    @map("platform_fee")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  @@index([isActive])
-  @@index([minAmount, maxAmount])
-  @@map("platform_fee_slabs")
-}
 
 model TurfMaintenance {
   id        String   @id @default(uuid())

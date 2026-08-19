@@ -29,7 +29,7 @@ import { EmailModule } from './common/email/email.module';
 import { RedisModule } from './common/redis/redis.module';
 import { BullMqModule } from './common/bullmq/bullmq.module';
 import { SentryModule } from '@sentry/nestjs/setup';
-import { PlatformFeeSlabModule } from './modules/platform-fee-slab/platform-fee-slab.module';
+
 import { AdminModule } from './modules/admin/admin.module';
 import { OwnerSettlementsModule } from './modules/owner-settlements/owner-settlements.module';
 import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
@@ -110,7 +110,7 @@ import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
     EmailModule,
     RedisModule,
     BullMqModule,
-    PlatformFeeSlabModule,
+
     AdminModule,
   ],
   controllers: [AppController],

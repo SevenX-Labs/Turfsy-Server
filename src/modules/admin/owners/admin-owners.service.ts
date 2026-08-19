@@ -74,12 +74,10 @@ export class AdminOwnersService {
               bookingStatus: 'COMPLETED',
               turf: { ownerProfileId: ownerProfile.id },
             },
-            _sum: { amount: true, platformFee: true },
+            _sum: { amount: true },
           });
 
-          const totalAmount = revenueAgg._sum.amount || 0;
-          const totalFee = revenueAgg._sum.platformFee || 0;
-          totalEarnings = Math.max(0, totalAmount - totalFee);
+          totalEarnings = revenueAgg._sum.amount || 0;
         }
 
         return {
@@ -147,7 +145,7 @@ export class AdminOwnersService {
       where: {
         turf: { ownerProfileId: ownerProfile.id },
       },
-      select: { amount: true, platformFee: true, bookingStatus: true },
+      select: { amount: true, bookingStatus: true },
     });
 
     const totalEarnings = bookings
@@ -155,7 +153,7 @@ export class AdminOwnersService {
         (b) =>
           b.bookingStatus === 'COMPLETED' || b.bookingStatus === 'CONFIRMED',
       )
-      .reduce((sum, b) => sum + (b.amount - b.platformFee), 0);
+      .reduce((sum, b) => sum + b.amount, 0);
 
     // 5. Rating
     const turfRatings = await this.prisma.turfRating.aggregate({

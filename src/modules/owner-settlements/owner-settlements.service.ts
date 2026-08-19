@@ -38,9 +38,9 @@ export class OwnerSettlementsService {
       0,
     );
 
-    // Total owed = Sum of (depositAmount - platformFee) for completed bookings
+    // Total owed = Sum of depositAmount for completed bookings
     const totalOwed = completedBookings.reduce(
-      (sum, b) => sum + (b.depositAmount - b.platformFee),
+      (sum, b) => sum + b.depositAmount,
       0,
     );
 

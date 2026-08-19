@@ -16,12 +16,9 @@ export class AdminAnalyticsService {
     });
 
     const totalRevenue = completedAgg._sum.amount || 0;
-    const grossPlatformFee = completedAgg._sum.platformFee || 0;
+    const grossPlatformFee = 0;
     const totalDepositAmount = completedAgg._sum.depositAmount || 0;
-    const totalPlatformFee = Math.max(
-      0,
-      grossPlatformFee - totalDepositAmount * 0.02,
-    );
+    const totalPlatformFee = 0;
     const completedCount = completedAgg._count.id;
 
     // 2. Status rates

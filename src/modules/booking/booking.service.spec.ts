@@ -30,9 +30,6 @@ describe('BookingService - Platform Fee Slabs', () => {
     turf: {
       findUnique: jest.fn(),
     },
-    platformFeeSlab: {
-      findMany: jest.fn(),
-    },
     slotLock: {
       create: jest.fn(),
       deleteMany: jest.fn(),
@@ -192,14 +189,6 @@ describe('BookingService - Platform Fee Slabs', () => {
       owner: { authId: 'owner-auth-id' },
     };
 
-    const defaultSlabs = [
-      { minAmount: 0, maxAmount: 1000, platformFee: 50, isActive: true },
-      { minAmount: 1001, maxAmount: 2000, platformFee: 100, isActive: true },
-      { minAmount: 2001, maxAmount: 3000, platformFee: 150, isActive: true },
-      { minAmount: 3001, maxAmount: 4000, platformFee: 200, isActive: true },
-      { minAmount: 4001, maxAmount: 5000, platformFee: 250, isActive: true },
-    ];
-
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const bookingDateStr = tomorrow.toISOString().split('T')[0];
@@ -216,7 +205,6 @@ describe('BookingService - Platform Fee Slabs', () => {
 
     beforeEach(() => {
       mockPrisma.turf.findUnique.mockResolvedValue(dummyTurf);
-      mockPrisma.platformFeeSlab.findMany.mockResolvedValue(defaultSlabs);
       mockPrisma.slotLock.create.mockResolvedValue({ id: 'lock-id' });
       mockPrisma.slotLock.findFirst.mockResolvedValue(null);
       mockPrisma.slotLock.update.mockResolvedValue({ id: 'lock-id' });
@@ -226,39 +214,21 @@ describe('BookingService - Platform Fee Slabs', () => {
         startTime: '10:00',
         endTime: '11:00',
         paymentType: PaymentType.FULL_ONLINE,
-        amount: 1050,
+        amount: 1000,
         groundCharge: 1000,
-        platformFee: 50,
-        depositAmount: 1050,
+        platformFee: 0,
+        depositAmount: 1000,
       });
     });
 
-    it('should successfully calculate a ₹50 platform fee for Ground Charge of ₹1000 (Boundary Value - slab 1)', async () => {
+    it('should successfully calculate pure ground charge for FULL_ONLINE preference', async () => {
       const response = await service.createBooking('user-id', createDto);
       expect(response.success).toBe(true);
       expect(response.data.groundCharge).toBe(1000);
-      expect(response.data.platformFee).toBe(50);
-      expect(response.data.totalAmount).toBe(1050);
-      expect(response.data.onlinePayable).toBe(1050);
+      expect(response.data.platformFee).toBe(0);
+      expect(response.data.totalAmount).toBe(1000);
+      expect(response.data.onlinePayable).toBe(1000);
       expect(response.data.remainingAtTurf).toBe(0);
-    });
-
-    it('should successfully calculate a ₹100 platform fee for Ground Charge of ₹1200 (Boundary Value - slab 2)', async () => {
-      mockPrisma.booking.create.mockResolvedValue({
-        id: 'booking-id',
-        amount: 1300,
-        groundCharge: 1200,
-        platformFee: 100,
-        depositAmount: 1300,
-      });
-
-      // We make it a 72-minute slot or change turf price to mock custom calculation
-      jest.spyOn(service as any, 'calculatePrice').mockReturnValue(1200);
-
-      const response = await service.createBooking('user-id', createDto);
-      expect(response.data.groundCharge).toBe(1200);
-      expect(response.data.platformFee).toBe(100);
-      expect(response.data.totalAmount).toBe(1300);
     });
 
     it('should calculate correct amounts for ADVANCE_PAYMENT preference (30% deposit)', async () => {
@@ -274,14 +244,11 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentType: PaymentType.HALF_ONLINE_HALF_CASH,
       });
 
-      // Total = 1200 + 100 = 1300
-      // Ground Advance = Math.round(1200 * 0.3) = 360
-      // Online Payable = 360 + 100 = 460
-      // Remaining at Turf = 1200 - 360 = 840
+      // Total = 1200, Ground Advance = Math.round(1200 * 0.3) = 360, Online Payable = 360, Remaining at Turf = 840
       expect(response.data.groundCharge).toBe(1200);
-      expect(response.data.platformFee).toBe(100);
+      expect(response.data.platformFee).toBe(0);
       expect(response.data.advanceAmount).toBe(360);
-      expect(response.data.onlinePayable).toBe(460);
+      expect(response.data.onlinePayable).toBe(360);
       expect(response.data.remainingAtTurf).toBe(840);
     });
 
@@ -298,49 +265,12 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentType: PaymentType.FULL_CASH,
       });
 
-      // Ground Charge = 1200, Platform Fee = 100
-      // Online Payable = 0
-      // Remaining at turf = 1300 (total amount)
+      // Ground Charge = 1200, Platform Fee = 0, Online Payable = 0, Remaining at turf = 1200
       expect(response.data.groundCharge).toBe(1200);
-      expect(response.data.platformFee).toBe(100);
+      expect(response.data.platformFee).toBe(0);
       expect(response.data.advanceAmount).toBe(0);
       expect(response.data.onlinePayable).toBe(0);
-      expect(response.data.remainingAtTurf).toBe(1300);
-    });
-
-    it('should throw BadRequestException if no active slab matches the ground charge', async () => {
-      mockPrisma.platformFeeSlab.findMany.mockResolvedValue([]);
-      await expect(service.createBooking('user-id', createDto)).rejects.toThrow(
-        new BadRequestException('No slab exists for this booking amount'),
-      );
-    });
-
-    it('should throw BadRequestException if multiple active slabs overlap/match', async () => {
-      mockPrisma.platformFeeSlab.findMany.mockResolvedValue([
-        { minAmount: 0, maxAmount: 1000, platformFee: 50, isActive: true },
-        { minAmount: 500, maxAmount: 1500, platformFee: 100, isActive: true },
-      ]);
-      await expect(service.createBooking('user-id', createDto)).rejects.toThrow(
-        new BadRequestException('Slab ranges overlap'),
-      );
-    });
-
-    it('should throw BadRequestException if any slab has minAmount > maxAmount', async () => {
-      mockPrisma.platformFeeSlab.findMany.mockResolvedValue([
-        { minAmount: 2000, maxAmount: 1000, platformFee: 50, isActive: true },
-      ]);
-      await expect(service.createBooking('user-id', createDto)).rejects.toThrow(
-        new BadRequestException('minAmount cannot be greater than maxAmount'),
-      );
-    });
-
-    it('should throw BadRequestException if any slab has a negative platformFee', async () => {
-      mockPrisma.platformFeeSlab.findMany.mockResolvedValue([
-        { minAmount: 0, maxAmount: 1000, platformFee: -50, isActive: true },
-      ]);
-      await expect(service.createBooking('user-id', createDto)).rejects.toThrow(
-        new BadRequestException('Platform Fee cannot be negative'),
-      );
+      expect(response.data.remainingAtTurf).toBe(1200);
     });
   });
 
@@ -361,13 +291,8 @@ describe('BookingService - Platform Fee Slabs', () => {
       owner: { authId: 'owner-auth-id' },
     };
 
-    const defaultSlabs = [
-      { minAmount: 0, maxAmount: 1000, platformFee: 50, isActive: true },
-    ];
-
     beforeEach(() => {
       mockPrisma.turf.findUnique.mockResolvedValue(dummyTurf);
-      mockPrisma.platformFeeSlab.findMany.mockResolvedValue(defaultSlabs);
       mockPrisma.slotLock.create.mockResolvedValue({ id: 'lock-id' });
       mockPrisma.slotLock.findFirst.mockResolvedValue(null);
       mockPrisma.slotLock.update.mockResolvedValue({ id: 'lock-id' });
@@ -403,10 +328,10 @@ describe('BookingService - Platform Fee Slabs', () => {
         startTime: '10:00',
         endTime: '11:00',
         paymentType: PaymentType.FULL_ONLINE,
-        amount: 1050,
+        amount: 1000,
         groundCharge: 1000,
-        platformFee: 50,
-        depositAmount: 1050,
+        platformFee: 0,
+        depositAmount: 1000,
       });
 
       const response = await service.createBooking('user-id', {
@@ -515,13 +440,8 @@ describe('BookingService - Platform Fee Slabs', () => {
       owner: { authId: 'owner-auth-id' },
     };
 
-    const defaultSlabs = [
-      { minAmount: 0, maxAmount: 1000, platformFee: 50, isActive: true },
-    ];
-
     beforeEach(() => {
       mockPrisma.turf.findUnique.mockResolvedValue(dummyTurf);
-      mockPrisma.platformFeeSlab.findMany.mockResolvedValue(defaultSlabs);
       mockPrisma.slotLock.create.mockResolvedValue({ id: 'lock-id' });
       mockPrisma.slotLock.findFirst.mockResolvedValue(null);
       mockPrisma.slotLock.update.mockResolvedValue({ id: 'lock-id' });
@@ -559,10 +479,10 @@ describe('BookingService - Platform Fee Slabs', () => {
         startTime: '10:00',
         endTime: '11:00',
         paymentType: PaymentType.FULL_ONLINE,
-        amount: 1050,
+        amount: 1000,
         groundCharge: 1000,
-        platformFee: 50,
-        depositAmount: 1050,
+        platformFee: 0,
+        depositAmount: 1000,
       });
 
       const response = await service.createBooking('user-id', {
@@ -809,7 +729,7 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentStatus: 'SUCCESS',
         paymentType: 'FULL_ONLINE',
         depositAmount: 1000,
-        platformFee: 50,
+        platformFee: 0,
         razorpayPaymentId: 'pay_123',
         turf: {
           name: 'Airoli Kickoff Turf',
@@ -827,10 +747,10 @@ describe('BookingService - Platform Fee Slabs', () => {
       expect(response.success).toBe(true);
       expect(response.data!.bookingStatus).toBe('CANCELLED');
       expect(response.data!.paymentStatus).toBe('REFUNDED');
-      expect(response.data!.refundAmount).toBe(950); // 1000 - 50 = 950
+      expect(response.data!.refundAmount).toBe(1000); // 100% of 1000
     });
 
-    it('should refund 50% of turfPortion when customer cancels between 24 and 72 hours before slot', async () => {
+    it('should refund 50% of deposit when customer cancels between 24 and 72 hours before slot', async () => {
       // Slot is 48 hours in the future
       const futureDate = new Date('2026-07-17T12:00:00.000Z');
 
@@ -844,7 +764,7 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentStatus: 'SUCCESS',
         paymentType: 'FULL_ONLINE',
         depositAmount: 1000,
-        platformFee: 50,
+        platformFee: 0,
         razorpayPaymentId: 'pay_123',
         turf: {
           name: 'Airoli Kickoff Turf',
@@ -862,7 +782,7 @@ describe('BookingService - Platform Fee Slabs', () => {
       expect(response.success).toBe(true);
       expect(response.data!.bookingStatus).toBe('CANCELLED');
       expect(response.data!.paymentStatus).toBe('REFUNDED');
-      expect(response.data!.refundAmount).toBe(475); // (1000 - 50) * 0.5 = 475
+      expect(response.data!.refundAmount).toBe(500); // 1000 * 0.5 = 500
     });
 
     it('should refund 0 when customer cancels <24 hours before slot', async () => {
@@ -879,7 +799,7 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentStatus: 'SUCCESS',
         paymentType: 'FULL_ONLINE',
         depositAmount: 1000,
-        platformFee: 50,
+        platformFee: 0,
         razorpayPaymentId: 'pay_123',
         turf: {
           name: 'Airoli Kickoff Turf',
@@ -914,7 +834,7 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentStatus: 'SUCCESS',
         paymentType: 'FULL_ONLINE',
         depositAmount: 1000,
-        platformFee: 50,
+        platformFee: 0,
         razorpayPaymentId: 'pay_123',
         turf: {
           name: 'Airoli Kickoff Turf',
@@ -944,7 +864,7 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentStatus: 'SUCCESS',
         paymentType: 'FULL_ONLINE',
         depositAmount: 1000,
-        platformFee: 50,
+        platformFee: 0,
       });
 
       mockPrisma.booking.update = jest.fn().mockImplementation(({ data }) => ({
@@ -1106,7 +1026,7 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentStatus: 'SUCCESS',
         paymentType: 'FULL_ONLINE',
         depositAmount: 1000,
-        platformFee: 50,
+        platformFee: 0,
         razorpayPaymentId: 'pay_123',
         turf: {
           id: 'turf-1',
@@ -1288,7 +1208,7 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentStatus: 'PENDING',
         paymentType: 'FULL_CASH',
         depositAmount: 0,
-        platformFee: 50,
+        platformFee: 0,
         turf: {
           id: 'turf-1',
           name: 'Airoli Kickoff Turf',

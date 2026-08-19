@@ -377,53 +377,9 @@ export class BookingService {
         dto.durationMins!,
       );
 
-      // Query active platform fee slabs
-      const activeSlabs = await this.prisma.platformFeeSlab.findMany({
-        where: { isActive: true },
-      });
-
-      // Validation 1: minAmount > maxAmount or negative platformFee
-      for (const s of activeSlabs) {
-        if (s.minAmount > s.maxAmount) {
-          throw new BadRequestException(
-            'minAmount cannot be greater than maxAmount',
-          );
-        }
-        if (s.platformFee < 0) {
-          throw new BadRequestException('Platform Fee cannot be negative');
-        }
-      }
-
-      // Validation 2: Slab ranges overlap
-      for (let i = 0; i < activeSlabs.length; i++) {
-        for (let j = i + 1; j < activeSlabs.length; j++) {
-          const s1 = activeSlabs[i];
-          const s2 = activeSlabs[j];
-          if (s1.minAmount <= s2.maxAmount && s1.maxAmount >= s2.minAmount) {
-            throw new BadRequestException('Slab ranges overlap');
-          }
-        }
-      }
-
-      // Validation 3: Find matching slab for booking amount (groundCharge/turfPrice)
-      const matchingSlabs = activeSlabs.filter(
-        (s) => turfPrice >= s.minAmount && turfPrice <= s.maxAmount,
-      );
-
-      // Validation 4: No slab exists
-      if (matchingSlabs.length === 0) {
-        throw new BadRequestException('No slab exists for this booking amount');
-      }
-
-      // Validation 5: Multiple slabs match
-      if (matchingSlabs.length > 1) {
-        throw new BadRequestException(
-          'Multiple slabs match this booking amount',
-        );
-      }
-
-      const platformFee = matchingSlabs[0].platformFee;
-      const amount = turfPrice + platformFee; // Total amount (Ground Charge + Platform Fee)
+      const groundCharge = turfPrice;
+      const platformFee = 0;
+      const amount = turfPrice; // Total amount is pure ground charge
 
       // Validate payment preference matching
       let isAllowed = false;
@@ -461,7 +417,7 @@ export class BookingService {
         remainingAtTurf = 0;
       } else if (dto.paymentType === PaymentType.HALF_ONLINE_HALF_CASH) {
         groundAdvance = Math.round(turfPrice * depositPercentage);
-        onlinePayable = groundAdvance + platformFee;
+        onlinePayable = groundAdvance;
         remainingAtTurf = turfPrice - groundAdvance;
         depositAmount = onlinePayable;
       } else if (dto.paymentType === PaymentType.FULL_CASH) {
@@ -2822,20 +2778,19 @@ export class BookingService {
             booking.paymentStatus === 'PENDING'));
 
       if (hasPaidOnline) {
-        const platformFee = booking.platformFee ?? 0;
-        const turfPortion = Math.max(0, booking.depositAmount - platformFee);
+        const deposit = booking.depositAmount ?? 0;
 
         if (booking.bookingStatus === 'PENDING_APPROVAL') {
-          // Booking was never confirmed, so 100% refund of turf/advance portion
-          refundAmount = turfPortion;
+          // Booking was never confirmed, so 100% refund of deposit
+          refundAmount = deposit;
         } else {
           // Booking was CONFIRMED, apply time-based refund matrix
           if (hoursUntilSlot > 72) {
-            // More than 72 Hours: 100% refund of turf/advance portion
-            refundAmount = turfPortion;
+            // More than 72 Hours: 100% refund of deposit
+            refundAmount = deposit;
           } else if (hoursUntilSlot >= 24) {
-            // 24–72 Hours: 50% refund of turf/advance portion
-            refundAmount = turfPortion * 0.5;
+            // 24–72 Hours: 50% refund of deposit
+            refundAmount = deposit * 0.5;
           } else {
             // Less than 24 Hours: No Refund
             refundAmount = 0;
@@ -4404,8 +4359,7 @@ export class BookingService {
             booking.paymentStatus === 'PENDING'));
 
       if (hasPaidOnline) {
-        const platformFee = booking.platformFee ?? 0;
-        refundAmount = Math.max(0, booking.depositAmount - platformFee);
+        refundAmount = booking.depositAmount ?? 0;
         refundAmount = Math.floor(refundAmount);
 
         if (refundAmount > 0) {
