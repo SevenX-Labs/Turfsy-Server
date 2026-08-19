@@ -278,8 +278,10 @@ export class EmailService implements OnModuleInit {
       endTime,
       amount,
       paymentStatus,
-      pin,
+      displayId,
     } = bookingData;
+
+    const bookingRef = displayId || `#${id.slice(0, 8).toUpperCase()}`;
 
     const content = `
       <div class="hero-text">Your Stadium is Ready! ⚽</div>
@@ -287,7 +289,7 @@ export class EmailService implements OnModuleInit {
       
       <div class="info-card">
         <table class="info-table">
-          <tr class="info-row"><td class="info-label">Booking ID</td> <td class="info-value">#${id.slice(0, 8).toUpperCase()}</td></tr>
+          <tr class="info-row"><td class="info-label">Booking ID</td> <td class="info-value">${bookingRef}</td></tr>
           <tr class="info-row"><td class="info-label">Date</td> <td class="info-value">${date}</td></tr>
           <tr class="info-row"><td class="info-label">Time Slot</td> <td class="info-value">${startTime} – ${endTime}</td></tr>
           <tr class="info-row"><td class="info-label">Payment</td> <td class="info-value"><span class="badge ${paymentStatus === 'SUCCESS' ? 'badge-success' : 'badge-pending'}">${paymentStatus}</span></td></tr>
@@ -296,9 +298,9 @@ export class EmailService implements OnModuleInit {
       </div>
 
       <div class="pin-container">
-        <div style="color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Your Check-In PIN</div>
-        <div class="pin-code">${pin || '0000'}</div>
-        <p style="font-size: 13px; color: #94a3b8; margin: 0;">Show this code at the turf entrance</p>
+        <div style="color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Check-In Pass</div>
+        <div class="pin-code" style="font-size: 28px; letter-spacing: 0.05em;">${bookingRef}</div>
+        <p style="font-size: 13px; color: #94a3b8; margin: 0;">Show your QR code from the app at the turf entrance (active 10 mins before slot)</p>
       </div>
       
       <a href="#" class="btn">Manage Booking</a>

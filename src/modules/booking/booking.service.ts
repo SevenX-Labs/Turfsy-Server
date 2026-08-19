@@ -4107,7 +4107,7 @@ export class BookingService {
       endTime: booking.endTime,
       amount: booking.amount,
       paymentStatus: booking.paymentStatus,
-      pin: booking.checkInPin || '0000',
+      displayId: this.formatBookingId(booking.id),
     };
 
     if (recipientEmail) {
