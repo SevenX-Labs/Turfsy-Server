@@ -23,18 +23,26 @@ export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
 
   constructor(private configService: ConfigService) {
+    const rawUser =
+      this.configService.get<string>('MAIL_USER') ||
+      this.configService.get<string>('GMAIL_USER') ||
+      '';
+    const rawPass =
+      this.configService.get<string>('MAIL_PASS') ||
+      this.configService.get<string>('GMAIL_APP_PASSWORD') ||
+      '';
+
+    const user = rawUser.trim();
+    const pass = rawPass.replace(/["'\s]/g, '');
+
     const smtpOptions: SMTPTransport.Options = {
       host: 'smtp.gmail.com',
       port: 587,
       secure: false, // port 587 uses STARTTLS
       requireTLS: true,
       auth: {
-        user:
-          this.configService.get<string>('MAIL_USER') ||
-          this.configService.get<string>('GMAIL_USER'),
-        pass:
-          this.configService.get<string>('MAIL_PASS') ||
-          this.configService.get<string>('GMAIL_APP_PASSWORD'),
+        user,
+        pass,
       },
       connectionTimeout: 10000, // 10s connect timeout
       socketTimeout: 15000, // 15s socket timeout
@@ -382,16 +390,23 @@ export class EmailService implements OnModuleInit {
   }
 
   private async sendMail(to: string, subject: string, html: string) {
+    const sender =
+      (
+        this.configService.get<string>('MAIL_USER') ||
+        this.configService.get<string>('GMAIL_USER') ||
+        'noreply@turfsy.com'
+      ).trim();
+
     try {
       const info = await this.transporter.sendMail({
-        from: `"Turfsy" <${this.configService.get<string>('MAIL_USER')}>`,
+        from: `"Turfsy" <${sender}>`,
         to,
         subject,
         html,
       });
-      this.logger.log(`Email sent: ${info.messageId}`);
+      this.logger.log(`Email sent successfully to ${to}: ${info.messageId}`);
       return info;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to send email to ${to}: ${error.message}`);
       throw error;
     }

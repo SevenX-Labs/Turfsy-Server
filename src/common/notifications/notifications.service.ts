@@ -2,11 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import axios from 'axios';
+import * as https from 'https';
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly expoUrl = 'https://exp.host/--/api/v2/push/send';
+  private readonly httpsAgent = new https.Agent({
+    keepAlive: true,
+    maxSockets: 100,
+    keepAliveMsecs: 15000,
+  });
 
   constructor(
     private readonly configService: ConfigService,
@@ -15,10 +21,7 @@ export class NotificationsService {
 
   /**
    * Send a notification by saving it to DB and pushing via Expo if token exists
-   * @param authId Auth ID of the user
-   * @param title Title of notification
-   * @param body Body content
-   * @param data Optional data payload
+   * Ultra-fast non-blocking execution: dispatches push notification over persistent socket immediately
    */
   async sendNotification(
     authId: string,
@@ -31,8 +34,27 @@ export class NotificationsService {
       return;
     }
 
-    try {
-      await this.prisma.notification.create({
+    // 1. Instant non-blocking Push Notification dispatch
+    this.prisma.auth
+      .findUnique({
+        where: { id: authId },
+        select: { expoPushToken: true },
+      })
+      .then((user) => {
+        const token = user?.expoPushToken;
+        if (token) {
+          this.dispatchExpoPush(token, title, body, data);
+        } else {
+          this.logger.log(`No push token for user ${authId}, saved to inbox only`);
+        }
+      })
+      .catch((e) =>
+        this.logger.error(`Error fetching push token for ${authId}: ${e.message}`),
+      );
+
+    // 2. Parallel asynchronous DB inbox save
+    this.prisma.notification
+      .create({
         data: {
           authId,
           title,
@@ -40,23 +62,98 @@ export class NotificationsService {
           type: data?.type || null,
           data: data || {},
         },
+      })
+      .catch((e) => {
+        this.logger.error(`Failed to save notification to DB: ${e.message}`);
       });
-    } catch (e) {
-      this.logger.error(`Failed to save notification to DB: ${e.message}`);
-    }
+  }
 
-    const user = await this.prisma.auth.findUnique({
-      where: { id: authId },
+  /**
+   * Fast batch multicast notification for sending to multiple users in a single HTTP request
+   */
+  async sendMulticastNotification(
+    authIds: string[],
+    title: string,
+    body: string,
+    data?: any,
+  ) {
+    if (!authIds || authIds.length === 0) return;
+
+    const uniqueAuthIds = [...new Set(authIds.filter(Boolean))];
+
+    // Save DB notifications in bulk
+    const dbPromise = this.prisma.notification
+      .createMany({
+        data: uniqueAuthIds.map((id) => ({
+          authId: id,
+          title,
+          body,
+          type: data?.type || null,
+          data: data || {},
+        })),
+      })
+      .catch((e) =>
+        this.logger.error(`Failed to bulk save notifications to DB: ${e.message}`),
+      );
+
+    // Fetch tokens in parallel
+    const tokensPromise = this.prisma.auth.findMany({
+      where: {
+        id: { in: uniqueAuthIds },
+        expoPushToken: { not: null },
+      },
       select: { expoPushToken: true },
     });
 
-    const token = user?.expoPushToken;
+    const [_, users] = await Promise.all([dbPromise, tokensPromise]);
 
-    if (!token) {
-      this.logger.log(`No push token for user ${authId}, saved to inbox only`);
-      return;
+    const validTokens = users
+      .map((u) => u.expoPushToken)
+      .filter((t): t is string => Boolean(t));
+
+    if (validTokens.length === 0) return;
+
+    // Send single batch HTTP request to Expo (up to 100 messages per payload)
+    const messages = validTokens.map((to) => ({
+      to,
+      title,
+      body,
+      sound: 'default',
+      priority: 'high',
+      channelId: 'default',
+      _displayInForeground: true,
+      data: data || {},
+    }));
+
+    const expoAccessToken = this.configService.get<string>('EXPO_ACCESS_TOKEN');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (expoAccessToken) {
+      headers['Authorization'] = `Bearer ${expoAccessToken}`;
     }
 
+    try {
+      await axios.post(this.expoUrl, messages, {
+        headers,
+        httpsAgent: this.httpsAgent,
+        timeout: 4000,
+      });
+      this.logger.log(`Multicast push sent to ${validTokens.length} devices`);
+    } catch (e: any) {
+      this.logger.error(`Failed multicast push notification: ${e.message}`);
+    }
+  }
+
+  /**
+   * Helper to execute high-priority push notification dispatch over persistent connection
+   */
+  private async dispatchExpoPush(
+    token: string,
+    title: string,
+    body: string,
+    data?: any,
+  ) {
     const expoAccessToken = this.configService.get<string>('EXPO_ACCESS_TOKEN');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -74,10 +171,16 @@ export class NotificationsService {
           title,
           body,
           sound: 'default',
+          priority: 'high', // High priority for instant delivery (FCM high priority / APNs priority 10)
           channelId: 'default',
+          _displayInForeground: true,
           data: data || {},
         },
-        { headers },
+        {
+          headers,
+          httpsAgent: this.httpsAgent,
+          timeout: 4000, // Short 4s timeout prevents blocking
+        },
       );
 
       const dataResponse = response.data?.data;
@@ -98,7 +201,7 @@ export class NotificationsService {
           `Expo global errors: ${JSON.stringify(response.data.errors)}`,
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to send push notification: ${error.message}`);
       if (error.response?.data?.errors) {
         const errors = error.response.data.errors;

@@ -4085,24 +4085,62 @@ export class BookingService {
       where: { id: bookingId },
       include: {
         user: { include: { userProfile: true } },
-        turf: true,
+        turf: { include: { owner: true } },
       },
     });
 
-    if (!booking || !booking.user?.userProfile?.email) return;
+    if (!booking) return;
 
-    await this.emailQueue.add('send-booking-confirmation', {
-      email: booking.user.userProfile.email,
-      bookingData: {
-        id: booking.id,
-        turfName: booking.turf.name,
-        date: booking.bookingDate.toISOString().split('T')[0],
-        startTime: booking.startTime,
-        endTime: booking.endTime,
-        amount: booking.amount,
-        paymentStatus: booking.paymentStatus,
-      },
-    });
+    const recipientEmail =
+      booking.user?.userProfile?.email || (booking.user as any)?.email;
+
+    const formattedDate =
+      typeof booking.bookingDate === 'string'
+        ? booking.bookingDate
+        : new Date(booking.bookingDate).toISOString().split('T')[0];
+
+    const bookingData = {
+      id: booking.id,
+      turfName: booking.turf.name,
+      date: formattedDate,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      amount: booking.amount,
+      paymentStatus: booking.paymentStatus,
+      pin: booking.checkInPin || '0000',
+    };
+
+    if (recipientEmail) {
+      // 1. Add to BullMQ email queue
+      this.emailQueue
+        .add('send-booking-confirmation', {
+          email: recipientEmail,
+          bookingData,
+        })
+        .catch((e) =>
+          this.logger.error(`Failed to add email to queue: ${e.message}`),
+        );
+
+      // 2. Direct fast async trigger
+      this.emailService
+        .sendBookingConfirmation(recipientEmail, bookingData)
+        .catch((err) =>
+          this.logger.error(`[EMAIL_SEND_ERROR] Customer email failed: ${err.message}`),
+        );
+    }
+
+    // Send copy to turf owner if owner has an email registered
+    const ownerEmail = booking.turf?.owner?.email;
+    if (ownerEmail && ownerEmail !== recipientEmail) {
+      this.emailService
+        .sendBookingConfirmation(ownerEmail, {
+          ...bookingData,
+          turfName: `${booking.turf.name} (Owner Copy)`,
+        })
+        .catch((err) =>
+          this.logger.error(`[EMAIL_SEND_ERROR] Owner email failed: ${err.message}`),
+        );
+    }
   }
 
   private async sendCancellationEmail(bookingId: string, reason: string) {
@@ -4110,11 +4148,14 @@ export class BookingService {
       where: { id: bookingId },
       include: {
         user: { include: { userProfile: true } },
-        turf: true,
+        turf: { include: { owner: true } },
       },
     });
 
-    if (!booking || !booking.user?.userProfile?.email) return;
+    if (!booking) return;
+
+    const recipientEmail =
+      booking.user?.userProfile?.email || (booking.user as any)?.email;
 
     let refundAmount = 0;
     if (booking.paymentStatus === 'REFUNDED') {
@@ -4124,17 +4165,32 @@ export class BookingService {
       );
     }
 
-    await this.emailQueue.add('send-booking-cancellation', {
-      email: booking.user.userProfile.email,
-      bookingData: {
-        turfName: booking.turf.name,
-        date: booking.bookingDate.toISOString().split('T')[0],
-        startTime: booking.startTime,
-        amount: booking.amount,
-        refundAmount,
-        reason,
-      },
-    });
+    const formattedDate =
+      typeof booking.bookingDate === 'string'
+        ? booking.bookingDate
+        : new Date(booking.bookingDate).toISOString().split('T')[0];
+
+    const bookingData = {
+      turfName: booking.turf.name,
+      date: formattedDate,
+      startTime: booking.startTime,
+      amount: booking.amount,
+      refundAmount,
+      reason,
+    };
+
+    if (recipientEmail) {
+      this.emailQueue.add('send-booking-cancellation', {
+        email: recipientEmail,
+        bookingData,
+      }).catch((e) => this.logger.error(`Queue error: ${e.message}`));
+
+      this.emailService
+        .sendBookingCancellation(recipientEmail, bookingData)
+        .catch((err) =>
+          this.logger.error(`[EMAIL_CANCEL_ERROR] ${err.message}`),
+        );
+    }
   }
 
   private async sendPaymentPendingEmail(bookingId: string) {
