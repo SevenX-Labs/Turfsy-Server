@@ -4,9 +4,10 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
 import { NotificationsController } from './notifications.controller';
 import { AuthModule } from '../../modules/auth/auth.module';
+import { FirebaseAdminModule } from '../firebase/firebase-admin.module';
 
 @Module({
-  imports: [PrismaModule, ConfigModule, AuthModule],
+  imports: [PrismaModule, ConfigModule, AuthModule, FirebaseAdminModule],
   providers: [NotificationsService],
   controllers: [NotificationsController],
   exports: [NotificationsService],

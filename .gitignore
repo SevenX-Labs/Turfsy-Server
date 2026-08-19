@@ -63,3 +63,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Documentation
 /docs
 
+# Firebase Admin Service Account Keys
+*firebase-adminsdk*.json
+serviceAccountKey.json
+

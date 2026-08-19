@@ -302,6 +302,7 @@ model Auth {
   ownerSettings      OwnerSettings?
   recentViews        RecentView[]
   notifications      Notification[]
+  fcmDevices         FcmDevice[]
   lateCancellations  LateCancellationHistory[]
 
   @@index([phone])
@@ -704,6 +705,24 @@ model Notification {
   @@index([authId])
   @@index([authId, isRead])
   @@map("notifications")
+}
+
+model FcmDevice {
+  id         String   @id @default(uuid())
+  authId     String   @map("auth_id")
+  fcmToken   String   @map("fcm_token")
+  platform   String   @default("android")
+  deviceId   String?  @map("device_id")
+  isActive   Boolean  @default(true) @map("is_active")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  auth       Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@unique([authId, fcmToken])
+  @@index([authId, isActive])
+  @@index([fcmToken])
+  @@map("fcm_devices")
 }
 
 

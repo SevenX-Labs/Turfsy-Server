@@ -11,12 +11,14 @@ import {
   Query,
   Req,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../modules/auth/guards/jwt-auth.guard';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { SaveTokenDto } from './dto/save-token.dto';
 
 @ApiTags('Notifications')
 @ApiBearerAuth('JWT-auth')
@@ -30,52 +32,64 @@ export class NotificationsController {
   @Post('save-token')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async saveToken(@Req() req: any, @Body() body: { expoPushToken: string }) {
+  @ApiOperation({ summary: 'Register or refresh client device FCM push token' })
+  @ApiResponse({ status: 200, description: 'Token registered successfully' })
+  async saveToken(@Req() req: any, @Body() body: SaveTokenDto) {
     const { authId } = req.user;
-    const { expoPushToken } = body;
+    const token = (body.token || body.fcmToken || body.expoPushToken || '').trim();
 
-    if (!expoPushToken) {
-      return { success: false, message: 'Token is required' };
+    if (!token) {
+      throw new BadRequestException('Push registration token is required');
     }
 
-    // Expo tokens usually look like ExponentPushToken[xxx] or expo.v2:xxx
-    const expoTokenRegex = /^(ExponentPushToken\[.+\]|expo\.v2:.+)$/;
-    if (!expoTokenRegex.test(expoPushToken)) {
-      return { success: false, message: 'Invalid Expo push token format' };
+    if (token.length < 5 || token.length > 4096) {
+      throw new BadRequestException('Invalid push registration token length');
     }
 
-    await this.prisma.auth.update({
-      where: { id: authId },
-      data: { expoPushToken },
-    });
+    const platform = (body.platform || 'android').toLowerCase();
+    const deviceId = body.deviceId?.trim() || undefined;
 
-    return { success: true, message: 'Token saved successfully' };
+    return this.notificationsService.registerDevice(
+      authId,
+      token,
+      platform,
+      deviceId,
+    );
   }
 
   @Get('test')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send test push notification to the authenticated user' })
   async testNotification(@Req() req: any) {
     const { authId } = req.user;
+
+    const deviceCount = await this.prisma.fcmDevice.count({
+      where: { authId, isActive: true },
+    });
 
     const user = await this.prisma.auth.findUnique({
       where: { id: authId },
       select: { expoPushToken: true },
     });
 
-    if (!user?.expoPushToken) {
-      return { success: false, message: 'No push token found for user' };
+    if (deviceCount === 0 && !user?.expoPushToken) {
+      return { success: false, message: 'No registered push devices found for user' };
     }
 
     await this.notificationsService.sendNotification(
       authId,
-      'Test Notification',
-      'This is a test notification from Turfzy.',
-      { type: 'test' },
+      'Turfzy Match Alert',
+      'This is a test notification from your Turfzy app.',
+      { type: 'test', timestamp: new Date().toISOString() },
     );
 
-    return { success: true, message: 'Test notification sent' };
+    return {
+      success: true,
+      message: `Test notification dispatched to ${deviceCount > 0 ? `${deviceCount} FCM device(s)` : 'legacy push device'}`,
+    };
   }
+
   @Get('inbox')
   @SkipThrottle()
   @UseGuards(JwtAuthGuard)
