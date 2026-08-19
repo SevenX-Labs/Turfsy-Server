@@ -103,7 +103,9 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
-      disableErrorMessages: process.env.NODE_ENV === 'production',
+      // NOTE: disableErrorMessages removed — the SecurityExceptionFilter
+      // controls the client-facing response. Keeping full error details
+      // ensures server-side logs capture exactly which fields failed.
     }),
   );
 

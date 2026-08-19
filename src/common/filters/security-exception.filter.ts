@@ -94,7 +94,13 @@ export class SecurityExceptionFilter implements ExceptionFilter {
       this.logger.warn(`[VALIDATION ERROR]`, {
         path: request.url,
         method: request.method,
-        message: originalMessage,
+        // Flatten array messages so they always show up in Pino JSON output
+        message: Array.isArray(originalMessage)
+          ? originalMessage.join(' | ')
+          : originalMessage,
+        validationErrors: Array.isArray(originalMessage)
+          ? originalMessage
+          : undefined,
         ip: request.ip,
         requestId: request.id || request.headers['x-request-id'],
       });
@@ -116,15 +122,18 @@ export class SecurityExceptionFilter implements ExceptionFilter {
       });
     }
 
-    // Client-side response — generic message only
-    // For 4xx: keep original message for dev-friendly responses (remove in prod if desired)
-    // For 5xx: always generic
-    const clientMessage = originalMessage;
+    // Client-side response:
+    // 4xx: include original message (helps mobile devs debug)
+    // 5xx: always generic to avoid leaking internals
+    const clientMessage =
+      status >= 500
+        ? GENERIC_MESSAGES[status] || GENERIC_MESSAGES[500]
+        : originalMessage;
 
     const responseBody: Record<string, any> = {
       success: false,
       statusCode: status,
-      message: Array.isArray(clientMessage) ? clientMessage : clientMessage,
+      message: clientMessage,
     };
 
     if (retryAfter) {
