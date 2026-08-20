@@ -2098,7 +2098,7 @@ export class BookingService {
 
       if (now < windowStart) {
         throw new BadRequestException(
-          `Check-in window opens at ${windowStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
+          `Check-in window opens at ${windowStart.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}.`,
         );
       }
       if (now > windowEnd) {
@@ -2129,9 +2129,11 @@ export class BookingService {
         bookingId,
       );
 
-      const checkInTime = now.toLocaleTimeString([], {
+      const checkInTime = now.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
         hour: '2-digit',
         minute: '2-digit',
+        hour12: true,
       });
 
       // ── Trigger notifications ──
@@ -2235,7 +2237,7 @@ export class BookingService {
 
     if (now < windowStart) {
       throw new BadRequestException(
-        `Check-in window opens at ${windowStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
+        `Check-in window opens at ${windowStart.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}.`,
       );
     }
     if (now > windowEnd) {
@@ -4210,7 +4212,12 @@ export class BookingService {
 
     const expiryTime = new Date(
       booking.createdAt.getTime() + SLOT_LOCK_TTL_MS,
-    ).toLocaleTimeString();
+    ).toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
 
     await this.emailQueue.add('send-payment-pending', {
       email: booking.user.userProfile.email,
