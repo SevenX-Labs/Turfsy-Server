@@ -62,13 +62,13 @@ export class AuthService {
     });
 
     try {
-      /* 
-      // Fast2SMS API call commented out to save balance / prevent 400 errors
       const response = await axios.post(
         'https://www.fast2sms.com/dev/bulkV2',
         {
-          route: 'otp',
-          variables_values: otp,
+          route: 'q',
+          message: `Your Turfzy verification OTP code is ${otp}. Valid for 10 minutes.`,
+          language: 'english',
+          flash: '0',
           numbers: phone,
         },
         {
@@ -82,7 +82,6 @@ export class AuthService {
         message: 'Fast2SMS response received',
         response: response.data,
       });
-      */
     } catch (err) {
       this.logger.error(
         `Fast2SMS OTP transmission error: ${err.message}`,
