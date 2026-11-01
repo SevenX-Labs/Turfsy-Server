@@ -37,22 +37,27 @@ export class PricingService {
     const dayOfWeek = date.getDay(); // 0=Sun, 5=Fri, 6=Sat
     const startHour = parseInt(startTime.split(':')[0], 10);
 
-    // Weekend Prime: Fri–Sun, 18:00–00:00
-    if ([0, 5, 6].includes(dayOfWeek) && startHour >= 18) {
-      return { multiplier: 1.4, reason: 'Weekend Prime' };
+    // Weekend Prime: Sat–Sun, 18:00–00:00 (Sat-Sun only)
+    if ([0, 6].includes(dayOfWeek) && startHour >= 18) {
+      return { multiplier: 1.5, reason: 'Weekend Prime' };
     }
 
-    // Weekend Day: Sat–Sun, 06:00–16:00
+    // Weekend Day: Sat–Sun, 06:00–18:00
     if ([0, 6].includes(dayOfWeek) && startHour < 18) {
       return { multiplier: 1.2, reason: 'Weekend Day' };
     }
 
-    // Weekday Prime: Mon–Thu, 18:00–00:00
-    if ([1, 2, 3, 4].includes(dayOfWeek) && startHour >= 18) {
-      return { multiplier: 1.2, reason: 'Weekday Prime' };
+    // Friday Prime: Fri, 18:00–00:00
+    if (dayOfWeek === 5 && startHour >= 18) {
+      return { multiplier: 1.4, reason: 'Friday Prime' };
     }
 
-    // Weekday Day: Mon–Thu, 06:00–16:00
+    // Weekday Prime: Mon–Thu, 18:00–00:00 (Mon-Thu only)
+    if ([1, 2, 3, 4].includes(dayOfWeek) && startHour >= 18) {
+      return { multiplier: 1.3, reason: 'Weekday Prime' };
+    }
+
+    // Weekday Day: Mon–Fri, 06:00–18:00
     return { multiplier: 1.0, reason: 'Weekday Day' };
   }
 
@@ -77,10 +82,10 @@ export class PricingService {
     const occupancy = (bookedCount / TOTAL_EVENING_SLOTS) * 100;
 
     if (occupancy > 75) {
-      return { multiplier: 1.25, badge: '⚡ High Demand', occupancyPercent: occupancy };
+      return { multiplier: 1.3, badge: '⚡ High Demand', occupancyPercent: occupancy };
     }
-    if (occupancy >= 51) {
-      return { multiplier: 1.15, badge: '🔥 Filling Fast', occupancyPercent: occupancy };
+    if (occupancy >= 40) {
+      return { multiplier: 1.2, badge: '🔥 Filling Fast', occupancyPercent: occupancy };
     }
     return { multiplier: 1.0, badge: null, occupancyPercent: occupancy };
   }
@@ -224,18 +229,6 @@ export class PricingService {
         status: 'WAITING',
       },
       select: { startTime: true },
-    });
-
-    // Check for post-cancellation slots with active waitlist expiry
-    const now = new Date();
-    const notifiedWaitlists = await this.prisma.waitlist.findMany({
-      where: {
-        turfId,
-        bookingDate: normalizedDate,
-        status: 'NOTIFIED',
-        expiresAt: { gt: now },
-      },
-      select: { startTime: true, expiresAt: true },
     });
 
     // Find recently cancelled slots that have expired waitlist windows

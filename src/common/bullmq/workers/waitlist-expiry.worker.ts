@@ -1,5 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
@@ -11,6 +11,7 @@ export class WaitlistExpiryWorker extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    @InjectQueue('waitlist-expiry') private readonly waitlistExpiryQueue: Queue,
   ) {
     super();
   }
@@ -93,19 +94,20 @@ export class WaitlistExpiryWorker extends WorkerHost {
           );
       }
 
-      // Schedule another expiry job for this new notification
-      // The job queue reference is not directly available here,
-      // so we use a self-referencing approach via the same queue
-      return {
-        success: true,
-        message: `Notified next user ${nextInQueue.userId}. New expiry scheduled.`,
-        scheduleNext: {
+      await this.waitlistExpiryQueue.add(
+        'expire-waitlist',
+        {
           waitlistId: nextInQueue.id,
           turfId,
           bookingDate,
           startTime,
-          delay: 10 * 60 * 1000,
         },
+        { delay: 10 * 60 * 1000 },
+      );
+
+      return {
+        success: true,
+        message: `Notified next user ${nextInQueue.userId}. Expiry job scheduled.`,
       };
     }
 
