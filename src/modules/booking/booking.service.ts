@@ -2485,6 +2485,69 @@ export class BookingService {
   }
 
   // ═══════════════════════════════════════════════════════
+  // 5.6b OWNER: GET WAITLIST ENTRIES FOR TURF
+  // ═══════════════════════════════════════════════════════
+  async getOwnerWaitlist(
+    ownerAuthId: string,
+    turfId: string,
+    date?: string,
+  ) {
+    const turf = await this.prisma.turf.findFirst({
+      where: {
+        id: turfId,
+        owner: { authId: ownerAuthId },
+      },
+      select: { id: true, name: true },
+    });
+    if (!turf) {
+      throw new ForbiddenException('You do not have access to this turf');
+    }
+
+    const where: any = { turfId };
+    if (date) {
+      const normalizedDate = new Date(date);
+      normalizedDate.setHours(0, 0, 0, 0);
+      where.bookingDate = normalizedDate;
+    }
+
+    const waitlists = await this.prisma.waitlist.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            auth: {
+              select: { phone: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return {
+      success: true,
+      data: waitlists.map((w, idx) => ({
+        id: w.id,
+        turfId: w.turfId,
+        bookingDate: w.bookingDate,
+        startTime: w.startTime,
+        endTime: w.endTime,
+        status: w.status,
+        notifiedAt: w.notifiedAt,
+        expiresAt: w.expiresAt,
+        createdAt: w.createdAt,
+        customerName: w.user?.name || 'Customer',
+        customerPhone: w.user?.auth?.phone || '',
+        customerEmail: w.user?.email || '',
+        position: idx + 1,
+      })),
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
   // 5.7 OWNER: GET SINGLE BOOKING DETAILS
   // ═══════════════════════════════════════════════════════
   async getOwnerBookingDetails(ownerAuthId: string, bookingId: string) {

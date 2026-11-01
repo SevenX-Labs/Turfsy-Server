@@ -286,6 +286,25 @@ export class BookingController {
   }
 
   // ──────────────────────────────────────────────
+  // 6.2b OWNER: WAITLIST FOR TURF
+  // GET /api/v3/booking/owner/waitlist/:turfId
+  // ──────────────────────────────────────────────
+  @Get('owner/waitlist/:turfId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(HttpStatus.OK)
+  async getOwnerWaitlist(
+    @Req() req: any,
+    @Param('turfId', new ParseUUIDPipe({ version: '4' })) turfId: string,
+    @Query('date') date?: string,
+  ) {
+    if (date && !/^d{4}-d{2}-d{2}$/.test(date)) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
+    }
+    return this.bookingService.getOwnerWaitlist(req.user.authId, turfId, date);
+  }
+
+  // ──────────────────────────────────────────────
   // 6.3 OWNER: SINGLE BOOKING DETAILS
   // GET /api/v3/booking/owner/bookings/:bookingId
   // ──────────────────────────────────────────────
