@@ -9,6 +9,7 @@ import { EmailService } from '../../common/email/email.service';
 import { NotificationsService } from '../../common/notifications/notifications.service';
 import { MetricsService } from '../../common/metrics/metrics.service';
 import { RedisService } from '../../common/redis/redis.service';
+import { PricingService } from './pricing.service';
 import { getQueueToken } from '@nestjs/bullmq';
 import {
   BadRequestException,
@@ -53,6 +54,20 @@ describe('BookingService - Platform Fee Slabs', () => {
     },
     turfMaintenance: {
       findFirst: jest.fn(),
+    },
+    waitlist: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+      update: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    specialEvent: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    userProfile: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findUnique: jest.fn().mockResolvedValue(null),
     },
     $transaction: jest.fn((cb) => cb(mockPrisma)),
     $queryRawUnsafe: jest.fn().mockResolvedValue([]),
@@ -111,6 +126,25 @@ describe('BookingService - Platform Fee Slabs', () => {
     releaseLock: jest.fn().mockResolvedValue(true),
   };
 
+  const mockPricingService = {
+    calculateSlotPrice: jest.fn().mockResolvedValue({
+      finalPrice: 1000,
+      basePrice: 1000,
+      calendarMultiplier: 1.0,
+      calendarReason: 'Weekday Day',
+      occupancySurgeMultiplier: 1.0,
+      totalSurgeMultiplier: 1.0,
+      badge: null,
+      occupancyPercent: 0,
+    }),
+    getSlotPricing: jest.fn().mockResolvedValue({
+      slotPricing: [],
+      clusterOccupancyPercent: 0,
+    }),
+    getCalendarMultiplier: jest.fn().mockResolvedValue({ multiplier: 1.0, reason: 'Weekday Day' }),
+    getClusterOccupancySurge: jest.fn().mockResolvedValue({ multiplier: 1.0, badge: null, occupancyPercent: 0 }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -124,9 +158,11 @@ describe('BookingService - Platform Fee Slabs', () => {
         { provide: NotificationsService, useValue: mockNotifications },
         { provide: MetricsService, useValue: mockMetrics },
         { provide: RedisService, useValue: mockRedis },
+        { provide: PricingService, useValue: mockPricingService },
         { provide: getQueueToken('email'), useValue: mockQueue },
         { provide: getQueueToken('payment-retry'), useValue: mockQueue },
         { provide: getQueueToken('booking-expiry'), useValue: mockQueue },
+        { provide: getQueueToken('waitlist-expiry'), useValue: mockQueue },
       ],
     }).compile();
 
@@ -160,6 +196,8 @@ describe('BookingService - Platform Fee Slabs', () => {
         mockNotifications as any,
         mockMetrics as any,
         mockRedis as any,
+        mockPricingService as any,
+        mockQueue as any,
         mockQueue as any,
         mockQueue as any,
         mockQueue as any,
@@ -237,7 +275,16 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentPreference: TurfPaymentPreference.ADVANCE_PAYMENT,
       };
       mockPrisma.turf.findUnique.mockResolvedValue(advanceTurf);
-      jest.spyOn(service as any, 'calculatePrice').mockReturnValue(1200);
+      mockPricingService.calculateSlotPrice.mockResolvedValue({
+        finalPrice: 1200,
+        basePrice: 1000,
+        calendarMultiplier: 1.2,
+        calendarReason: 'Weekend Day',
+        occupancySurgeMultiplier: 1.0,
+        totalSurgeMultiplier: 1.2,
+        badge: null,
+        occupancyPercent: 0,
+      });
 
       const response = await service.createBooking('user-id', {
         ...createDto,
@@ -258,7 +305,16 @@ describe('BookingService - Platform Fee Slabs', () => {
         paymentPreference: TurfPaymentPreference.FULL_CASH,
       };
       mockPrisma.turf.findUnique.mockResolvedValue(cashTurf);
-      jest.spyOn(service as any, 'calculatePrice').mockReturnValue(1200);
+      mockPricingService.calculateSlotPrice.mockResolvedValue({
+        finalPrice: 1200,
+        basePrice: 1000,
+        calendarMultiplier: 1.2,
+        calendarReason: 'Weekend Day',
+        occupancySurgeMultiplier: 1.0,
+        totalSurgeMultiplier: 1.2,
+        badge: null,
+        occupancyPercent: 0,
+      });
 
       const response = await service.createBooking('user-id', {
         ...createDto,

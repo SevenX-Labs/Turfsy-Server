@@ -104,6 +104,29 @@ export class CancelBookingDto {
   reason?: string;
 }
 
+export class JoinWaitlistDto {
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'bookingDate must be YYYY-MM-DD format',
+  })
+  bookingDate: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
+    message: 'startTime must be HH:MM (24hr) format',
+  })
+  startTime: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
+    message: 'endTime must be HH:MM (24hr) format',
+  })
+  endTime: string;
+}
+
 export class RebookBookingDto {
   @IsString()
   @IsNotEmpty()

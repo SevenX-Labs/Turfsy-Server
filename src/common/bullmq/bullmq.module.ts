@@ -17,6 +17,7 @@ import { CleanupWorker } from './workers/cleanup.worker';
 import { EmailWorker } from './workers/email.worker';
 import { PaymentRetryWorker } from './workers/payment-retry.worker';
 import { BookingExpiryWorker } from './workers/booking-expiry.worker';
+import { WaitlistExpiryWorker } from './workers/waitlist-expiry.worker';
 
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
@@ -88,6 +89,16 @@ import { BullMqConnectionModule } from './bullmq-connection.module';
           },
         },
       },
+      {
+        name: 'waitlist-expiry',
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      },
     ),
   ],
   providers: [
@@ -99,6 +110,7 @@ import { BullMqConnectionModule } from './bullmq-connection.module';
     EmailWorker,
     PaymentRetryWorker,
     BookingExpiryWorker,
+    WaitlistExpiryWorker,
   ],
   exports: [BullModule],
 })

@@ -37,6 +37,7 @@ import { EmailService } from '../../common/email/email.service';
 import { NotificationsService } from '../../common/notifications/notifications.service';
 import { MetricsService } from '../../common/metrics/metrics.service';
 import { RedisService } from '../../common/redis/redis.service';
+import { PricingService } from './pricing.service';
 
 // ─── CONSTANTS ───────────────────────────────────────────
 const CASH_DEPOSIT_PERCENT = 0.5; // 50% advance for CASH bookings
@@ -63,9 +64,11 @@ export class BookingService {
     private readonly notificationsService: NotificationsService,
     private readonly metrics: MetricsService,
     private readonly redisService: RedisService,
+    private readonly pricingService: PricingService,
     @InjectQueue('email') private readonly emailQueue: Queue,
     @InjectQueue('payment-retry') private readonly paymentRetryQueue: Queue,
     @InjectQueue('booking-expiry') private readonly bookingExpiryQueue: Queue,
+    @InjectQueue('waitlist-expiry') private readonly waitlistExpiryQueue: Queue,
   ) {
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
     const keySecret =
@@ -369,17 +372,55 @@ export class BookingService {
         );
       }
 
-      // ── Layer 4: Server-side price calculation (NEVER from client) ──
-      const turfPrice = this.calculatePrice(
-        turf,
-        bookingDate,
-        dto.startTime,
-        dto.durationMins!,
-      );
+      // ── Layer 4: Server-side dynamic price calculation (NEVER from client) ──
+      // Check if this is a waitlist claim
+      let isWaitlistClaim = false;
+      let isPostCancellationPublic = false;
+      const normalizedBookingDate = this.normalizeBookingDate(dto.bookingDate);
 
+      const activeWaitlistClaim = await this.prisma.waitlist.findFirst({
+        where: {
+          turfId: dto.turfId,
+          bookingDate: normalizedBookingDate,
+          startTime: dto.startTime,
+          status: 'NOTIFIED',
+          expiresAt: { gt: new Date() },
+          user: { authId },
+        },
+      });
+      if (activeWaitlistClaim) {
+        isWaitlistClaim = true;
+      }
+
+      // Check if slot is a post-cancellation public release
+      if (!isWaitlistClaim) {
+        const expiredWaitlist = await this.prisma.waitlist.findFirst({
+          where: {
+            turfId: dto.turfId,
+            bookingDate: normalizedBookingDate,
+            startTime: dto.startTime,
+            status: 'EXPIRED',
+          },
+        });
+        if (expiredWaitlist) {
+          isPostCancellationPublic = true;
+        }
+      }
+
+      const dynamicPricing = await this.pricingService.calculateSlotPrice({
+        turfId: dto.turfId,
+        basePrice: turf.weekdayDayPrice,
+        date: bookingDate,
+        startTime: dto.startTime,
+        durationMins: dto.durationMins!,
+        isWaitlistClaim,
+        isPostCancellationPublic,
+      });
+
+      const turfPrice = dynamicPricing.finalPrice;
       const groundCharge = turfPrice;
       const platformFee = 0;
-      const amount = turfPrice; // Total amount is pure ground charge
+      const amount = turfPrice;
 
       // Validate payment preference matching
       let isAllowed = false;
@@ -470,6 +511,10 @@ export class BookingService {
               platformFee,
               depositAmount,
               notes: sanitizedNotes,
+              basePrice: Math.round(turf.weekdayDayPrice),
+              surgeMultiplier: dynamicPricing.totalSurgeMultiplier,
+              surgeBadge: dynamicPricing.badge,
+              isWaitlistClaim,
               bookingStatus:
                 dto.paymentType === PaymentType.FULL_CASH
                   ? turf.bookingApprovalType === 'MANUAL'
@@ -489,6 +534,14 @@ export class BookingService {
         where: { id: slotLock.id },
         data: { bookingId: booking.id },
       });
+
+      // Mark waitlist claim if applicable
+      if (isWaitlistClaim && activeWaitlistClaim) {
+        await this.prisma.waitlist.update({
+          where: { id: activeWaitlistClaim.id },
+          data: { status: 'CLAIMED' },
+        });
+      }
 
       // For FULL_CASH, we confirm immediately, so release the lock
       if (dto.paymentType === PaymentType.FULL_CASH) {
@@ -791,6 +844,15 @@ export class BookingService {
     // Sort all slots (real + synthetic) by startTime
     allSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
+    // Dynamic pricing data
+    const pricingData = await this.pricingService.getSlotPricing(
+      turfId,
+      bookingDate,
+      turf.openTime,
+      turf.closeTime,
+      turf.weekdayDayPrice,
+    );
+
     return {
       success: true,
       data: {
@@ -798,6 +860,8 @@ export class BookingService {
         closeTime: turf.closeTime,
         bookedSlots: allSlots,
         minBookableTime, // null for future dates, "HH:MM" for today
+        clusterOccupancyPercent: pricingData.clusterOccupancyPercent,
+        slotPricing: pricingData.slotPricing,
         pricing: {
           dayPrice: isWeekend ? turf.weekendDayPrice : turf.weekdayDayPrice,
           nightPrice: isWeekend
@@ -2960,6 +3024,72 @@ export class BookingService {
       }
     }
 
+    // Phase 2.5: Waitlist notification on cancellation
+    try {
+      const cancelledBookingDate = this.normalizeBookingDate(booking.bookingDate);
+      const waitlistUser = await this.prisma.waitlist.findFirst({
+        where: {
+          turfId: booking.turfId,
+          bookingDate: cancelledBookingDate,
+          startTime: booking.startTime,
+          status: 'WAITING',
+        },
+        orderBy: { createdAt: 'asc' },
+        include: { user: { select: { id: true, authId: true } } },
+      });
+
+      if (waitlistUser) {
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        await this.prisma.waitlist.update({
+          where: { id: waitlistUser.id },
+          data: {
+            status: 'NOTIFIED',
+            notifiedAt: new Date(),
+            expiresAt,
+          },
+        });
+
+        // Notify waitlisted user
+        if (waitlistUser.user?.authId) {
+          this.triggerPushNotification(
+            waitlistUser.user.authId,
+            'Waitlisted Slot Available!',
+            `Your waitlisted slot at ${booking.turf?.name || 'the turf'} for ${booking.startTime} is open! You have 10 minutes to book at regular price.`,
+            {
+              type: 'WAITLIST_SLOT_AVAILABLE',
+              waitlistId: waitlistUser.id,
+              turfId: booking.turfId,
+              startTime: booking.startTime,
+            },
+          );
+        }
+
+        // Schedule 10-minute expiry job
+        await this.waitlistExpiryQueue.add(
+          'expire-waitlist',
+          {
+            waitlistId: waitlistUser.id,
+            turfId: booking.turfId,
+            bookingDate: cancelledBookingDate.toISOString(),
+            startTime: booking.startTime,
+          },
+          { delay: 10 * 60 * 1000 },
+        );
+
+        this.logger.log({
+          event: 'waitlist_notified',
+          waitlistId: waitlistUser.id,
+          userId: waitlistUser.userId,
+          turfId: booking.turfId,
+          startTime: booking.startTime,
+        });
+      }
+    } catch (err) {
+      this.logger.error(
+        `[WAITLIST] Failed to process waitlist on cancellation: ${err.message}`,
+      );
+    }
+
     // Phase 3: Notifications & Analytics (only run for FRESH cancellations)
     this.paymentLogger.log({
       userId: authId,
@@ -3040,6 +3170,98 @@ export class BookingService {
         ...finalBooking,
         displayId: this.formatBookingId(bookingId),
         refundAmount,
+      },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // WAITLIST: Join waitlist for a booked slot
+  // ═══════════════════════════════════════════════════════
+  async joinWaitlist(
+    authId: string,
+    turfId: string,
+    dto: { bookingDate: string; startTime: string; endTime: string },
+  ) {
+    const turf = await this.prisma.turf.findUnique({
+      where: { id: turfId },
+      select: { id: true, name: true },
+    });
+    if (!turf) throw new NotFoundException('Turf not found');
+
+    const bookingDate = this.normalizeBookingDate(dto.bookingDate);
+
+    // Verify the slot is actually booked
+    const existingBooking = await this.prisma.booking.findFirst({
+      where: {
+        turfId,
+        bookingDate,
+        startTime: dto.startTime,
+        bookingStatus: {
+          in: ['PENDING', 'PENDING_APPROVAL', 'CONFIRMED'] as any[],
+        },
+      },
+    });
+
+    if (!existingBooking) {
+      throw new BadRequestException(
+        'This slot is not currently booked. You can book it directly.',
+      );
+    }
+
+    // Get user profile
+    const userProfile = await this.prisma.userProfile.findFirst({
+      where: { authId },
+      select: { id: true },
+    });
+    if (!userProfile) {
+      throw new BadRequestException('User profile not found');
+    }
+
+    // Check for duplicate waitlist entry
+    const existingWaitlist = await this.prisma.waitlist.findFirst({
+      where: {
+        turfId,
+        userId: userProfile.id,
+        bookingDate,
+        startTime: dto.startTime,
+        status: { in: ['WAITING', 'NOTIFIED'] },
+      },
+    });
+
+    if (existingWaitlist) {
+      throw new ConflictException('You are already on the waitlist for this slot');
+    }
+
+    const waitlistEntry = await this.prisma.waitlist.create({
+      data: {
+        turfId,
+        userId: userProfile.id,
+        bookingDate,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        status: 'WAITING',
+      },
+    });
+
+    const waitlistCount = await this.prisma.waitlist.count({
+      where: {
+        turfId,
+        bookingDate,
+        startTime: dto.startTime,
+        status: 'WAITING',
+      },
+    });
+
+    return {
+      success: true,
+      message: `Added to waitlist for ${turf.name} at ${dto.startTime}. You are #${waitlistCount} in queue.`,
+      data: {
+        waitlistId: waitlistEntry.id,
+        position: waitlistCount,
+        turfName: turf.name,
+        bookingDate: dto.bookingDate,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
       },
     };
   }

@@ -32,6 +32,7 @@ import {
   CancelBookingDto,
   RebookBookingDto,
   ManualCheckInDto,
+  JoinWaitlistDto,
 } from './dto/booking.dto';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -554,6 +555,23 @@ export class BookingController {
   @HttpCode(HttpStatus.OK)
   async testEmail(@Req() req: any) {
     return this.bookingService.sendTestEmail(req.user.authId);
+  }
+
+  // ──────────────────────────────────────────────
+  // WAITLIST: Join waitlist for a booked slot
+  // POST /api/v3/booking/:turfId/waitlist
+  // ──────────────────────────────────────────────
+  @Post(':turfId/waitlist')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('USER')
+  @Throttle({ medium: { limit: 10, ttl: 60000 } })
+  @HttpCode(HttpStatus.CREATED)
+  async joinWaitlist(
+    @Req() req: any,
+    @Param('turfId', new ParseUUIDPipe({ version: '4' })) turfId: string,
+    @Body() dto: JoinWaitlistDto,
+  ) {
+    return this.bookingService.joinWaitlist(req.user.authId, turfId, dto);
   }
 
   @Get('customer/full-cash-status')
