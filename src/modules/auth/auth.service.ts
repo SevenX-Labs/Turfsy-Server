@@ -54,39 +54,61 @@ export class AuthService {
   }
 
   private async sendOtpViaSms(phone: string, otp: string): Promise<void> {
-    // TEMPORARY: Always show OTP in logs (even on Render) to save Fast2SMS balance
+    const formattedPhone = phone.replace(/\D/g, "").slice(-10);
+
+    // Keep logging OTP for visibility and testing on Render
     this.logger.log({
-      message: `Sending OTP to ${phone}`,
-      phone,
-      otp: otp, // <-- Exposing OTP in logs for testing on Render
+      message: `Sending OTP to ${formattedPhone}`,
+      phone: formattedPhone,
+      otp,
     });
+
+    const apiKey =
+      this.config.get<string>("OTP_API_KEY") ||
+      this.config.get<string>("NEXUS_OTP_API_KEY") ||
+      process.env.OTP_API_KEY ||
+      process.env.NEXUS_OTP_API_KEY ||
+      "";
+
+    if (!apiKey) {
+      this.logger.warn(
+        "OTP_API_KEY / NEXUS_OTP_API_KEY is not configured. OTP SMS cannot be sent.",
+      );
+      return;
+    }
+
+    const authHeader = apiKey.startsWith("Bearer ")
+      ? apiKey
+      : `Bearer ${apiKey}`;
 
     try {
       const response = await axios.post(
-        'https://www.fast2sms.com/dev/bulkV2',
+        "https://apinexusotp.vercel.app/api/v1/otp/send",
         {
-          route: 'q',
-          message: `Your Turfzy verification OTP code is ${otp}. Valid for 10 minutes.`,
-          language: 'english',
-          flash: '0',
-          numbers: phone,
+          phone: formattedPhone,
+          otp,
         },
         {
           headers: {
-            authorization: this.config.get<string>('OTP_API_KEY') || '',
-            'Content-Type': 'application/json',
+            Authorization: authHeader,
+            "Content-Type": "application/json",
           },
+          timeout: 10000,
         },
       );
       this.logger.log({
-        message: 'Fast2SMS response received',
-        response: response.data,
+        message: "Nexus OTP response received",
+        status: response.status,
+        data: response.data,
       });
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error(
-        `Fast2SMS OTP transmission error: ${err.message}`,
+        `Nexus OTP transmission error: ${err.message}`,
         err.stack,
-        { errorDetails: err?.response?.data || err.message },
+        {
+          errorDetails: err?.response?.data || err.message,
+          status: err?.response?.status,
+        },
       );
     }
   }
