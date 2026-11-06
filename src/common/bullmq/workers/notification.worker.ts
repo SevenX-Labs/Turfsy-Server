@@ -27,6 +27,16 @@ export class NotificationWorker extends WorkerHost {
         );
         break;
       }
+      case 'send-multicast': {
+        const { authIds, title, body, data } = job.data;
+        await this.notificationsService.sendMulticastNotification(
+          authIds,
+          title,
+          body,
+          data,
+        );
+        break;
+      }
       default:
         this.logger.warn(`Unknown notification job name: ${job.name}`);
     }

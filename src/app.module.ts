@@ -20,6 +20,7 @@ import { SavedTurfsModule } from './modules/saved-turfs/saved-turfs.module';
 import { BookingModule } from './modules/booking/booking.module';
 import { OwnerHomeModule } from './modules/owner-home/owner-home.module';
 import { OwnerAnalyticsModule } from './modules/owner-analytics/owner-analytics.module';
+import { OwnerCrmModule } from './modules/owner-crm/owner-crm.module';
 import { OwnerSettingsModule } from './modules/owner-settings/owner-settings.module';
 import { UserGamificationModule } from './modules/user-gamification/user-gamification.module';
 import { UserSettingsModule } from './modules/user-settings/user-settings.module';
@@ -102,6 +103,7 @@ import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
     BookingModule,
     OwnerHomeModule,
     OwnerAnalyticsModule,
+    OwnerCrmModule,
     OwnerSettingsModule,
     OwnerSettlementsModule,
     UserGamificationModule,
