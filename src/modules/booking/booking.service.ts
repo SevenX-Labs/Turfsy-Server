@@ -4868,6 +4868,56 @@ export class BookingService {
     };
   }
 
+  async getActiveWaitlistClaim(authId: string, turfId?: string) {
+    const where: any = {
+      user: { authId },
+      status: "NOTIFIED",
+      expiresAt: { gt: new Date() },
+    };
+    if (turfId) {
+      where.turfId = turfId;
+    }
+    const claim = await this.prisma.waitlist.findFirst({
+      where,
+      include: {
+        turf: {
+          select: {
+            id: true,
+            name: true,
+            weekdayDayPrice: true,
+          },
+        },
+      },
+      orderBy: { expiresAt: "asc" },
+    });
+
+    if (!claim) {
+      return { success: true, data: null };
+    }
+
+    const now = Date.now();
+    const expiresAtMs = claim.expiresAt ? new Date(claim.expiresAt).getTime() : now;
+    const remainingSeconds = Math.max(0, Math.floor((expiresAtMs - now) / 1000));
+    const bookingDateStr = claim.bookingDate instanceof Date
+      ? claim.bookingDate.toISOString().slice(0, 10)
+      : String(claim.bookingDate);
+
+    return {
+      success: true,
+      data: {
+        waitlistId: claim.id,
+        turfId: claim.turfId,
+        turfName: claim.turf?.name || "Turf Arena",
+        bookingDate: bookingDateStr,
+        startTime: claim.startTime,
+        endTime: claim.endTime,
+        basePrice: claim.turf?.weekdayDayPrice || 800,
+        expiresAt: claim.expiresAt,
+        remainingSeconds,
+      },
+    };
+  }
+
   private async triggerPushNotification(
     userId: string,
     title: string,

@@ -50,7 +50,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('USER')
+  @Roles('USER', 'OWNER')
   @Throttle({ medium: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.CREATED)
   async createBooking(@Req() req: any, @Body() dto: CreateBookingDto) {
@@ -60,7 +60,7 @@ export class BookingController {
 
   @Post('pay-at-turf')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('USER')
+  @Roles('USER', 'OWNER')
   @Throttle({ medium: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.CREATED)
   async createPayAtTurfBooking(@Req() req: any, @Body() dto: CreateBookingDto) {
@@ -76,7 +76,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Post(':bookingId/rebook')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('USER')
+  @Roles('USER', 'OWNER')
   @Throttle({ medium: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.CREATED)
   async rebook(
@@ -582,7 +582,7 @@ export class BookingController {
   // ──────────────────────────────────────────────
   @Post(':turfId/waitlist')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('USER')
+  @Roles('USER', 'OWNER')
   @Throttle({ medium: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.CREATED)
   async joinWaitlist(
@@ -593,6 +593,16 @@ export class BookingController {
     return this.bookingService.joinWaitlist(req.user.authId, turfId, dto);
   }
 
+
+  @Get("customer/active-waitlist-claim")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getActiveWaitlistClaim(
+    @Req() req: any,
+    @Query("turfId") turfId?: string,
+  ) {
+    return this.bookingService.getActiveWaitlistClaim(req.user.authId, turfId);
+  }
   @Get('customer/full-cash-status')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

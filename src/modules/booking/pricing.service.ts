@@ -152,7 +152,14 @@ export class PricingService {
     );
 
     const totalMultiplier = calendar.multiplier * occupancy.multiplier;
-    const finalPrice = Math.round(basePriceForDuration * totalMultiplier);
+    let finalPrice = Math.round(basePriceForDuration * totalMultiplier);
+    if (totalMultiplier > 1.0 && finalPrice <= basePriceForDuration && basePriceForDuration > 0) {
+      finalPrice = basePriceForDuration + 1;
+    }
+
+    const badge =
+      occupancy.badge ||
+      (calendar.multiplier > 1.0 ? `⚡ ${calendar.reason}` : null);
 
     return {
       finalPrice,
@@ -161,7 +168,7 @@ export class PricingService {
       calendarReason: calendar.reason,
       occupancySurgeMultiplier: occupancy.multiplier,
       totalSurgeMultiplier: totalMultiplier,
-      badge: occupancy.badge,
+      badge,
       occupancyPercent: occupancy.occupancyPercent,
     };
   }
