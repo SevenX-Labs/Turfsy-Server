@@ -129,7 +129,8 @@ export class NotificationsService {
   }
 
   /**
-   * Fast batch multicast notification for sending to multiple users in bulk
+   * Fast batch multicast notification for sending to multiple users in bulk.
+   * Partitions tokens into Expo and native FCM, dispatching each to its service.
    */
   async sendMulticastNotification(
     authIds: string[],
@@ -156,7 +157,7 @@ export class NotificationsService {
         this.logger.error(`Failed to bulk save notifications to DB: ${e.message}`),
       );
 
-    // Fetch all active FCM devices for target users
+    // Fetch all active devices for target users
     const devicesPromise = this.prisma.fcmDevice.findMany({
       where: {
         authId: { in: uniqueAuthIds },
@@ -167,33 +168,138 @@ export class NotificationsService {
 
     const [_, devices] = await Promise.all([dbPromise, devicesPromise]);
 
-    const fcmTokens = devices
+    const allTokens = devices
       .map((d) => d.fcmToken)
       .filter((t): t is string => Boolean(t));
 
-    if (fcmTokens.length > 0) {
-      const multicastResult = await this.firebaseAdminService.sendEachForMulticast(
-        fcmTokens,
-        {
-          title,
-          body,
-          data: data || {},
-        },
+    // Partition tokens by type
+    const expoTokens = allTokens.filter((t) => this.isExpoPushToken(t));
+    const nativeFcmTokens = allTokens.filter((t) => !this.isExpoPushToken(t));
+
+    const promises: Promise<any>[] = [];
+
+    // Dispatch Expo tokens via Expo Push Service
+    if (expoTokens.length > 0) {
+      promises.push(
+        this.dispatchExpoBatch(expoTokens, title, body, data).catch((err) =>
+          this.logger.error(`Expo multicast dispatch error: ${err.message}`),
+        ),
       );
+    }
 
-      // Automatically deactivate any invalid/unregistered tokens
-      const unregistered = multicastResult.failedTokens
-        .filter((f) => f.isUnregistered)
-        .map((f) => f.token);
+    // Dispatch native FCM tokens via Firebase Admin SDK
+    if (nativeFcmTokens.length > 0) {
+      promises.push(
+        this.firebaseAdminService
+          .sendEachForMulticast(nativeFcmTokens, {
+            title,
+            body,
+            data: data || {},
+          })
+          .then(async (result) => {
+            const unregistered = result.failedTokens
+              .filter((f) => f.isUnregistered)
+              .map((f) => f.token);
+            if (unregistered.length > 0) {
+              await this.handleInvalidTokens(unregistered);
+            }
+          })
+          .catch((err) =>
+            this.logger.error(`Native FCM multicast dispatch error: ${err.message}`),
+          ),
+      );
+    }
 
-      if (unregistered.length > 0) {
-        await this.handleInvalidTokens(unregistered);
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Helper to identify if a token belongs to Expo Push Service
+   */
+  public isExpoPushToken(token: string): boolean {
+    if (!token || typeof token !== 'string') return false;
+    const trimmed = token.trim();
+    return trimmed.startsWith('ExponentPushToken[') || trimmed.startsWith('expo.v2:');
+  }
+
+  /**
+   * Send push notifications to multiple Expo push tokens via the Expo Push API.
+   * Batches tokens in groups of 100 (Expo API limit per request).
+   * Automatically deactivates tokens that Expo reports as DeviceNotRegistered.
+   */
+  public async dispatchExpoBatch(
+    tokens: string[],
+    title: string,
+    body: string,
+    data?: any,
+  ): Promise<void> {
+    const validTokens = [...new Set(tokens.filter((t) => this.isExpoPushToken(t)))];
+    if (validTokens.length === 0) return;
+
+    const expoAccessToken = this.configService.get<string>('EXPO_ACCESS_TOKEN');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'Accept-Encoding': 'gzip, deflate',
+    };
+    if (expoAccessToken) {
+      headers['Authorization'] = `Bearer ${expoAccessToken}`;
+    }
+
+    // Expo Push API accepts maximum 100 messages per request
+    const batchSize = 100;
+    for (let i = 0; i < validTokens.length; i += batchSize) {
+      const batch = validTokens.slice(i, i + batchSize);
+      const messages = batch.map((token) => ({
+        to: token,
+        title,
+        body,
+        sound: 'default' as const,
+        priority: 'high' as const,
+        channelId: 'default',
+        _displayInForeground: true,
+        data: data || {},
+      }));
+
+      try {
+        const response = await axios.post(this.expoUrl, messages, {
+          headers,
+          httpsAgent: this.httpsAgent,
+          timeout: 8000,
+        });
+
+        // Check tickets for unregistered tokens
+        const tickets = response.data?.data || [];
+        const unregisteredTokens: string[] = [];
+
+        tickets.forEach((ticket: any, idx: number) => {
+          if (ticket.status === 'error') {
+            this.logger.warn(
+              `Expo push error for token ${batch[idx]?.slice(0, 15)}...: ${ticket.message} (${ticket.details?.error})`,
+            );
+            if (ticket.details?.error === 'DeviceNotRegistered') {
+              unregisteredTokens.push(batch[idx]);
+            }
+          }
+        });
+
+        if (unregisteredTokens.length > 0) {
+          await this.handleInvalidTokens(unregisteredTokens);
+        }
+
+        this.logger.log(
+          `Expo push batch dispatched: ${batch.length} tokens, ${unregisteredTokens.length} unregistered`,
+        );
+      } catch (error: any) {
+        this.logger.error(`Failed to dispatch Expo push batch: ${error.message}`);
       }
     }
   }
 
   /**
-   * Helper to dispatch push notification across all registered FCM devices for a user
+   * Helper to dispatch push notification across all registered devices for a user.
+   * Intelligently partitions tokens into Expo Push Tokens and native FCM tokens,
+   * sending each batch to its dedicated push service.
    */
   private async dispatchPushToUser(
     authId: string,
@@ -201,96 +307,83 @@ export class NotificationsService {
     body: string,
     data?: any,
   ) {
-    // 1. Query active FCM devices for this user
-    const fcmDevices = await this.prisma.fcmDevice.findMany({
+    // 1. Query active devices from DB
+    const devices = await this.prisma.fcmDevice.findMany({
       where: { authId, isActive: true },
       select: { fcmToken: true },
     });
 
-    const fcmTokens = fcmDevices
-      .map((d) => d.fcmToken)
-      .filter((t): t is string => Boolean(t));
+    const tokenSet = new Set<string>(
+      devices.map((d) => d.fcmToken.trim()).filter(Boolean),
+    );
 
-    if (fcmTokens.length > 0) {
-      // Send via Firebase Admin SDK
-      const multicastResult = await this.firebaseAdminService.sendEachForMulticast(
-        fcmTokens,
-        {
-          title,
-          body,
-          data: data || {},
-        },
-      );
-
-      // Deactivate any tokens that Firebase identified as unregistered
-      const unregistered = multicastResult.failedTokens
-        .filter((f) => f.isUnregistered)
-        .map((f) => f.token);
-
-      if (unregistered.length > 0) {
-        await this.handleInvalidTokens(unregistered);
-      }
-      return;
-    }
-
-    // 2. Fallback check for legacy Expo Push Token if no FCM devices registered yet
+    // 2. Fallback check for Auth.expoPushToken (legacy field)
     const userAuth = await this.prisma.auth.findUnique({
       where: { id: authId },
       select: { expoPushToken: true },
     });
 
-    const legacyToken = userAuth?.expoPushToken;
-    if (legacyToken && (legacyToken.startsWith('ExponentPushToken[') || legacyToken.startsWith('expo.v2:'))) {
-      this.logger.log(`Dispatching via fallback Expo push for user ${authId}`);
-      await this.dispatchExpoFallback(legacyToken, title, body, data);
-    } else {
-      this.logger.log(`No active FCM push tokens for user ${authId}, saved to inbox only`);
-    }
-  }
-
-  /**
-   * Fallback for legacy Expo clients
-   */
-  private async dispatchExpoFallback(
-    token: string,
-    title: string,
-    body: string,
-    data?: any,
-  ) {
-    const expoAccessToken = this.configService.get<string>('EXPO_ACCESS_TOKEN');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (expoAccessToken) {
-      headers['Authorization'] = `Bearer ${expoAccessToken}`;
+    if (userAuth?.expoPushToken) {
+      tokenSet.add(userAuth.expoPushToken.trim());
     }
 
-    try {
-      await axios.post(
-        this.expoUrl,
-        {
-          to: token,
-          title,
-          body,
-          sound: 'default',
-          priority: 'high',
-          channelId: 'default',
-          _displayInForeground: true,
-          data: data || {},
-        },
-        {
-          headers,
-          httpsAgent: this.httpsAgent,
-          timeout: 4000,
-        },
+    const allTokens = Array.from(tokenSet);
+    if (allTokens.length === 0) {
+      this.logger.log(`No active push tokens for user ${authId}, saved to inbox only`);
+      return;
+    }
+
+    // 3. Partition tokens by type
+    const expoTokens: string[] = [];
+    const nativeFcmTokens: string[] = [];
+
+    for (const token of allTokens) {
+      if (this.isExpoPushToken(token)) {
+        expoTokens.push(token);
+      } else {
+        nativeFcmTokens.push(token);
+      }
+    }
+
+    const promises: Promise<any>[] = [];
+
+    // 4. Dispatch Expo push tokens via Expo Push Service
+    if (expoTokens.length > 0) {
+      promises.push(
+        this.dispatchExpoBatch(expoTokens, title, body, data).catch((err) =>
+          this.logger.error(`Expo dispatch error for user ${authId}: ${err.message}`),
+        ),
       );
-    } catch (e: any) {
-      this.logger.error(`Expo fallback error for ${token.slice(0, 12)}...: ${e.message}`);
     }
+
+    // 5. Dispatch native FCM tokens via Firebase Admin SDK
+    if (nativeFcmTokens.length > 0) {
+      promises.push(
+        this.firebaseAdminService
+          .sendEachForMulticast(nativeFcmTokens, {
+            title,
+            body,
+            data: data || {},
+          })
+          .then(async (result) => {
+            const unregistered = result.failedTokens
+              .filter((f) => f.isUnregistered)
+              .map((f) => f.token);
+            if (unregistered.length > 0) {
+              await this.handleInvalidTokens(unregistered);
+            }
+          })
+          .catch((err) =>
+            this.logger.error(`Native FCM dispatch error for user ${authId}: ${err.message}`),
+          ),
+      );
+    }
+
+    await Promise.allSettled(promises);
   }
 
   /**
-   * Deactivate invalid/unregistered FCM tokens in the database
+   * Deactivate invalid/unregistered push tokens in the database
    */
   private async handleInvalidTokens(tokens: string[]) {
     if (!tokens || tokens.length === 0) return;

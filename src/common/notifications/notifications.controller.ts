@@ -32,7 +32,7 @@ export class NotificationsController {
   @Post('save-token')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Register or refresh client device FCM push token' })
+  @ApiOperation({ summary: 'Register or refresh client device push token (FCM or Expo)' })
   @ApiResponse({ status: 200, description: 'Token registered successfully' })
   async saveToken(@Req() req: any, @Body() body: SaveTokenDto) {
     const { authId } = req.user;
@@ -55,6 +55,19 @@ export class NotificationsController {
       platform,
       deviceId,
     );
+  }
+
+  /**
+   * Alias endpoint for Turfzy-owner-app which calls /register-token instead of /save-token.
+   * Both routes share the same handler logic.
+   */
+  @Post('register-token')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Register or refresh client device push token (alias for save-token)' })
+  @ApiResponse({ status: 200, description: 'Token registered successfully' })
+  async registerToken(@Req() req: any, @Body() body: SaveTokenDto) {
+    return this.saveToken(req, body);
   }
 
   @Get('test')
