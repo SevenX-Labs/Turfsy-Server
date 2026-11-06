@@ -23,6 +23,7 @@ import { OwnerCrmService } from './owner-crm.service';
 import { SendTurfOfferDto } from './dto/send-turf-offer.dto';
 import { GetAudienceDto } from './dto/get-audience.dto';
 import { BroadcastHistoryQueryDto } from './dto/broadcast-history-query.dto';
+import { GetCustomersQueryDto } from './dto/get-customers-query.dto';
 
 @ApiTags('Owner CRM')
 @ApiBearerAuth('JWT-auth')
@@ -108,6 +109,22 @@ export class OwnerCrmController {
     @Query() query: BroadcastHistoryQueryDto,
   ) {
     return this.ownerCrmService.getBroadcastHistory(req.user.authId, query);
+  }
+
+  @Get('customers')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'List distinct past customers who booked owner turf(s) with contact details and booking stats',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of past customers with contact details and stats',
+  })
+  async getPastCustomers(
+    @Req() req: any,
+    @Query() query: GetCustomersQueryDto,
+  ) {
+    return this.ownerCrmService.getPastCustomers(req.user.authId, query);
   }
 }
 

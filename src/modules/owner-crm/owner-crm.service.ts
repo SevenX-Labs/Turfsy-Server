@@ -231,7 +231,13 @@ export class OwnerCrmService {
     await this.checkBroadcastRateLimit(owner.id, dto.turfId, targetTurfIds);
 
     // 3. Find eligible recipient customer user IDs
-    const recipientUserIds = await this.getEligibleCustomerIds(targetTurfIds);
+    let recipientUserIds = await this.getEligibleCustomerIds(targetTurfIds);
+
+    // If specific target user IDs were provided, intersect with eligible customer audience
+    if (dto.targetUserIds && dto.targetUserIds.length > 0) {
+      const selectedSet = new Set(dto.targetUserIds);
+      recipientUserIds = recipientUserIds.filter((id) => selectedSet.has(id));
+    }
 
     const primaryTurfId =
       targetTurfs.length === 1 ? targetTurfs[0].id : dto.turfId;
@@ -397,6 +403,152 @@ export class OwnerCrmService {
         limit,
         totalPages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  /**
+   * List distinct past customers who booked owner's turf(s) with contact details,
+   * booking counts, last booking date, and notification preference status.
+   */
+  async getPastCustomers(
+    ownerAuthId: string,
+    query: { turfId?: string; search?: string; limit?: number; offset?: number },
+  ) {
+    const requestedTurfId = query.turfId || ALL_MY_TURFS;
+    const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
+    const offset = Math.max(Number(query.offset) || 0, 0);
+
+    const { targetTurfs, targetTurfIds } = await this.validateAndResolveTurfs(
+      ownerAuthId,
+      requestedTurfId,
+    );
+
+    // 1. Fetch bookings for these turfs
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        turfId: { in: targetTurfIds },
+        bookingStatus: {
+          in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
+        },
+      },
+      select: {
+        userId: true,
+        turfId: true,
+        bookingDate: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (bookings.length === 0) {
+      return { total: 0, customers: [] };
+    }
+
+    // 2. Aggregate per customer
+    const userStats = new Map<
+      string,
+      {
+        totalBookings: number;
+        lastBookingDate: Date;
+        lastTurfId: string;
+      }
+    >();
+
+    for (const b of bookings) {
+      const existing = userStats.get(b.userId);
+      const bDate = b.bookingDate || b.createdAt;
+      if (!existing) {
+        userStats.set(b.userId, {
+          totalBookings: 1,
+          lastBookingDate: bDate,
+          lastTurfId: b.turfId,
+        });
+      } else {
+        existing.totalBookings += 1;
+        if (bDate > existing.lastBookingDate) {
+          existing.lastBookingDate = bDate;
+          existing.lastTurfId = b.turfId;
+        }
+      }
+    }
+
+    const allUserIds = Array.from(userStats.keys());
+
+    // 3. Query user profiles & auth & settings
+    const users = await this.prisma.auth.findMany({
+      where: {
+        id: { in: allUserIds },
+        isActive: true,
+        isBanned: false,
+      },
+      select: {
+        id: true,
+        phone: true,
+        userProfile: {
+          select: {
+            name: true,
+            username: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+        userSettings: {
+          select: {
+            offerAlerts: true,
+            notificationsEnabled: true,
+          },
+        },
+      },
+    });
+
+    const turfNameMap = new Map(targetTurfs.map((t) => [t.id, t.name]));
+
+    let customerList = users.map((u) => {
+      const stats = userStats.get(u.id);
+      const profile = u.userProfile;
+      const settings = u.userSettings;
+      const offerAlertsEnabled =
+        settings?.offerAlerts !== false && settings?.notificationsEnabled !== false;
+
+      return {
+        userId: u.id,
+        name: profile?.name || profile?.username || 'Customer',
+        phone: u.phone,
+        email: profile?.email || null,
+        avatarUrl: profile?.avatarUrl || null,
+        totalBookings: stats?.totalBookings || 1,
+        lastBookingDate: stats?.lastBookingDate || null,
+        lastTurfName: stats?.lastTurfId ? turfNameMap.get(stats.lastTurfId) : undefined,
+        offerAlertsEnabled,
+      };
+    });
+
+    // 4. Optional search filter
+    if (query.search && query.search.trim()) {
+      const s = query.search.trim().toLowerCase();
+      customerList = customerList.filter(
+        (c) =>
+          c.name.toLowerCase().includes(s) ||
+          (c.phone && c.phone.toLowerCase().includes(s)) ||
+          (c.email && c.email.toLowerCase().includes(s)),
+      );
+    }
+
+    // Sort by last booking date descending
+    customerList.sort((a, b) => {
+      const dateA = a.lastBookingDate ? new Date(a.lastBookingDate).getTime() : 0;
+      const dateB = b.lastBookingDate ? new Date(b.lastBookingDate).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    const total = customerList.length;
+    const paginated = customerList.slice(offset, offset + limit);
+
+    return {
+      total,
+      limit,
+      offset,
+      customers: paginated,
     };
   }
 }

@@ -10,6 +10,7 @@ import {
   Max,
   IsDateString,
   IsObject,
+  IsArray,
 } from 'class-validator';
 
 export class SendTurfOfferDto {
@@ -82,5 +83,15 @@ export class SendTurfOfferDto {
   @IsOptional()
   @IsObject()
   data?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description: 'Optional list of specific customer userIds to send to. If omitted or empty, sends to all eligible past customers of the turf.',
+    type: [String],
+    example: ['d9841f4e-1234-5678-90ab-cdef12345678'],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  targetUserIds?: string[];
 }
 
