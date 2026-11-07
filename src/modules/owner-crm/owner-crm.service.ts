@@ -14,6 +14,7 @@ import { BroadcastHistoryQueryDto } from './dto/broadcast-history-query.dto';
 import { BookingStatus } from '@prisma/client';
 
 export const ALL_MY_TURFS = 'ALL_MY_TURFS';
+export const ALL_APP_USERS = 'ALL_APP_USERS';
 export const MAX_BROADCASTS_PER_TURF_24H = 2;
 
 @Injectable()
@@ -51,11 +52,21 @@ export class OwnerCrmService {
       throw new BadRequestException('No registered turfs found for this owner');
     }
 
+    if (requestedTurfId === ALL_APP_USERS || requestedTurfId === 'ALL_APP_CUSTOMERS') {
+      return {
+        owner,
+        targetTurfs: owner.turfs,
+        targetTurfIds: [ALL_APP_USERS],
+        isGlobal: true,
+      };
+    }
+
     if (requestedTurfId === ALL_MY_TURFS) {
       return {
         owner,
         targetTurfs: owner.turfs,
         targetTurfIds: owner.turfs.map((t) => t.id),
+        isGlobal: false,
       };
     }
 
@@ -90,21 +101,36 @@ export class OwnerCrmService {
       return [];
     }
 
-    // 1. Query past bookings with valid confirmed/completed statuses
-    const bookings = await this.prisma.booking.findMany({
-      where: {
-        turfId: { in: targetTurfIds },
-        bookingStatus: {
-          in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
-        },
-      },
-      select: { userId: true },
-      distinct: ['userId'],
-    });
+    let candidateUserIds: string[] = [];
 
-    const candidateUserIds = Array.from(
-      new Set(bookings.map((b) => b.userId).filter(Boolean)),
-    );
+    // Check if broadcasting globally to all app users
+    if (targetTurfIds.includes(ALL_APP_USERS)) {
+      const allAppCustomers = await this.prisma.auth.findMany({
+        where: {
+          role: 'USER',
+          isActive: true,
+          isBanned: false,
+        },
+        select: { id: true },
+      });
+      candidateUserIds = allAppCustomers.map((u) => u.id);
+    } else {
+      // 1. Query past bookings with valid confirmed/completed statuses for target turfs
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          turfId: { in: targetTurfIds },
+          bookingStatus: {
+            in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
+          },
+        },
+        select: { userId: true },
+        distinct: ['userId'],
+      });
+
+      candidateUserIds = Array.from(
+        new Set(bookings.map((b) => b.userId).filter(Boolean)),
+      );
+    }
 
     if (candidateUserIds.length === 0) {
       return [];
@@ -198,14 +224,19 @@ export class OwnerCrmService {
       turfId,
     );
 
-    const [totalPastBookings, eligibleCustomerIds] = await Promise.all([
-      this.prisma.booking.count({
-        where: {
+    const isGlobal = targetTurfIds.includes(ALL_APP_USERS);
+    const bookingWhere: any = isGlobal
+      ? { bookingStatus: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] } }
+      : {
           turfId: { in: targetTurfIds },
           bookingStatus: {
             in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
           },
-        },
+        };
+
+    const [totalPastBookings, eligibleCustomerIds] = await Promise.all([
+      this.prisma.booking.count({
+        where: bookingWhere,
       }),
       this.getEligibleCustomerIds(targetTurfIds),
     ]);
@@ -213,7 +244,7 @@ export class OwnerCrmService {
     return {
       success: true,
       turfId,
-      targetTurfNames: targetTurfs.map((t) => t.name),
+      targetTurfNames: isGlobal ? ['All Turfzy App Players'] : targetTurfs.map((t) => t.name),
       audienceCount: eligibleCustomerIds.length,
       totalPastBookings,
     };
@@ -423,14 +454,22 @@ export class OwnerCrmService {
       requestedTurfId,
     );
 
-    // 1. Fetch bookings for these turfs
+    const isGlobal = targetTurfIds.includes(ALL_APP_USERS);
+
+    // 1. Fetch bookings
     const bookings = await this.prisma.booking.findMany({
-      where: {
-        turfId: { in: targetTurfIds },
-        bookingStatus: {
-          in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
-        },
-      },
+      where: isGlobal
+        ? {
+            bookingStatus: {
+              in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
+            },
+          }
+        : {
+            turfId: { in: targetTurfIds },
+            bookingStatus: {
+              in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
+            },
+          },
       select: {
         userId: true,
         turfId: true,
@@ -440,7 +479,7 @@ export class OwnerCrmService {
       orderBy: { createdAt: 'desc' },
     });
 
-    if (bookings.length === 0) {
+    if (bookings.length === 0 && !isGlobal) {
       return { total: 0, customers: [] };
     }
 
@@ -472,7 +511,16 @@ export class OwnerCrmService {
       }
     }
 
-    const allUserIds = Array.from(userStats.keys());
+    let allUserIds: string[] = [];
+    if (isGlobal) {
+      const globalUsers = await this.prisma.auth.findMany({
+        where: { role: 'USER', isActive: true, isBanned: false },
+        select: { id: true },
+      });
+      allUserIds = globalUsers.map((u) => u.id);
+    } else {
+      allUserIds = Array.from(userStats.keys());
+    }
 
     // 3. Query user profiles & auth & settings
     const users = await this.prisma.auth.findMany({
