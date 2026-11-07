@@ -195,7 +195,44 @@ export class PricingService {
     const normalizedDate = new Date(date);
     normalizedDate.setHours(0, 0, 0, 0);
 
-    const occupancy = await this.getClusterOccupancySurge(turfId, date);
+    // Fetch all required data in parallel to avoid N+1 sequential DB queries
+    const [occupancy, specialEvent, activeBookings, waitlistEntries, expiredWaitlists] =
+      await Promise.all([
+        this.getClusterOccupancySurge(turfId, date),
+        this.prisma.specialEvent.findFirst({
+          where: {
+            date: normalizedDate,
+            OR: [{ turfId }, { turfId: null }],
+          },
+          orderBy: { turfId: 'desc' },
+        }),
+        this.prisma.booking.findMany({
+          where: {
+            turfId,
+            bookingDate: normalizedDate,
+            bookingStatus: {
+              notIn: ['CANCELLED', 'NO_SHOW', 'REJECTED'] as any[],
+            },
+          },
+          select: { startTime: true, endTime: true },
+        }),
+        this.prisma.waitlist.findMany({
+          where: {
+            turfId,
+            bookingDate: normalizedDate,
+            status: 'WAITING',
+          },
+          select: { startTime: true },
+        }),
+        this.prisma.waitlist.findMany({
+          where: {
+            turfId,
+            bookingDate: normalizedDate,
+            status: 'EXPIRED',
+          },
+          select: { startTime: true },
+        }),
+      ]);
 
     // Generate 1-hour slots from openTime to closeTime
     const slots: Array<{
@@ -215,38 +252,7 @@ export class PricingService {
     const is24Hour = openTime === closeTime;
 
     const maxHour = is24Hour ? 24 : isOvernight ? 24 + closeHour : closeHour;
-
-    // Get all active bookings for this date
-    const activeBookings = await this.prisma.booking.findMany({
-      where: {
-        turfId,
-        bookingDate: normalizedDate,
-        bookingStatus: {
-          notIn: ['CANCELLED', 'NO_SHOW', 'REJECTED'] as any[],
-        },
-      },
-      select: { startTime: true, endTime: true },
-    });
-
-    // Get waitlist counts
-    const waitlistEntries = await this.prisma.waitlist.findMany({
-      where: {
-        turfId,
-        bookingDate: normalizedDate,
-        status: 'WAITING',
-      },
-      select: { startTime: true },
-    });
-
-    // Find recently cancelled slots that have expired waitlist windows
-    const expiredWaitlists = await this.prisma.waitlist.findMany({
-      where: {
-        turfId,
-        bookingDate: normalizedDate,
-        status: 'EXPIRED',
-      },
-      select: { startTime: true },
-    });
+    const dayOfWeek = normalizedDate.getDay(); // 0=Sun, 6=Sat
 
     for (let h = openHour; h < maxHour; h++) {
       const hour = h % 24;
@@ -262,26 +268,56 @@ export class PricingService {
         (w) => w.startTime === startTimeStr,
       ).length;
 
-      const isPostCancellationPublic = expiredWaitlists.some(
-        (w) => w.startTime === startTimeStr,
-      ) && !isBooked;
+      const isPostCancellationPublic =
+        expiredWaitlists.some((w) => w.startTime === startTimeStr) && !isBooked;
 
-      const pricing = await this.calculateSlotPrice({
-        turfId,
-        basePrice: weekdayDayPrice,
-        date,
-        startTime: startTimeStr,
-        durationMins: 60,
-        isPostCancellationPublic,
-      });
+      // In-memory calendar surge computation (0 DB roundtrips)
+      let calendarMultiplier = 1.0;
+      let calendarReason = 'Weekday Day';
+
+      if (specialEvent) {
+        calendarMultiplier = specialEvent.multiplier;
+        calendarReason = `${specialEvent.eventType}: ${specialEvent.title}`;
+      } else if ([0, 6].includes(dayOfWeek) && hour >= 18) {
+        calendarMultiplier = 1.5;
+        calendarReason = 'Weekend Prime';
+      } else if ([0, 6].includes(dayOfWeek) && hour < 18) {
+        calendarMultiplier = 1.2;
+        calendarReason = 'Weekend Day';
+      } else if (dayOfWeek === 5 && hour >= 18) {
+        calendarMultiplier = 1.4;
+        calendarReason = 'Friday Prime';
+      } else if ([1, 2, 3, 4].includes(dayOfWeek) && hour >= 18) {
+        calendarMultiplier = 1.3;
+        calendarReason = 'Weekday Prime';
+      }
+
+      let totalSurgeMultiplier = calendarMultiplier * occupancy.multiplier;
+      let badge: string | null =
+        occupancy.badge ||
+        (calendarMultiplier > 1.0 ? `⚡ ${calendarReason}` : null);
+
+      if (isPostCancellationPublic) {
+        totalSurgeMultiplier = 1.2;
+        badge = '🔥 Last-Minute Hot Slot';
+      }
+
+      let finalPrice = Math.round(weekdayDayPrice * totalSurgeMultiplier);
+      if (
+        totalSurgeMultiplier > 1.0 &&
+        finalPrice <= weekdayDayPrice &&
+        weekdayDayPrice > 0
+      ) {
+        finalPrice = weekdayDayPrice + 1;
+      }
 
       slots.push({
         startTime: startTimeStr,
         endTime: endTimeStr,
         basePrice: weekdayDayPrice,
-        finalPrice: pricing.finalPrice,
-        surgeMultiplier: pricing.totalSurgeMultiplier,
-        badge: pricing.badge,
+        finalPrice,
+        surgeMultiplier: totalSurgeMultiplier,
+        badge,
         isWaitlistAvailable: isBooked,
         waitlistCount,
       });
